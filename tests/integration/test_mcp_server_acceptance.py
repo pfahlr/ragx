@@ -1,4 +1,4 @@
-import os, json, pytest, pathlib
+import pytest
 
 @pytest.mark.xfail(reason="MCP server not implemented yet", strict=False)
 def test_mcp_envelope_schema_contract():
@@ -16,5 +16,5 @@ def test_mcp_envelope_schema_contract():
         "errors": []
     }
     # In real test: validate against apps/mcp_server/schemas/envelope.schema.json
-    assert set(sample) == {"ok","data","meta","errors"}
+    assert set(sample) == {"ok", "data", "meta", "errors"}
     assert isinstance(sample["meta"]["durationMs"], int)

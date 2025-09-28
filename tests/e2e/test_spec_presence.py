@@ -1,4 +1,6 @@
-import os
+from pathlib import Path
+
 
 def test_master_spec_exists():
-    assert os.path.exists("codex/specs/ragx_master_spec.yaml"), "Master spec is missing."
+    spec_path = Path("codex/specs/ragx_master_spec.yaml")
+    assert spec_path.exists(), "Master spec is missing."
