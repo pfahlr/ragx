@@ -1,0 +1,17 @@
+
+version: 0.1
+globals:
+  tools: {}
+graph:
+  nodes:
+    - id: seed
+      kind: unit
+      spec:
+        type: llm
+        tool_ref: gpt
+        system: "Test system"
+        prompt: "Hello {{inputs.name}}"
+      inputs:
+        name: ${root.name}
+      outputs: [draft]
+  control: []
