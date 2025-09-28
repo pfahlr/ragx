@@ -4,6 +4,7 @@ import json
 import subprocess
 import sys
 from pathlib import Path
+import pytest
 
 
 def _write(tmp_dir: Path, relative: str, content: str) -> Path:
@@ -14,6 +15,8 @@ def _write(tmp_dir: Path, relative: str, content: str) -> Path:
 
 
 def test_vectordb_builder_ingests_markdown(tmp_path: Path) -> None:
+    pytest.importorskip("numpy")
+
     corpus_dir = tmp_path / "corpus"
     corpus_dir.mkdir()
 
@@ -42,12 +45,36 @@ Doc two body paragraph.
     output_dir = tmp_path / "index"
 
     cmd = [
-        "python",
+        sys.executable,
+        "-m",
+        "ragcore.cli",
+        "build",
+        "--corpus-dir",
+        str(corpus_dir),
+        "--out",
+        str(output_dir),
+        "--accept-format",
+        "md",
     ]
 
-    # Placeholder assertions until the CLI wiring is implemented.
-    assert output_dir == tmp_path / "index"
-    assert cmd == ["python"]
+    result = subprocess.run(cmd, capture_output=True, text=True, check=False)
+    assert result.returncode == 0, result.stderr
+
+    docmap_path = output_dir / "docmap.json"
+    assert docmap_path.exists(), "docmap.json should be written"
+
+    docmap = json.loads(docmap_path.read_text(encoding="utf-8"))
+    documents = docmap["documents"]
+
+    doc_one = next(entry for entry in documents if entry["id"] == "doc-one")
+    assert doc_one["metadata"]["title"] == "Doc One"
+    assert (
+        doc_one["metadata"]["summary"]
+        == "Preferred summary from front matter"
+    )
+
+    assert any(entry["path"].endswith("doc_two.md") for entry in documents)
+
 
 def test_vectordb_build_md_fixture(tmp_path: Path) -> None:
     corpus = tmp_path / "corpus"
