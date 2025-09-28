@@ -1,10 +1,21 @@
 import os
 import pathlib
 import random
+import sys
+from pathlib import Path
+
 import numpy as np
 import pytest
 
-from conftest import skip_if_no_eval
+ROOT = Path(__file__).resolve().parents[2]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+EVAL_DIR = ROOT / "eval" / "verification"
+skip_if_no_eval = pytest.mark.skipif(
+    not EVAL_DIR.exists(),
+    reason="/eval/verification not found; provide gold corpus to run this test",
+)
 
 def _maybe_import_dummy():
     try:
@@ -31,7 +42,8 @@ def test_dummy_pipeline_index_and_search(eval_dir: pathlib.Path):
     register, get, list_backends, DummyBackend = _maybe_import_dummy()
 
     # Register dummy backend for tests
-    register(DummyBackend())
+    if "dummy" not in list_backends():
+        register(DummyBackend())
     backend = get("dummy")
 
     dim = 64
@@ -63,7 +75,11 @@ def test_dummy_pipeline_index_and_search(eval_dir: pathlib.Path):
     # Query with the first text (should rank itself highest)
     q = embed(texts[0])[None, :]
     res = handle.search(q, k=min(5, xb.shape[0]))
-    ids, dists = res["ids"], res["dists"]
+    ids = res["ids"]
+    dists = res.get("distances")
+    if dists is None:
+        dists = res.get("dists")
+    assert dists is not None
     assert ids.shape == dists.shape
     assert ids.shape[0] == 1
     assert ids.shape[1] >= 1

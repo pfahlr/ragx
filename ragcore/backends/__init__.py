@@ -6,9 +6,10 @@ from .hnsw import HnswBackend
 from .pyflat import PyFlatBackend
 
 try:  # Optional C++ extension backend
-    from .cpp import CppBackend, HAS_CPP_EXTENSION
+    from .cpp import CppBackend, CppFaissBackend, HAS_CPP_EXTENSION
 except ModuleNotFoundError:  # pragma: no cover - import-time guard
     CppBackend = None  # type: ignore[assignment]
+    CppFaissBackend = None  # type: ignore[assignment]
     HAS_CPP_EXTENSION = False
 
 
@@ -50,4 +51,5 @@ __all__ = [
     "FaissBackend",
     "HnswBackend",
     "CppBackend",
+    "CppFaissBackend",
 ]

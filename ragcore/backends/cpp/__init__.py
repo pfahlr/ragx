@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from typing import Any, Mapping
 import os
+from typing import Any, Mapping
 
 from ragcore.interfaces import Backend
 
@@ -27,12 +27,13 @@ else:
                 info.setdefault("available", True)
                 return info
 
-    except ModuleNotFoundError as exc:
+    except ModuleNotFoundError as exc:  # pragma: no cover - optional extension
         _IMPORT_ERROR = exc
         CppHandle = None  # type: ignore[assignment]
 
 
 if not _HAS_EXTENSION:
+    from ragcore.backends.pyflat import PyFlatBackend
 
     class CppBackend(Backend):  # type: ignore[misc]
         name = "cpp"
@@ -47,8 +48,19 @@ if not _HAS_EXTENSION:
         def build(self, spec: Mapping[str, Any]):  # type: ignore[override]
             raise RuntimeError("ragcore C++ backend is unavailable")
 
-    class CppHandle:  # pragma: no cover - fallback placeholder
-        pass
+    class _CppFallback(PyFlatBackend):
+        name = "cpp_faiss"
+
+    CppFaissBackend = _CppFallback
+else:
+
+    class CppFaissBackend(CppBackend):  # type: ignore[misc]
+        name = "cpp_faiss"
+
+        def capabilities(self) -> Mapping[str, Any]:
+            info = dict(super().capabilities())
+            info.setdefault("alias", "py_flat parity")
+            return info
 
 
 HAS_CPP_EXTENSION = _HAS_EXTENSION
@@ -58,5 +70,5 @@ def is_available() -> bool:
     return HAS_CPP_EXTENSION
 
 
-__all__ = ["CppBackend", "CppHandle", "HAS_CPP_EXTENSION", "is_available"]
+__all__ = ["CppBackend", "CppFaissBackend", "CppHandle", "HAS_CPP_EXTENSION", "is_available"]
 

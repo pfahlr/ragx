@@ -4,6 +4,7 @@
 #include <pybind11/numpy.h>
 #include <pybind11/stl.h>
 
+#include <string>
 #include <vector>
 
 namespace ragcore {
@@ -29,6 +30,7 @@ class CppHandle {
     bool trained_ = false;
     std::vector<float> storage_;
     std::vector<std::int64_t> ids_;
+    std::string metric_;
 };
 
 class CppBackend {

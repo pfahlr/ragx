@@ -32,6 +32,8 @@ def test_list_command_outputs_registered_backends(capsys) -> None:
     payload = json.loads(captured)
     names = [entry["name"] for entry in payload["backends"]]
     assert "dummy" in names
+    assert "py_flat" in names
+    assert "cpp_faiss" in names
 
 
 def test_build_command_creates_artifacts(tmp_path: Path, capsys) -> None:
@@ -85,4 +87,3 @@ def test_build_command_creates_artifacts(tmp_path: Path, capsys) -> None:
     payload = np.load(index_bin_path)
     assert payload["vectors"].shape == (2, 4)
     assert payload["ids"].tolist() == [0, 1]
-

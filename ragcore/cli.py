@@ -11,6 +11,11 @@ import numpy as np
 from ragcore.backends import register_default_backends
 from ragcore.backends.dummy import DummyBackend
 from ragcore.backends.pyflat import PyFlatBackend
+
+try:  # Optional C++ alias
+    from ragcore.backends.cpp import CppFaissBackend
+except ImportError:  # pragma: no cover - optional dependency
+    CppFaissBackend = None  # type: ignore[assignment]
 from ragcore.ingest.scanner import IngestedDocument, scan_corpus
 from ragcore.interfaces import Backend
 from ragcore.registry import get, list_backends, register
@@ -214,6 +219,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         register(PyFlatBackend())
     if "dummy" not in list_backends():
         register(DummyBackend())
+    if CppFaissBackend is not None and "cpp_faiss" not in list_backends():
+        register(CppFaissBackend())
     parser = _build_parser()
     args = parser.parse_args(argv)
     return args.func(args)

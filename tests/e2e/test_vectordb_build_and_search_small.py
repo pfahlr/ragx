@@ -1,15 +1,22 @@
 from __future__ import annotations
 
-import json
+import sys
 from pathlib import Path
+import json
 
 import numpy as np
+import pytest
+
+ROOT = Path(__file__).resolve().parents[2]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 
 from ragcore.backends.pyflat import PyFlatBackend
 from ragcore.cli import main
 
 
-def test_cli_build_with_pyflat_backend(tmp_path: Path) -> None:
+@pytest.mark.parametrize("backend_name", ["py_flat", "cpp_faiss"])
+def test_cli_build_with_pyflat_backend(tmp_path: Path, backend_name: str) -> None:
     corpus = tmp_path / "corpus"
     corpus.mkdir()
     (corpus / "doc1.md").write_text("# Doc 1\n\nalpha beta", encoding="utf-8")
@@ -21,7 +28,7 @@ def test_cli_build_with_pyflat_backend(tmp_path: Path) -> None:
         [
             "build",
             "--backend",
-            "py_flat",
+            backend_name,
             "--index-kind",
             "flat",
             "--metric",
@@ -45,7 +52,7 @@ def test_cli_build_with_pyflat_backend(tmp_path: Path) -> None:
     assert index_bin_path.is_file()
 
     spec = json.loads(index_spec_path.read_text(encoding="utf-8"))
-    assert spec["backend"] == "py_flat"
+    assert spec["backend"] == backend_name
     assert spec["metric"] == "ip"
     assert spec["kind"] == "flat"
 
