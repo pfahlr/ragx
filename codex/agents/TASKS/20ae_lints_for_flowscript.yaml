@@ -1,4 +1,4 @@
-id: FS-20e
+id: FS-20ae
 title: Add FlowScript-specific lints (unused vars, missing outputs, unknown tool_ref)
 intent: |
   Extend the linter to cover common FlowScript mistakes, while leaving core DSL lints unchanged.

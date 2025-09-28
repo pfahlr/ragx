@@ -1,4 +1,4 @@
-id: FS-20f
+id: FS-20af
 title: CI: add dedicated FlowScript job (idempotent)
 intent: |
   Ensure CI includes a focused FlowScript job that installs jsonschema/pyyaml/pytest and runs the tests.

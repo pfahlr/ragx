@@ -1,4 +1,4 @@
-id: FS-20c
+id: FS-20ac
 title: Integrate rw compile into rw dispatcher
 intent: |
   Ensure `rw` supports a `compile` subcommand,

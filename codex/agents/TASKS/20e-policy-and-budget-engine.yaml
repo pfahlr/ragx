@@ -1,0 +1,19 @@
+id: 20e-policy-and-budget-engine
+title: Policy stack + budget meters (hard/soft) with enforcement
+owner: codex
+priority: P0
+depends_on: [20d-runner-execution-core]
+goal: Enforce hierarchical policy allow/deny and budget caps at run/node/spec scope.
+inputs:
+  - codex/specs/ragx_master_spec.yaml
+outputs:
+  - pkgs/dsl/orchestrator/policy.py
+  - pkgs/dsl/orchestrator/budget.py
+  - tests/dsl/test_policy_budget_enforcement.py
+deliverables:
+  - PolicyStack.effective_allowlist() with tool_sets resolution.
+  - BudgetMeter.can_spend()/charge(); stop with clear error when exceeding hard caps.
+acceptance:
+  - Unreachable tool calls are blocked; fallbacks triggered and traced
+  - Budget breach produces expected stop/error per mode
+  - "pytest -q -k policy_budget_enforcement" green

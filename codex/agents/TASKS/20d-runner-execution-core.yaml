@@ -1,0 +1,26 @@
+id: 20d-runner-execution-core
+title: DSL Runner – execution core (sequential, no loops/decisions yet)
+owner: codex
+priority: P0
+depends_on: [20c-flowscript-compiler-to-yaml]
+goal: Execute YAML DSL graphs (unit + transform nodes) sequentially with templating and tracing.
+inputs:
+  - codex/specs/ragx_master_spec.yaml
+outputs:
+  - pkgs/dsl/orchestrator/runner.py
+  - pkgs/dsl/orchestrator/trace.py
+  - pkgs/dsl/orchestrator/schema_validate.py
+  - tests/dsl/test_runner_sequential.py
+deliverables:
+  - FlowRunner.plan() and .run() minimal path with Jinja templating for prompts/args.
+  - JSONL trace with node_start/node_end and minimal cost placeholders.
+acceptance:
+  - Schema validation called prior to run
+  - Deterministic outputs for stub adapters
+  - "pytest -q -k runner_sequential" green
+paths_changed:
+  - pkgs/dsl/orchestrator/*
+  - tests/dsl/*
+ci:
+  run:
+    - pytest -q
