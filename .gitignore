@@ -1,2 +1,4 @@
 *__pycache__*
+ragcore/backends/_ragcore_cpp*.so
+build/
 

@@ -1,6 +1,8 @@
 jinja2
 jsonschema
 numpy
+pybind11
+setuptools
 pyyaml
 pytest
 numpy
