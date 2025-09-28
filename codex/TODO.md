@@ -10,7 +10,7 @@ Setup:
 
 Request:
 
--Complete `codex/agents/TASKS/06a_core_tools_minimal_subset.yaml`
+-Complete `codex/agents/TASKS/05g_toolpacks_legacy_shim.yaml`
 
 Requirements: 
 - verify operation using a combination of the feedback from tests and by running the components in the environment and analyzing their outputs
@@ -39,11 +39,11 @@ review the implementations of  codex/agents/TASKS/05a_toolpacks_loader_minimal.y
 - [x] codex/agents/TASKS/05a_toolpacks_loader_minimal.yaml
 - [x] codex/agents/TASKS/05b_toolpacks_executor_python_only.yaml
 
-- [ ] codex/agents/TASKS/05g_toolpacks_legacy_shim.yaml
-- [ ] codex/agents/TASKS/05f_toolpacks_docs_sync.yaml
-- [ ] codex/agents/TASKS/05e_toolpacks_tests_completeness.yaml
-- [ ] codex/agents/TASKS/05d_toolpacks_executor_python_only_plus.yaml
 - [ ] codex/agents/TASKS/05c_toolpacks_loader_spec_alignment.yaml
+- [ ] codex/agents/TASKS/05d_toolpacks_executor_python_only_plus.yaml
+- [ ] codex/agents/TASKS/05e_toolpacks_tests_completeness.yaml
+- [ ] codex/agents/TASKS/05f_toolpacks_docs_sync.yaml
+- [ ] codex/agents/TASKS/05g_toolpacks_legacy_shim.yaml
 
 - [ ] codex/agents/TASKS/06a_core_tools_minimal_subset.yaml
 - [ ] codex/agents/TASKS/06b_mcp_server_bootstrap.yaml
