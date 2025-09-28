@@ -3,6 +3,7 @@ jsonschema
 numpy
 pyyaml
 pytest
+numpy
 ruff
 mypy
 yamllint
