@@ -44,7 +44,7 @@ jobs:
           pybind11_DIR: ${{ env.pybind11_DIR }}
         run: |
           # Adjust -S/-B to your C++ source root if not at repo root
-          cmake -S . -B build \
+          cmake -S ./cpp  -B build \
             -G Ninja \
             -Dpybind11_DIR="$pybind11_DIR" \
             -DPYBIND11_FINDPYTHON=ON
