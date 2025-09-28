@@ -2,6 +2,7 @@ jinja2
 jsonschema
 pyyaml
 pytest
+numpy
 ruff
 mypy
 yamllint
