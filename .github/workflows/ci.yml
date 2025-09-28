@@ -43,16 +43,19 @@ jobs:
           echo "pybind11_DIR=$(python -m pybind11 --cmakedir)" >> $GITHUB_ENV
           echo "Using pybind11_DIR=$pybind11_DIR"
 
-      # Cache ~/.cache/ccache directly (fast restore, no compression)
+      # Compute hashes safely (no commas)
+      - name: Compute hash keys
+        id: hash
+        run: |
+          echo "cmake_hash=$(sha1sum $(find . -name 'CMakeLists.txt' -o -name '*.cmake' | sort) | sha1sum | cut -d' ' -f1)" >> $GITHUB_ENV
+          echo "src_hash=$(sha1sum $(find . -name '*.cpp' -o -name '*.cc' -o -name '*.c' -o -name '*.hpp' -o -name '*.h' | sort) | sha1sum | cut -d' ' -f1)" >> $GITHUB_ENV
+
       - name: Cache ccache dir
-        if: steps.changes.outputs.native == 'true' && hashFiles('**/CMakeLists.txt') != ''
+        if: steps.changes.outputs.native == 'true'
         uses: actions/cache@v4
         with:
           path: ~/.cache/ccache
-          key: >
-            ccache-${{ runner.os }}-${{ env.CXX_VER }}-
-            ${!! hashFiles('**/CMakeLists.txt') && hashFiles('**/CMakeLists.txt') || 'no-cmake' }-
-            ${!! hashFiles('**/*.cpp','**/*.cc','**/*.c','**/*.hpp','**/*.h') && hashFiles('**/*.cpp','**/*.cc','**/*.c','**/*.hpp','**/*.h') || 'no-src' }
+          key: ccache-${{ runner.os }}-${{ env.CXX_VER }}-${{ env.cmake_hash }}-${{ env.src_hash }}
           restore-keys: |
             ccache-${{ runner.os }}-${{ env.CXX_VER }}-
             ccache-${{ runner.os }}-
