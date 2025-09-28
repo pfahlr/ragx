@@ -2,36 +2,62 @@
 
 This repository is set up so autonomous agents (e.g., Codex) can implement large parts of **RAGX** using a single source of truth: `codex/specs/ragx_master_spec.yaml`.
 
+---
+
 ## Golden Rules
+
 1. **Spec-first**: All interfaces, flags, and schemas come from `codex/specs/ragx_master_spec.yaml`. Never invent flags or paths.
 2. **Readability-first**: Follow naming/style rules in the spec's `style_guide` section.
 3. **Determinism**: Avoid nondeterministic behavior in unit tests (seed randomness, offline fixtures).
 4. **Contracts over code**: Implement acceptance tests before filling implementations. CI must pass.
 5. **No backdoors**: Tools must respect policy/budget guards in the DSL.
+6. **Tests First (absolute gate)**: Do nothing until the test harness runs cleanly. All tasks stop if `./scripts/ensure_green.sh` is failing.
+
+---
 
 ## Quick Start for Agents
-- Parse `codex/specs/ragx_master_spec.yaml` and load `arg_spec`, `components`, and `tool_registry`.
-- Pick tasks from `codex/agents/TASKS/*.yaml` (start with the lowest number).
-- For each task, produce a PR with:
-  - Code under the designated path (see task file).
-  - Tests under `tests/` as specified.
-  - Updates to docs under `docs/` if required.
-  - Ensure `make lint typecheck test` passes locally.
-- If a flag or schema is missing, add it to the **spec** first in a dedicated PR.
+
+* Parse `codex/specs/ragx_master_spec.yaml` and load `arg_spec`, `components`, and `tool_registry`.
+* Pick tasks from `codex/agents/TASKS/*.yaml` (start with the lowest number).
+* For each task, produce a PR with:
+
+  * Code under the designated path (see task file).
+  * Tests under `tests/` as specified.
+  * Updates to docs under `docs/` if required.
+  * Ensure **`./scripts/ensure_green.sh`** passes locally before proposing code changes.
+* If a flag or schema is missing, add it to the **spec** first in a dedicated PR.
+
+---
 
 ## Commands
+
 ```bash
 make codex-bootstrap   # sanity checks + print next tasks
 make lint              # ruff + yamllint
 make typecheck         # mypy
 make test              # pytest (unit + e2e)
+./scripts/ensure_green.sh  # full gate (must pass before anything else)
 ```
 
-## CI Gates
-- Lint + typecheck + unit + integration + e2e.
-- Coverage ≥ spec `tests.ci.coverage_minimum` (default 85).
+---
 
-See `codex/agents/CODEX_BOOTSTRAP.md` for more details.
+## Stop Conditions
+
+Agents must **abort work and restore the harness** if:
+
+1. `pytest` cannot run (import errors, broken config).
+2. Linters/type checks (`ruff`, `mypy`, `yamllint`) fail to execute.
+3. Native C++/GPU toolchain is required but unavailable and no skip markers exist.
+4. `/eval/verification` corpus is missing/unreadable.
+5. `./scripts/ensure_green.sh` fails for any reason.
+
+---
+
+## CI Gates
+
+* Lint + typecheck + unit + integration + e2e.
+* Coverage ≥ spec `tests.ci.coverage_minimum` (default 85).
+* CI steps mirror `./scripts/ensure_green.sh`.
 
 ---
 
@@ -39,7 +65,7 @@ See `codex/agents/CODEX_BOOTSTRAP.md` for more details.
 
 **RAGX** is a clean-slate architecture for **DSL-driven retrieval-augmented generation (RAG)**, built on:
 
-* A declarative **multi-shot DSL** (for flows, policies, budgets, transforms).
+* A declarative **multi-shot DSL** (flows, policies, budgets, transforms).
 * A deterministic **MCP server** exposing tools & prompt packs over HTTP/STDIO.
 * **Vector database core** with modular backends (FAISS, HNSW, GPU, adapters).
 * **Declarative Toolpacks** (YAML) for Python/Node/CLI/HTTP tools.
@@ -50,99 +76,71 @@ All canonical specs are stored under `codex/specs/`.
 
 ---
 
-## Setup Commands
+## Environment Bootstrap
 
-### Clone and bootstrap
+Agents must ensure:
 
 ```bash
-git clone https://github.com/your-org/ragx.git
-cd ragx
-python -m venv .venv
-source .venv/bin/activate
+python -V
 pip install -r requirements.txt
+pip install ruff mypy pytest coverage yamllint
 ```
 
-
-
-### Build C++ FAISS backend (optional)
+Optional native build:
 
 ```bash
-mkdir build && cd build
-cmake ..
-make -j$(nproc)
+sudo apt-get install -y cmake ninja-build ccache build-essential
+pip install pybind11
 ```
 
-This produces `_ragcore_cpp.*.so` for Python bindings.
-
-### Run checks
-
-```bash
-make lint
-make typecheck
-make test
-```
+If not available, fall back to dummy backend and skip native/gpu tests.
 
 ---
 
-## Code Conventions
+## One Command Gate
 
-See **style guide** in [`codex/specs/ragx_master_spec.yaml`](codex/specs/ragx_master_spec.yaml#style_guide).
+**File:** `scripts/ensure_green.sh`
 
-* Python: `PascalCase` for classes, `snake_case` for functions/vars.
-* C++: `PascalCase` for types, `snake_case` for methods/vars.
-* YAML/JSON: `snake_case` keys.
-* CLI flags: `--kebab-case`.
-* Booleans: prefixes `is_`, `has_`, `can_`, `should_`.
+```bash
+#!/usr/bin/env bash
+set -euo pipefail
+
+ruff check .
+mypy .
+yamllint .
+
+pytest --maxfail=1 --disable-warnings ${PYTEST_ADDOPTS:-}
+
+echo "[ensure_green] OK"
+```
+
+Executable:
+
+```bash
+chmod +x scripts/ensure_green.sh
+```
 
 ---
 
 ## TDD Protocol (MANDATORY)
 
-> Codex and other coding agents **must follow Test‑Driven Development**. Write/modify tests **before** implementing or changing code. Treat failing tests as your guidance loop.
+> Codex and other agents must follow **Test-Driven Development**.
 
 ### Red → Green → Refactor
 
-1. **Red:**
+1. **Red**: write failing tests first.
+2. **Green**: implement minimal code to pass.
+3. **Refactor**: improve code structure, keep tests green.
 
-   * For a *new feature*: write failing tests in `tests/` that specify the behavior.
-   * For a *bug*: reproduce with a failing **regression test** (name like `test_issue_<id>_regression`).
-   * Run `pytest -q` and confirm failures.
-2. **Green:**
+### Test rules
 
-   * Implement the minimal code to pass the tests.
-   * Run `make test` (or `pytest -q`) until green.
-3. **Refactor:**
-
-   * Improve code structure, keep tests green.
-   * Run `make fmt lint test` to ensure style and static checks.
-
-### Test authoring rules
-
-* **Mirroring:** tests mirror source paths (e.g., `src/services/retrieval/foo.py` → `tests/services/retrieval/test_foo.py`).
-* **Coverage gate:** target ≥ **80%** for changed files. If under target, add tests. Command:
-
-  ```bash
-  pytest -q --cov=src --cov-report=term-missing
-  ```
-* **Property tests (where useful):** use `hypothesis` for pure functions and text transforms.
-* **Snapshot tests:** for deterministic RAG outputs (store under `tests/snapshots/`).
-* **Network isolation:** mock providers and HTTP; mark external calls with `-m external`.
-* **Fixtures:** place shared fixtures in `tests/conftest.py` and `tests/fixtures/`.
-* **Regression first:** any discovered bug must first land as a failing test.
-
-### Self‑feedback loop for agents
-
-* If tests fail, **read the traceback**, locate the function, and iterate.
-* If `ruff`/`mypy` fail, fix style/types **before** pushing.
-* Commit tests and implementation together; PR description must note new/changed tests.
-
-### Optional but recommended
-
-* **Mutation tests:** (e.g., `mutmut`) for critical modules.
-* **Pre‑commit hooks:** add `pre-commit` with `ruff`, `black`, and `pytest -q` (fast subset) on commit.
+* Mirror source paths under `tests/`.
+* Coverage ≥ 80% for changed files.
+* Use `hypothesis` where helpful.
+* Mock network/external providers.
+* Add regression tests before fixes.
 
 ---
-
 
 ## Components & Entrypoints
 
@@ -159,48 +157,29 @@ See **style guide** in [`codex/specs/ragx_master_spec.yaml`](codex/specs/ragx_ma
 
 ---
 
-## Codex & Agent Usage
-
-### 1. Codex Prompts
-
-* All specs in `codex/specs/` are **machine-readable**.
-* Codex agents should always load the canonical flag definitions from `arg_spec` rather than inventing new ones.
-* When creating or updating components, agents must:
-
-  1. Reference component `id` in `components:`.
-  2. Ensure CLI flags match `arg_spec`.
-  3. Preserve style rules from `style_guide`.
-
-### 2. Development Workflow
-
-* **One spec → many outputs.**
-  Codex may be asked to:
-
-  * Generate documentation (`/docs`).
-  * Produce test fixtures (`/tests`).
-  * Update implementation code (`/pkgs`).
-* Patches should be applied with `git apply` (agents: generate unified diff).
-
-### 3. CI Rules
-
-* Unit tests must pass locally (`pytest`).
-* CI runs lint/type/unit/integration/e2e defined in spec.
-* External-network variability should be mocked in fixtures.
-
----
-
 ## Human-in-the-Loop
 
-* Agents may request user approval for **outlines** and **question merges** via MCP `hitl.*` tools.
+* Agents may request approval for outlines/questions via MCP `hitl.*` tools.
 * Default `--approve-outline` is `noninteractive`.
-* Editors can switch to `--approve-outline=editor` for manual review.
 
 ---
 
 ## Contributing
 
-1. Fork and clone the repo.
-2. Make changes in feature branch.
-3. Ensure specs are updated (`codex/specs/`).
-4. Run `make test` and `make lint`.
-5. Submit PR with link to relevant spec section.
+1. Fork + clone.
+2. Feature branch.
+3. Update specs if needed.
+4. Run `./scripts/ensure_green.sh`.
+5. Submit PR with spec references.
+
+---
+
+### TL;DR for Agents
+
+* **Run `./scripts/ensure_green.sh` first.**
+* If red, fix harness before coding.
+* Add failing test → implement → pass tests → refactor.
+* No commit/PR is valid unless tests are green.
+
+
+
