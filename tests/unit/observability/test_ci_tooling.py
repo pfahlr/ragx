@@ -56,12 +56,15 @@ def test_ci_workflow_runs_linters_typechecks_tests():
     assert setup_python_step is not None, "Python setup step missing"
     assert setup_python_step.get("with", {}).get("python-version") == "3.11"
 
-    run_commands = [step.get("run") for step in steps if step.get("run")]
-    assert "pip install -r requirements.txt || true" in run_commands
-    assert "pip install ruff mypy pytest coverage yamllint || true" in run_commands
-    assert "ruff check . || true" in run_commands
-    assert "mypy . || true" in run_commands
-    assert "pytest --maxfail=1 --disable-warnings || true" in run_commands
+    run_blocks = [step.get("run") for step in steps if step.get("run")]
+    run_commands: list[str] = []
+    for block in run_blocks:
+        run_commands.extend(line.strip() for line in block.splitlines() if line.strip())
+    assert any(cmd.startswith("pip install -r requirements.txt") for cmd in run_commands)
+    assert any("pip install" in cmd and "ruff" in cmd and "mypy" in cmd and "pytest" in cmd and "yamllint" in cmd for cmd in run_commands)
+    assert any(cmd.startswith("ruff check") for cmd in run_commands)
+    assert any(cmd.startswith("mypy ") for cmd in run_commands)
+    assert any(cmd.startswith("pytest --maxfail=1 --disable-warnings") for cmd in run_commands)
 
 
 def test_makefile_has_ci_targets():
