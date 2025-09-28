@@ -1,0 +1,12 @@
+id: 06b_mcp_server_bootstrap
+title: MCP server bootstrap (HTTP + STDIO, envelope only)
+description: >
+  Stand up FastAPI HTTP and STDIO JSON-RPC skeleton exposing /mcp/discover, /mcp/prompt/*, and /mcp/tool/*
+  that return envelope-shaped placeholders.
+acceptance:
+  - tests/e2e/test_mcp_server_bootstrap.py pass
+  - GET /mcp/discover returns ok:true envelope; STDIO discover echoes same
+steps:
+  - Implement McpService with discover(), get_prompt(), invoke_tool() stubs.
+  - Implement Envelope model and JSON logs with traceId.
+  - Wire CLI flags (--http/--stdio/--host/--port).

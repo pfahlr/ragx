@@ -1,0 +1,9 @@
+id: 11c_retrieval_provider_connectors
+title: Retrieval connectors (bing/tavily) via MCP tool
+description: >
+  Implement connectors with normalization; support recencyDays and limit; add offline fixtures for CI.
+acceptance:
+  - tests/unit/test_search_normalization.py pass
+  - tests/e2e/test_retriever_end_to_end_offline.py pass
+steps:
+  - Connector adapters with provider switch; offline fixtures for deterministic tests.

@@ -1,0 +1,8 @@
+id: 10b_ci_conformance_suite
+title: CI conformance tests (MCP envelope, DSL lints)
+description: >
+  Provide pytest suites to validate envelope shape, error codes, and linter outputs.
+acceptance:
+  - ci job passes locally (documented); test fixtures included
+steps:
+  - Add tests under tests/conformance/ and fixtures; document running locally.

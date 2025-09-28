@@ -1,0 +1,8 @@
+id: 15f_quality_bar_exit_checks
+title: Quality bar exit checks (linters, typecheck, conformance)
+description: >
+  Final gate running ruff, mypy, yamllint, unit/e2e tests, and conformance suites.
+acceptance:
+  - single make target passes locally
+steps:
+  - Add Makefile targets and documentation.

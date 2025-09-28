@@ -1,0 +1,9 @@
+id: 10a_observability_trace_metrics
+title: Tracing + metrics counters across components
+description: >
+  Emit JSONL trace events and basic counters (requests, durations, errors) for MCP and Runner.
+acceptance:
+  - tests/unit/test_trace_events_shape.py pass
+  - tests/unit/test_metrics_counters_increment.py pass
+steps:
+  - Implement TraceWriter events; minimal in-memory metrics registry for unit tests.

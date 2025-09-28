@@ -1,0 +1,12 @@
+id: 11a_core_tools_full_set
+title: Core MCP tools full coverage + schemas
+description: >
+  Implement web.search.query (normalized), vector.query.search (real index call),
+  docs.load.fetch (local fs), citations.audit.check (LLM optional / deterministic stub),
+  exports.render.markdown (Markdown + front-matter).
+acceptance:
+  - tests/unit/test_core_tools_schemas_complete.py pass
+  - tests/e2e/test_mcp_core_tools_full.py pass
+steps:
+  - Provide complete JSON Schemas and sample toolpacks/specs.
+  - Wire into MCP server with validation and limits.

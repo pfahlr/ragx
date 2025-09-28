@@ -1,0 +1,9 @@
+id: 15e_end_to_end_demo_script
+title: End-to-end demo script (happy path)
+description: >
+  Script that builds a small index (md+pdf), runs the MCP server, executes a simple flow,
+  and renders a markdown report artifact.
+acceptance:
+  - tests/e2e/test_demo_happy_path.py pass (offline)
+steps:
+  - Provide ./scripts/demo_happy_path.sh and fixtures; ensure deterministic results.

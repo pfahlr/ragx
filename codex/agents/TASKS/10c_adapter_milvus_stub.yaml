@@ -1,0 +1,8 @@
+id: 10c_adapter_milvus_stub
+title: Milvus adapter stub (client shape, no network)
+description: >
+  Provide client shape and mapping functions without external calls; unit tests verify mappings.
+acceptance:
+  - tests/unit/test_milvus_adapter_mapping.py pass
+steps:
+  - Implement mapping functions; mark network as disabled in CI.

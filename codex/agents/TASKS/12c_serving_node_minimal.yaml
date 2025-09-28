@@ -1,0 +1,8 @@
+id: 12c_serving_node_minimal
+title: Serving node (HTTP) for search + reload
+description: >
+  FastAPI app to load serialized CPU index, optional to_gpu stub, /search and /reload endpoints.
+acceptance:
+  - tests/e2e/test_serving_node_minimal.py pass
+steps:
+  - Implement load on startup; JSON contracts for queries and responses.

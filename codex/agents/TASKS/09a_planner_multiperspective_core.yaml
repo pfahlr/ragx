@@ -1,0 +1,9 @@
+id: 09a_planner_multiperspective_core
+title: Deterministic perspectives + questions + mind-map
+description: >
+  Implement perspective derivation and question generation with seeded determinism; export/import graph JSON.
+acceptance:
+  - tests/unit/test_planner_determinism.py pass
+  - tests/unit/test_mindmap_roundtrip.py pass
+steps:
+  - Implement derive_perspectives(), generate_questions(), and MindMap class.

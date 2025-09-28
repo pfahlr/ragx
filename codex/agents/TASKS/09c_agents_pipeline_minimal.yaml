@@ -1,0 +1,8 @@
+id: 09c_agents_pipeline_minimal
+title: Planner → Executor → Publisher (minimal artifacts)
+description: >
+  Wire minimal pipeline producing report_md, outline_md, bibliography_md with deterministic fixtures.
+acceptance:
+  - tests/e2e/test_agents_pipeline_minimal.py pass
+steps:
+  - Implement Planner.plan(), Executor.run() (dummy retrieval), Publisher.assemble().

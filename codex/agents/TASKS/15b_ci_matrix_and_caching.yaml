@@ -1,0 +1,8 @@
+id: 15b_ci_matrix_and_caching
+title: CI matrix (py versions) + cache deps + coverage gate
+description: >
+  Configure GitHub Actions matrix (3.10–3.12), pip cache, and coverage >=85 gate.
+acceptance:
+  - workflow yaml validates; local dry-run steps pass
+steps:
+  - Add .github/workflows/ci.yaml; badges in README.

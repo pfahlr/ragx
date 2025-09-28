@@ -1,0 +1,8 @@
+id: 15c_security_and_sandbox_policy
+title: Security policy for Toolpacks + sandbox configs
+description: >
+  Document and enforce defaults for path allowlists, network-off by default, and env passthrough allowlist.
+acceptance:
+  - tests/unit/test_toolpack_security_defaults.py pass
+steps:
+  - Implement checks in executor; docs page for security policy.

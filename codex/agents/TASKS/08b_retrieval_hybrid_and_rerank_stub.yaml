@@ -1,0 +1,9 @@
+id: 08b_retrieval_hybrid_and_rerank_stub
+title: Hybrid BM25+vector scoring (stub) + reranker stub
+description: >
+  Provide deterministic stub for BM25 and cross-encoder rerank to enable tests without model downloads.
+acceptance:
+  - tests/unit/test_hybrid_tie_breaks.py pass
+  - tests/unit/test_stub_reranker_determinism.py pass
+steps:
+  - Implement simple BM25 and tie-breaking; stub reranker scoring function; configuration flags respected.

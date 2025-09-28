@@ -1,0 +1,8 @@
+id: 14a_docs_site_scaffolding
+title: Docs scaffolding (mkdocs or docusaurus) + API refs
+description: >
+  Set up docs site with navigation for DSL, MCP, Vector DB, and Quickstart; generate API reference stubs.
+acceptance:
+  - docs build runs locally
+steps:
+  - Scaffold configs and initial pages; link to spec files in /codex/specs.

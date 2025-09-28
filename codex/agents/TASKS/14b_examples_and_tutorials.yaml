@@ -1,0 +1,8 @@
+id: 14b_examples_and_tutorials
+title: Examples (flows, toolpacks, ingestion) + tutorials
+description: >
+  Provide runnable examples for 'react_self_refine', 'markdown_ingest', and 'mcp_core_tools'.
+acceptance:
+  - tests/e2e/test_examples_smoke.py pass
+steps:
+  - Add example assets and scripts under examples/.

@@ -1,0 +1,9 @@
+id: 07a_dsl_policy_engine_completion
+title: Complete PolicyStack (allow/deny tools/tags) + tests
+description: >
+  Implement hierarchical policy resolution and enforcement; add linter checks for unreachable nodes.
+acceptance:
+  - tests/unit/test_policy_stack_resolution.py pass
+  - tests/unit/test_linter_unreachable_tools.py pass
+steps:
+  - Implement effective_allowlist(); emit policy trace events; linter rule for unreachable branches.

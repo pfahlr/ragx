@@ -1,0 +1,9 @@
+id: 09b_hitl_checkpoints_minimal
+title: HITL outline approval (stdin) and question injection
+description: >
+  Validate outline JSON, allow stdin edits, and merge extra questions.
+acceptance:
+  - tests/unit/test_hitl_outline_validation.py pass
+  - tests/unit/test_hitl_questions_merge.py pass
+steps:
+  - Implement Checkpointer methods; schema validation for inputs.

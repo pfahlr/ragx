@@ -1,0 +1,13 @@
+id: 10e_runner_templating_and_decisions
+title: FlowRunner templating (Jinja) + decision resolution
+description: >
+  Implement prompt/args rendering from vars and prior outputs; add decision node evaluation
+  via Jinja predicates and simple plan parsing. Include caching key based on rendered inputs.
+acceptance:
+  - tests/unit/test_runner_templating.py pass
+  - tests/unit/test_runner_decisions.py pass
+  - tests/e2e/test_example_flow_react_self_refine.py pass
+steps:
+  - Integrate Jinja2 environment with safe filters.
+  - Implement decision resolution with 'when' Jinja expressions and default branch.
+  - Cache key: sha256(node_id|rendered_inputs|tool_ref).

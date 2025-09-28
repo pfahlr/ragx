@@ -1,0 +1,9 @@
+id: 06d_mcp_toolpacks_transport
+title: Wire toolpacks runtime into MCP server (Python kind)
+description: >
+  Hook up ToolpackLoader + Executor (python kind) so MCP POST /mcp/tool/{id} executes toolpacks deterministically.
+acceptance:
+  - tests/e2e/test_mcp_python_toolpacks_exec.py pass
+  - Idempotency cache hits logged
+steps:
+  - Integrate loader/executor; honor timeouts/limits; log durationMs and IO sizes.

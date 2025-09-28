@@ -1,0 +1,8 @@
+id: 15d_performance_fixtures_and_bench
+title: Performance fixtures (small) + bench harness
+description: >
+  Add micro-benchmark harness for index add/search and MCP tool latency; CI runs quick smoke.
+acceptance:
+  - tests/unit/test_bench_harness_smoke.py pass
+steps:
+  - Provide harness utilities and sample fixtures; print p50/p95 locally.

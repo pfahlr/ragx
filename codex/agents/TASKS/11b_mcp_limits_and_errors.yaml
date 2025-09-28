@@ -1,0 +1,9 @@
+id: 11b_mcp_limits_and_errors
+title: MCP limits (payload caps, timeouts) + canonical errors
+description: >
+  Enforce maxInputBytes/maxOutputBytes/timeouts per tool; map failures to canonical codes.
+acceptance:
+  - tests/unit/test_mcp_timeouts_and_caps.py pass
+  - tests/e2e/test_mcp_error_mapping.py pass
+steps:
+  - Enforce caps from toolpack config; capture stderr head on failure.

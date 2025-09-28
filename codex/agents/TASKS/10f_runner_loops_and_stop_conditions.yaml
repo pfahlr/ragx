@@ -1,0 +1,10 @@
+id: 10f_runner_loops_and_stop_conditions
+title: Loop control (max_iterations, budget stop) with traces
+description: >
+  Execute loop control entries, track iterations, enforce stop conditions and emit trace events.
+acceptance:
+  - tests/unit/test_runner_loops.py pass
+  - tests/e2e/test_self_refine_loop_stops.py pass
+steps:
+  - Implement loop executor targeting subgraph.
+  - Honor stop.max_iterations and stop.budget (breach_action stop|error).

@@ -1,0 +1,9 @@
+id: 07b_budget_guards_and_runner_integration
+title: Budget guards integrated in FlowRunner
+description: >
+  Hard/soft budgets at run/node/spec/loop with breach actions; trace spend and stop reasons.
+acceptance:
+  - tests/unit/test_budget_meter_limits.py pass
+  - tests/e2e/test_runner_budget_stop.py pass
+steps:
+  - Wire BudgetMeter into runner; add loop stop conditions; record spend in trace.

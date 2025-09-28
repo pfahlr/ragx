@@ -1,0 +1,8 @@
+id: 15a_release_engineering
+title: Release engineering (versioning, CHANGELOG, packaging)
+description: >
+  Add semantic versioning, changelog generation, and PyPI packaging stubs for Python parts.
+acceptance:
+  - packaging build succeeds locally
+steps:
+  - Setup pyproject.toml, version bump script, CONTRIBUTING docs.

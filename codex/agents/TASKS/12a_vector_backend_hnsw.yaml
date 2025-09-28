@@ -1,0 +1,9 @@
+id: 12a_vector_backend_hnsw
+title: HNSW backend via hnswlib (P1)
+description: >
+  Add HNSW Handle implementation with merge_by_reinsertion and CPU serialization.
+acceptance:
+  - tests/unit/test_hnsw_add_search.py pass
+  - tests/e2e/test_hnsw_merge_flow.py pass
+steps:
+  - Implement handle; registry register 'hnsw_py' (or cpp if available).

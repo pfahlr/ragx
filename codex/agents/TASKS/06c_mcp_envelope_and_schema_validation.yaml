@@ -1,0 +1,10 @@
+id: 06c_mcp_envelope_and_schema_validation
+title: Envelope + schema validation for tool IO
+description: >
+  Enforce envelope.schema.json and per-tool input/output schemas; reject invalid payloads with canonical error codes.
+acceptance:
+  - tests/unit/test_envelope_schema_validation.py pass
+  - tests/e2e/test_mcp_envelope_validation.py pass (invalid -> INVALID_INPUT)
+steps:
+  - Load JSON Schemas; validate on ingress/egress.
+  - Map HTTP status and JSON-RPC errors to canonical codes.

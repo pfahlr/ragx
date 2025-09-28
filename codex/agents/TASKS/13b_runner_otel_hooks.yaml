@@ -1,0 +1,8 @@
+id: 13b_runner_otel_hooks
+title: OpenTelemetry hooks (optional) for runner + MCP
+description: >
+  Add no-op OTEL hooks with environment-driven toggle; keep tests offline and deterministic.
+acceptance:
+  - tests/unit/test_otel_hooks_toggle.py pass
+steps:
+  - Provide instrumentation stubs; ensure zero-cost when disabled.

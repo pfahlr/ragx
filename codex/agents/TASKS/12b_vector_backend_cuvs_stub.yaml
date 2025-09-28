@@ -1,0 +1,8 @@
+id: 12b_vector_backend_cuvs_stub
+title: cuVS/RAFT GPU backend (stub with CPU serialize)
+description: >
+  Provide interface and to_gpu() behavior placeholder; tests run in CPU-only mode using stub.
+acceptance:
+  - tests/unit/test_cuvs_interface_stub.py pass
+steps:
+  - Implement stub class and register 'cuvs_stub' guarded by CUDA availability.

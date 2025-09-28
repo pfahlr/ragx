@@ -1,0 +1,8 @@
+id: 08a_rest_facade_minimal
+title: REST facade parity endpoints (/v1/search, /v1/plan)
+description: >
+  Thin FastAPI wrapper calling the same service layer as MCP.
+acceptance:
+  - tests/e2e/test_rest_facade_minimal.py pass
+steps:
+  - Implement /v1/search and /v1/plan; return normalized outputs and envelope on errors.

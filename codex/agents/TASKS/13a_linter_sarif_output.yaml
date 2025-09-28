@@ -1,0 +1,9 @@
+id: 13a_linter_sarif_output
+title: Linter SARIF output + stricter rules
+description: >
+  Add --format sarif, rule for missing pricing metadata (strict), and loop blow-up detection.
+acceptance:
+  - tests/unit/test_linter_sarif.py pass
+  - tests/unit/test_linter_blowup_detection.py pass
+steps:
+  - Implement SARIF formatter; new rules; CI sample artifact.
