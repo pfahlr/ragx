@@ -8,6 +8,7 @@ import pytest
 from ragcore.backends.cuvs import CuVSBackend
 from ragcore.backends.faiss import FaissBackend
 from ragcore.backends.hnsw import HnswBackend
+from ragcore.backends.pyflat import PyFlatBackend
 from ragcore.registry import get, register, _reset_registry
 
 
@@ -60,6 +61,15 @@ def _clear_registry() -> Iterable[None]:
                 "params": {"nlist": 1, "m": 1, "nbits": 8},
             },
         ),
+        (
+            PyFlatBackend(),
+            {
+                "backend": "py_flat",
+                "kind": "flat",
+                "metric": "l2",
+                "dim": 3,
+            },
+        ),
     ],
 )
 def test_small_index_build_and_search(backend, spec) -> None:
@@ -91,10 +101,12 @@ def test_merge_shards_across_backends() -> None:
     faiss = FaissBackend()
     hnsw = HnswBackend()
     cuvs = CuVSBackend()
+    pyflat = PyFlatBackend()
 
     register(faiss)
     register(hnsw)
     register(cuvs)
+    register(pyflat)
 
     faiss_handle = faiss.build({
         "backend": "faiss",
@@ -115,8 +127,14 @@ def test_merge_shards_across_backends() -> None:
         "dim": 2,
         "params": {"nlist": 1},
     })
+    pyflat_handle = pyflat.build({
+        "backend": "py_flat",
+        "kind": "flat",
+        "metric": "l2",
+        "dim": 2,
+    })
 
-    for handle in (faiss_handle, hnsw_handle, cuvs_handle):
+    for handle in (faiss_handle, hnsw_handle, cuvs_handle, pyflat_handle):
         if handle.requires_training():
             handle.train(np.eye(2, dtype="float32"))
 
@@ -126,6 +144,7 @@ def test_merge_shards_across_backends() -> None:
     faiss_handle.add(shard_a)
     hnsw_handle.add(shard_a)
     cuvs_handle.add(shard_a)
+    pyflat_handle.add(shard_a)
 
     faiss_other = faiss.build({
         "backend": "faiss",
@@ -146,8 +165,14 @@ def test_merge_shards_across_backends() -> None:
         "dim": 2,
         "params": {"nlist": 1},
     })
+    pyflat_other = pyflat.build({
+        "backend": "py_flat",
+        "kind": "flat",
+        "metric": "l2",
+        "dim": 2,
+    })
 
-    for other in (faiss_other, hnsw_other, cuvs_other):
+    for other in (faiss_other, hnsw_other, cuvs_other, pyflat_other):
         if other.requires_training():
             other.train(np.eye(2, dtype="float32"))
         other.add(shard_b)
@@ -155,13 +180,14 @@ def test_merge_shards_across_backends() -> None:
     merged_faiss = faiss_handle.merge_with(faiss_other)
     merged_hnsw = hnsw_handle.merge_with(hnsw_other)
     merged_cuvs = cuvs_handle.merge_with(cuvs_other)
+    merged_pyflat = pyflat_handle.merge_with(pyflat_other)
 
     assert merged_faiss.ntotal() == 3
     assert merged_hnsw.ntotal() == 3
     assert merged_cuvs.ntotal() == 3
+    assert merged_pyflat.ntotal() == 3
 
-    for merged in (merged_faiss, merged_hnsw, merged_cuvs):
+    for merged in (merged_faiss, merged_hnsw, merged_cuvs, merged_pyflat):
         search = merged.search(np.array([[1.0, 0.0]], dtype="float32"), k=1)
         assert search["ids"].shape == (1, 1)
         assert search["distances"].shape == (1, 1)
-

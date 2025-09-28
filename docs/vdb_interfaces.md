@@ -90,11 +90,13 @@ FAISS, HNSW, cuVS) so callers usually need to register only custom plug-ins.
 ## Dummy backend
 
 `ragcore.backends.dummy.DummyBackend` is a pure-Python backend that implements
-`kind=flat` with `metric ∈ {ip, l2}`. It uses the shared `VectorIndexHandle`
-implementation from `ragcore.backends.base`, so it supports `merge_with()` and
-serialization just like the simulated FAISS/HNSW backends used elsewhere in the
-repo. The dummy backend keeps our unit tests fast and avoids native
-dependencies.
+`kind=flat` with default metrics and exists only for smoke tests.
+
+`ragcore.backends.pyflat.PyFlatBackend` is the baseline production-ready Python
+implementation. It uses `VectorIndexHandle` under the hood, offering exact `L2`
+and inner-product search, deterministic serialization, and merge support without
+any native dependencies. The backend is registered by default so `vectordb-
+builder` can target `--backend py_flat` out of the box.
 
 ## CLI (`vectordb-builder`)
 
@@ -125,4 +127,3 @@ Running `build` produces the index layout from the spec:
 
 The build step can leverage any backend implementer because it only interacts
 through the shared `Backend`/`Handle` protocols and the registry.
-
