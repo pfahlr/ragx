@@ -31,7 +31,7 @@ jobs:
 
       # Enable ccache to cache compiled C++ objects
       - name: Enable ccache
-        uses: hendrikmuhs/ccache-action@v2
+        uses: hendrikmuhs/ccache-action@v1.2
         with:
           key: ccache-${{ runner.os }}-${{ hashFiles('**/CMakeLists.txt') }}
           max-size: 500M
