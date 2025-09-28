@@ -49,6 +49,7 @@ jobs:
       - name: Install ccache
         if: ${{ steps.changes.outputs.native == 'true' && hashFiles('cpp/CMakeLists.txt') != '' }}
         run: |
+          echo "set man-db/auto-update false" | sudo debconf-communicate
           sudo apt-get update
           sudo apt-get install -y ccache
           ccache --version
