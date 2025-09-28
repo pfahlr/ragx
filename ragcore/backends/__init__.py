@@ -13,7 +13,7 @@ except ModuleNotFoundError:  # pragma: no cover - import-time guard
 
 
 
-_DEFAULT = [DummyBackend, PyFlatBackend, FaissBackend, HnswBackend, CuVSBackend]
+_DEFAULT = [FaissBackend, HnswBackend, CuVSBackend]
 if HAS_CPP_EXTENSION and CppBackend is not None:
     _DEFAULT.append(CppBackend)
 

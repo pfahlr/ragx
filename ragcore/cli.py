@@ -9,9 +9,11 @@ from typing import Any
 import numpy as np
 
 from ragcore.backends import register_default_backends
+from ragcore.backends.dummy import DummyBackend
+from ragcore.backends.pyflat import PyFlatBackend
 from ragcore.ingest.scanner import IngestedDocument, scan_corpus
 from ragcore.interfaces import Backend
-from ragcore.registry import get, list_backends
+from ragcore.registry import get, list_backends, register
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -208,6 +210,10 @@ def _ensure_backend_protocol(name: str, backend: Backend) -> None:
 
 def main(argv: Sequence[str] | None = None) -> int:
     register_default_backends()
+    if "py_flat" not in list_backends():
+        register(PyFlatBackend())
+    if "dummy" not in list_backends():
+        register(DummyBackend())
     parser = _build_parser()
     args = parser.parse_args(argv)
     return args.func(args)

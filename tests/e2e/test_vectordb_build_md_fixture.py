@@ -41,8 +41,42 @@ Doc two body paragraph.
     output_dir = tmp_path / "index"
 
     cmd = [
-        "python",
-      
+        sys.executable,
+        "-m",
+        "ragcore.cli",
+        "build",
+        "--backend",
+        "py_flat",
+        "--index-kind",
+        "flat",
+        "--metric",
+        "l2",
+        "--dim",
+        "3",
+        "--corpus-dir",
+        str(corpus_dir),
+        "--out",
+        str(output_dir),
+        "--accept-format",
+        "md",
+    ]
+
+    completed = subprocess.run(cmd, capture_output=True, text=True, check=False)
+    assert completed.returncode == 0, completed.stderr
+
+    docmap_path = output_dir / "docmap.json"
+    assert docmap_path.exists()
+
+    spec_path = output_dir / "index_spec.json"
+    assert spec_path.exists()
+
+    payload = json.loads(docmap_path.read_text(encoding="utf-8"))
+    docs = payload["documents"]
+    assert len(docs) == 2
+
+    doc_ids = {entry["id"] for entry in docs}
+    assert doc_ids == {"doc_one", "doc_two"}
+
 
 def test_vectordb_build_md_fixture(tmp_path: Path) -> None:
     corpus = tmp_path / "corpus"
@@ -74,6 +108,14 @@ def test_vectordb_build_md_fixture(tmp_path: Path) -> None:
         "-m",
         "ragcore.cli",
         "build",
+        "--backend",
+        "py_flat",
+        "--index-kind",
+        "flat",
+        "--metric",
+        "ip",
+        "--dim",
+        "4",
         "--corpus-dir",
         str(corpus),
         "--out",
