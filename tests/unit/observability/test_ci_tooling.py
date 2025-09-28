@@ -1,3 +1,5 @@
+import subprocess
+import sys
 import tomllib
 from pathlib import Path
 
@@ -62,12 +64,43 @@ def test_makefile_has_ci_targets():
     assert MAKEFILE_PATH.exists(), "Makefile must exist"
     content = MAKEFILE_PATH.read_text(encoding="utf-8")
 
-    assert ".PHONY: lint typecheck test codex-bootstrap" in content
+    assert ".PHONY: lint typecheck test codex-bootstrap check unit integration e2e acceptance" in content
     assert "lint:" in content
     assert "typecheck:" in content
     assert "test:" in content
+    assert "check: lint typecheck test" in content
     assert "codex-bootstrap:" in content
+    assert "PYTHON ?= python3" in content
+    assert "ruff check ." in content and "ruff check . || true" not in content
+    assert "yamllint -s codex/ flows/" in content
+    assert "mypy ." in content and "mypy . || true" not in content
+    assert "pytest --maxfail=1 --disable-warnings" in content and "|| true" not in content
+    assert "-m scripts.codex_next_tasks" in content
+    assert "python scripts/codex_next_tasks.py" in content
 
-    assert "ruff check ." in content
-    assert "mypy ." in content
-    assert "pytest" in content
+
+def test_codex_next_tasks_lists_sorted_tasks():
+    script_path = Path("scripts/codex_next_tasks.py")
+    assert script_path.exists(), "codex_next_tasks script missing"
+
+    result = subprocess.run(
+        [sys.executable, str(script_path)],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stderr
+
+    out_lines = [line.strip() for line in result.stdout.strip().splitlines() if line.strip()]
+    assert out_lines, "Script output is empty"
+    assert out_lines[0] == "Next tasks:", "Script must print header"
+
+    listed_lines = out_lines[1:]
+    expected_tasks = sorted(
+        str(path)
+        for path in Path("codex/agents/TASKS").glob("*.yaml")
+    )
+    assert listed_lines == [
+        f"- {task}" for task in expected_tasks
+    ], "Tasks must be sorted and prefixed"
+

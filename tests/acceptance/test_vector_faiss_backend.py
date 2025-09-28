@@ -1,8 +1,8 @@
 import json
 import subprocess
-import numpy as np
-import pytest
 from pathlib import Path
+
+import pytest
 
 np = pytest.importorskip("numpy")
 
