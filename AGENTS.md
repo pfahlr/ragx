@@ -11,7 +11,12 @@ This repository is set up so autonomous agents (e.g., Codex) can implement large
 3. **Determinism**: Avoid nondeterministic behavior in unit tests (seed randomness, offline fixtures).
 4. **Contracts over code**: Implement acceptance tests before filling implementations. CI must pass.
 5. **No backdoors**: Tools must respect policy/budget guards in the DSL.
-6. **Tests First (absolute gate)**: Do nothing until the test harness runs cleanly. All tasks stop if `./scripts/ensure_green.sh` is failing.
+6. **Tests First (absolute gate)**: Do nothing until the test harness runs cleanly. All tasks stop if `./scripts/ensure_green.sh` is failing. Check it often.
+7. **Test Driven Development: your environment**:  Consider your development environment broken if tests are not running, stop everything and focus on getting them working before doing anything else.
+8. **Test Driven Development: your code**: Consider your code not working if tests are failing, use their output to determine what is wrong with your code
+
+
+
 
 ---
 
