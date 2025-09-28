@@ -1,103 +1,74 @@
 from __future__ import annotations
-
-import sys
-import textwrap
 from pathlib import Path
-
 import pytest
+from ragcore.ingest.md_parser import parse_markdown
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-
-
-def _write_markdown(tmp_path: Path, name: str, content: str) -> Path:
+def _write(tmp_path: Path, name: str, contents: str) -> Path:
     path = tmp_path / name
-    path.write_text(textwrap.dedent(content).lstrip("\n"), encoding="utf-8")
+    path.write_text(contents, encoding="utf-8")
     return path
 
 
-def test_yaml_front_matter_overrides_heading(tmp_path: Path) -> None:
-    path = _write_markdown(
+def test_yaml_front_matter_overrides_base_metadata(tmp_path: Path) -> None:
+    doc = _write(
         tmp_path,
-        "front_matter.md",
-        """
-        title: Override Title
-        summary: Example summary
-        tags:
-          - ingestion
-          - markdown
-        ---
-        # Heading Title
-
-        Body content goes here.
-        """,
+        "yaml_doc.md",
+        "---\n"
+        "title: Doc Title\n"
+        "aliases:\n"
+        "  - dt\n"
+        "---\n"
+        "# Heading\n"
+        "Body text.\n",
     )
 
-    from ragcore.ingest.md_parser import parse_markdown  # import inside for TDD ordering
+    text, metadata = parse_markdown(doc, base_metadata={"title": "Old", "category": "notes"})
 
-    text, metadata = parse_markdown(path)
-
-    assert text.startswith("# Heading Title")
-    assert metadata["title"] == "Override Title"
-    assert metadata["summary"] == "Example summary"
-    assert metadata["tags"] == ["ingestion", "markdown"]
-    assert metadata["derived_title"] == "Heading Title"
+    assert "Heading" in text
+    assert metadata["title"] == "Doc Title"
+    assert metadata["category"] == "notes"
+    assert metadata["aliases"] == ["dt"]
 
 
-def test_header_block_without_nested_yaml(tmp_path: Path) -> None:
-    path = _write_markdown(
+def test_key_value_front_matter_parses_and_overrides(tmp_path: Path) -> None:
+    doc = _write(
         tmp_path,
-        "header_block.md",
-        """
-        title: Plain Header Title
-        category: research
-        owner: ops
-        ---
-        Content without headings.
-        """,
+        "kv_doc.md",
+        "title: Front Matter Title\n"
+        "tags: a, b\n"
+        "---\n"
+        "Actual content\n",
     )
 
-    from ragcore.ingest.md_parser import parse_markdown
+    text, metadata = parse_markdown(doc, base_metadata={"title": "Fallback", "tags": "c"})
 
-    text, metadata = parse_markdown(path)
-
-    assert text.startswith("Content without headings.")
-    assert metadata["title"] == "Plain Header Title"
-    assert metadata["category"] == "research"
-    assert metadata["owner"] == "ops"
+    assert text.strip() == "Actual content"
+    assert metadata["title"] == "Front Matter Title"
+    assert metadata["tags"] == "a, b"
 
 
-def test_title_falls_back_to_first_heading_or_stem(tmp_path: Path) -> None:
-    path_with_heading = _write_markdown(
-        tmp_path,
-        "has_heading.md",
-        """
-        # Heading Driven Title
+def test_missing_front_matter_returns_plain_text(tmp_path: Path) -> None:
+    doc = _write(tmp_path, "plain.md", "No front matter here\nSecond line\n")
 
-        Some content.
-        """,
-    )
+    text, metadata = parse_markdown(doc, base_metadata={"category": "misc"})
 
-    path_without_heading = _write_markdown(
-        tmp_path,
-        "no_heading.md",
-        """
-        Paragraph only without any headings.
-        """,
-    )
-
-    from ragcore.ingest.md_parser import parse_markdown
-
-    text_heading, metadata_heading = parse_markdown(path_with_heading)
-    text_none, metadata_none = parse_markdown(path_without_heading)
-
-    assert text_heading.startswith("# Heading Driven Title")
-    assert metadata_heading["title"] == "Heading Driven Title"
-    assert metadata_heading["derived_title"] == "Heading Driven Title"
-
-    assert text_none.startswith("Paragraph only")
-    assert metadata_none["title"] == "no_heading"
-    assert metadata_none["derived_title"] == "no_heading"
+    assert text.startswith("No front matter")
+    assert metadata == {"category": "misc"}
 
 
-if __name__ == "__main__":
-    pytest.main([__file__])
+@pytest.mark.parametrize(
+    "header_lines",
+    [
+        "invalid header\n---\nBody\n",
+        "key only\n---\nBody\n",
+    ],
+)
+
+def test_invalid_header_does_not_raise(tmp_path: Path, header_lines: str) -> None:
+    doc = _write(tmp_path, "invalid.md", header_lines)
+
+    text, metadata = parse_markdown(doc)
+
+    assert text.endswith("Body\n")
+    # Invalid headers are ignored; metadata remains unchanged (empty dict)
+    assert metadata == {}

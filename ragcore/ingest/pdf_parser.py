@@ -1,44 +1,46 @@
+"""PDF ingestion utilities."""
+
 from __future__ import annotations
 
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
+try:
+    from pypdf import PdfReader  # type: ignore
+except ModuleNotFoundError:  # pragma: no cover - optional dependency
+    PdfReader = None
 
-def parse_pdf(path: Path) -> tuple[str, dict[str, Any]]:
-    """Extract text and metadata from a PDF document.
 
-    The implementation prefers :mod:`pypdf` but degrades gracefully with a
-    helpful error message if the dependency is missing. This keeps the module
-    importable in environments where PDF ingestion is not yet required.
-    """
+def parse_pdf(
+    path: Path,
+    base_metadata: Mapping[str, Any] | None = None,
+) -> tuple[str, dict[str, Any]]:
+    """Parse a PDF document, extracting text and merging metadata."""
 
-    try:
-        from pypdf import PdfReader  # type: ignore
-    except ImportError as exc:  # pragma: no cover - exercised when dependency missing
+    if PdfReader is None:
         raise RuntimeError(
-            "PDF parsing requires the 'pypdf' package. Install it to enable PDF ingestion."
-        ) from exc
+            "pypdf is required for PDF ingestion; install ragx[ingest] "
+            "or add pypdf to your environment."
+        )
 
     reader = PdfReader(str(path))
-    text_parts: list[str] = []
+
+    text_parts = []
     for page in reader.pages:
         extracted = page.extract_text() or ""
-        text_parts.append(extracted.rstrip())
+        cleaned = extracted.strip()
+        if cleaned:
+            text_parts.append(cleaned)
 
-    metadata: dict[str, Any] = {
-        "title": path.stem,
-        "derived_title": path.stem,
-    }
+    text = "\n".join(text_parts)
 
-    doc_info: Any = reader.metadata or {}
-    title = getattr(doc_info, "title", None)
-    if title:
-        metadata["title"] = title
-    for key, value in getattr(doc_info, "items", lambda: [])():
-        if not value:
+    metadata = dict(base_metadata or {})
+    pdf_meta = getattr(reader, "metadata", None) or {}
+    for key, value in pdf_meta.items():
+        if not key:
             continue
-        normalized_key = str(key).strip("/")
-        metadata.setdefault(normalized_key, value)
+        key_str = key.lstrip("/") if isinstance(key, str) else str(key)
+        metadata.setdefault(key_str, value)
 
-    text = "\n".join(part for part in text_parts if part).strip()
     return text, metadata

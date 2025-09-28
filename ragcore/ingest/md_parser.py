@@ -1,79 +1,105 @@
-from __future__ import annotations
 
-from collections.abc import Iterable
+"""Markdown ingestion utilities."""
+
+from __future__ import annotations
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
 import yaml
 
 
-class MarkdownFrontMatterError(RuntimeError):
-    """Raised when front-matter parsing fails."""
+FrontMatter = dict[str, Any]
 
 
-def parse_markdown(path: Path) -> tuple[str, dict[str, Any]]:
-    """Parse a Markdown document returning clean text and metadata.
+def parse_markdown(
+    path: Path,
+    base_metadata: Mapping[str, Any] | None = None,
+) -> tuple[str, dict[str, Any]]:
+    """Parse a Markdown document extracting optional front-matter.
 
-    The parser looks for a front-matter block preceding the first line that only
-    contains ``---``. When present, the block is treated as YAML. Front-matter
-    keys override metadata derived from the document itself, respecting the
-    product decision ``front_matter_overrides`` documented in the spec.
+    Parameters
+    ----------
+    path:
+        The Markdown file to parse.
+    base_metadata:
+        Existing metadata extracted from other sources. Values defined in
+        front-matter take precedence per the ``markdown_front_matter_precedence``
+        open decision.
     """
 
-    raw = path.read_text(encoding="utf-8")
-    front_matter_text, body_lines = _split_front_matter(raw)
-    body_text = "\n".join(body_lines).lstrip("\n")
+    raw_text = path.read_text(encoding="utf-8")
+    text, front_matter = _split_front_matter(raw_text)
 
-    derived_title = _derive_title(body_lines, path)
-    metadata: dict[str, Any] = {
-        "title": derived_title,
-        "derived_title": derived_title,
-        "source_name": path.name,
-        "source_stem": path.stem,
-    }
+    metadata = dict(base_metadata or {})
+    if front_matter:
+        metadata.update(front_matter)
 
-    if front_matter_text is not None:
-        front_meta = _parse_front_matter(front_matter_text, path)
-        metadata.update(front_meta)
-        metadata["title"] = front_meta.get("title", metadata.get("title"))
-        metadata["derived_title"] = derived_title
-
-    return body_text, metadata
+    return text, metadata
 
 
-def _split_front_matter(raw: str) -> tuple[str | None, list[str]]:
-    lines = raw.splitlines()
-    for index, line in enumerate(lines):
+def _split_front_matter(raw_text: str) -> tuple[str, FrontMatter]:
+    text = raw_text.lstrip("\ufeff")
+
+    if text.startswith("---"):
+        extracted = _extract_yaml_front_matter(text)
+        if extracted is not None:
+            return extracted
+
+    extracted = _extract_key_value_front_matter(text)
+    if extracted is not None:
+        return extracted
+
+    return text, {}
+
+
+def _extract_yaml_front_matter(text: str) -> tuple[str, FrontMatter] | None:
+    lines = text.splitlines(keepends=True)
+    if not lines or lines[0].strip() != "---":
+        return None
+
+    closing = None
+    for idx, line in enumerate(lines[1:], start=1):
         if line.strip() == "---":
-            front_lines = lines[:index]
-            body_lines = lines[index + 1 :]
-            front_text = "\n".join(front_lines).strip()
-            if not front_text:
-                return None, lines
-            return front_text, body_lines
-    return None, lines
+            closing = idx
+            break
 
+    if closing is None:
+        return None
 
-def _parse_front_matter(front_text: str, path: Path) -> dict[str, Any]:
+    block = "".join(lines[1:closing])
     try:
-        loaded = yaml.safe_load(front_text) or {}
-    except yaml.YAMLError as exc:  # pragma: no cover - defensive
-        raise MarkdownFrontMatterError(
-            f"Failed to parse front matter in {path}: {exc}"
-        ) from exc
+        data = yaml.safe_load(block) or {}
+    except yaml.YAMLError:
+        data = {}
 
-    if not isinstance(loaded, dict):  # pragma: no cover - spec guard
-        raise MarkdownFrontMatterError(
-            f"Front matter in {path} must yield a mapping, got {type(loaded).__name__}"
-        )
-    return loaded
+    if not isinstance(data, dict):
+        data = {}
+
+    remainder = "".join(lines[closing + 1 :])
+    return remainder, data
 
 
-def _derive_title(lines: Iterable[str], path: Path) -> str:
-    for line in lines:
-        stripped = line.strip()
-        if stripped.startswith("#"):
-            candidate = stripped.lstrip("#").strip()
-            if candidate:
-                return candidate
-    return path.stem
+def _extract_key_value_front_matter(text: str) -> tuple[str, FrontMatter] | None:
+    lines = text.splitlines(keepends=True)
+    try:
+        delimiter_index = next(idx for idx, line in enumerate(lines) if line.strip() == "---")
+    except StopIteration:
+        return None
+
+    if delimiter_index == 0:
+        return None
+
+    header_lines = lines[:delimiter_index]
+    metadata: dict[str, Any] = {}
+    for raw_line in header_lines:
+        stripped = raw_line.strip()
+        if not stripped:
+            continue
+        if ":" not in stripped:
+            return None
+        key, value = stripped.split(":", 1)
+        metadata[key.strip()] = value.strip()
+
+    remainder = "".join(lines[delimiter_index + 1 :])
+    return remainder, metadata

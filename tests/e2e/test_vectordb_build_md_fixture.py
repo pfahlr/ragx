@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import json
 import subprocess
+import sys
 from pathlib import Path
-
 
 def _write(tmp_dir: Path, relative: str, content: str) -> Path:
     path = tmp_dir / relative
@@ -42,42 +42,62 @@ Doc two body paragraph.
 
     cmd = [
         "python",
+      
+
+def test_vectordb_build_md_fixture(tmp_path: Path) -> None:
+    corpus = tmp_path / "corpus"
+    corpus.mkdir()
+
+    (corpus / "doc1.md").write_text(
+        "---\n"
+        "id: doc-one\n"
+        "title: Document One\n"
+        "category: reference\n"
+        "---\n"
+        "# Document One\n"
+        "Body text here.\n",
+        encoding="utf-8",
+    )
+
+    (corpus / "doc2.md").write_text(
+        "title: Document Two\n"
+        "tags: t1, t2\n"
+        "---\n"
+        "Document two content.\n",
+        encoding="utf-8",
+    )
+
+    out_dir = tmp_path / "out"
+
+    cmd = [
+        sys.executable,
         "-m",
         "ragcore.cli",
         "build",
         "--corpus-dir",
-        str(corpus_dir),
+        str(corpus),
+        "--out",
+        str(out_dir),
         "--accept-format",
         "md",
-        "--out",
-        str(output_dir),
     ]
 
-    proc = subprocess.run(cmd, capture_output=True, text=True)
+    result = subprocess.run(cmd, capture_output=True, text=True, check=False)
+    assert result.returncode == 0, result.stderr
 
-    assert proc.returncode == 0, proc.stderr
-
-    summary = json.loads(proc.stdout)
-    assert summary["documents"] == 2
-
-    docmap_path = Path(summary["docmap_path"])
-    assert docmap_path.exists()
+    docmap_path = out_dir / "docmap.json"
+    assert docmap_path.exists(), "docmap.json should be written"
 
     docmap = json.loads(docmap_path.read_text(encoding="utf-8"))
-    docs_by_id = {entry["id"]: entry for entry in docmap["documents"]}
+    documents = {entry["id"]: entry for entry in docmap["documents"]}
 
-    assert "doc-one" in docs_by_id
-    doc_one = docs_by_id["doc-one"]
-    assert doc_one["metadata"]["title"] == "Doc One"
-    assert doc_one["metadata"]["summary"] == "Preferred summary from front matter"
-    assert doc_one["metadata"]["source_relpath"] == "doc_one.md"
+    doc_one = documents["doc-one"]
+    assert doc_one["metadata"]["title"] == "Document One"
+    assert doc_one["metadata"]["category"] == "reference"
 
-    fallback_id = "notes/doc_two.md"
-    assert fallback_id in docs_by_id
-    doc_two = docs_by_id[fallback_id]
-    assert doc_two["metadata"]["title"] == "Doc Two Heading"
-    assert doc_two["metadata"]["source_relpath"] == fallback_id
+    doc_two = documents["doc2"]
+    assert doc_two["metadata"]["title"] == "Document Two"
+    assert doc_two["metadata"]["tags"] == "t1, t2"
 
-    # Text content should be present so downstream embedding steps can operate.
-    assert doc_one["text"].startswith("# Ignored Heading")
-    assert "Doc two body" in doc_two["text"]
+    assert doc_one["path"].endswith("doc1.md")
+    assert doc_two["path"].endswith("doc2.md")

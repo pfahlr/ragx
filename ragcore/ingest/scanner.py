@@ -1,66 +1,74 @@
+"""Directory scanner for corpus ingestion."""
+
 from __future__ import annotations
 
-from collections.abc import Callable, Iterable
+from collections.abc import Iterator, Sequence
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
-from . import md_parser, pdf_parser
+from .md_parser import parse_markdown
+from .pdf_parser import parse_pdf
 
 SUPPORTED_FORMATS = {"md", "pdf"}
 
 
 @dataclass(frozen=True)
-class DocumentRecord:
-    """Normalized representation of an ingested document."""
 
-    source_path: Path
-    source_relpath: str
+class IngestedDocument:
+    path: Path
     text: str
-    metadata: dict[str, object]
+    metadata: dict[str, Any]
+    format: str
 
 
 def scan_corpus(
-    corpus_dir: Path, accept_formats: Iterable[str] | None = None
-) -> list[DocumentRecord]:
-    """Scan ``corpus_dir`` collecting documents that match ``accept_formats``."""
+    corpus_dir: Path,
+    accept_formats: Sequence[str] | None = None,
+) -> list[IngestedDocument]:
+    """Scan a corpus directory and parse supported documents."""
 
     if not corpus_dir.exists():
-        raise FileNotFoundError(f"Corpus directory not found: {corpus_dir}")
+        raise FileNotFoundError(f"Corpus directory does not exist: {corpus_dir}")
 
-    if accept_formats is None:
-        normalized_formats = SUPPORTED_FORMATS
-    else:
-        normalized_formats = {fmt.lower() for fmt in accept_formats}
-        unsupported = normalized_formats - SUPPORTED_FORMATS
-        if unsupported:
-            raise ValueError(f"Unsupported formats requested: {sorted(unsupported)}")
+    requested = set(accept_formats) if accept_formats else set(SUPPORTED_FORMATS)
+    unknown = requested - SUPPORTED_FORMATS
+    if unknown:
+        raise ValueError(f"Unsupported formats requested: {sorted(unknown)}")
 
-    parser_map: dict[str, Callable[[Path], tuple[str, dict[str, object]]]] = {
-        "md": md_parser.parse_markdown,
-        "pdf": pdf_parser.parse_pdf,
-    }
+    documents: list[IngestedDocument] = []
+    for file_path in _iter_files(corpus_dir):
+        suffix = file_path.suffix.lower().lstrip(".")
+        if suffix not in requested:
+            continue
 
-    records: list[DocumentRecord] = []
-    for fmt in sorted(normalized_formats):
-        suffix = f"*.{fmt}"
-        for path in sorted(corpus_dir.rglob(suffix)):
-            text, metadata = parser_map[fmt](path)
-            relpath = path.relative_to(corpus_dir)
-            relpath_str = relpath.as_posix()
-            doc_metadata: dict[str, object] = {
-                "source_path": str(path),
-                "source_relpath": relpath_str,
-                "source_format": fmt,
-            }
-            doc_metadata.update(metadata)
-            records.append(
-                DocumentRecord(
-                    source_path=path,
-                    source_relpath=relpath_str,
-                    text=text,
-                    metadata=doc_metadata,
-                )
+        parser = _get_parser(suffix)
+        text, metadata = parser(file_path, base_metadata={"format": suffix})
+        merged = dict(metadata)
+        merged.setdefault("format", suffix)
+
+        documents.append(
+            IngestedDocument(
+                path=file_path,
+                text=text,
+                metadata=merged,
+                format=suffix,
             )
+        )
 
-    records.sort(key=lambda record: record.source_relpath)
-    return records
+    documents.sort(key=lambda doc: doc.path.relative_to(corpus_dir).as_posix())
+    return documents
+
+
+def _iter_files(corpus_dir: Path) -> Iterator[Path]:
+    for path in sorted(corpus_dir.rglob("*")):
+        if path.is_file():
+            yield path
+
+
+def _get_parser(fmt: str):
+    if fmt == "md":
+        return parse_markdown
+    if fmt == "pdf":
+        return parse_pdf
+    raise ValueError(f"Unsupported format: {fmt}")

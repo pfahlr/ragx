@@ -61,6 +61,7 @@ arg_spec:
     - { flag: "--merge",             dest: merge,             type: path,   repeatable: true }
     - { flag: "--faiss-threads",     dest: faiss_threads,     type: int,    default: 0 }
     - { flag: "--to-gpu",            dest: to_gpu,            type: int }
+    - { flag: "--accept-format",     dest: accept_format,     type: enum,   choices: [pdf,md], repeatable: true, default: [pdf,md], help: "Accepted source formats when scanning --corpus-dir." }
 
   retrieval:
     - { flag: "--search",            dest: search,            type: enum,   choices: [bing,tavily,none], default: none, help: "Web search provider used by retriever." }
@@ -466,6 +467,7 @@ components:
   description: Stable Python registry + protocols; C++ interface design; CLI wrapper; CPU-serialized index contract. Consumed by MCP tool implementations and Serving Node; NOT imported directly by the Task Runner.
   responsibilities:
     - Provide Backend/Handle protocols, registry, CLI; enforce CPU serialization contract; shard merge API.
+    - Orchestrate ingestion from PDF and Markdown corpora discovered under --corpus-dir, extracting text and metadata (front-matter aware).
   interfaces:
     cli:
       command: "vectordb-builder"
@@ -483,6 +485,11 @@ components:
       index_spec_json: "index_spec.json"
       docmap_json: "docmap.json"
       shards_dir: "shards/"
+    corpus_input:
+      description: "Files discovered under --corpus-dir; PDFs and Markdown are supported."
+      formats:
+        pdf: "Extract text and document metadata when available."
+        md: "Extract Markdown content; parse optional front-matter (YAML or key:value headers) above a '---' delimiter."
   dependencies: [numpy]
   observability:
     metrics: [shards_merged_total, index_serialize_seconds, index_deserialize_seconds]
@@ -591,7 +598,7 @@ components:
   repository: "git+ssh://example.com/your-org/research-collector.git"
   artifacts_out: ["collector/manifest.json", "collector/corpus.jsonl", "collector/pdfs/"]
   responsibilities:
-    - Build manifest, download PDFs, enrich metadata, export corpus for indexing.
+    - Build manifest, download PDFs/Markdown, enrich metadata, export corpus for indexing.
   interfaces:
     cli:
       command: "research-collector"
@@ -602,6 +609,9 @@ components:
   data_contracts:
     manifest_json: "collector/manifest.schema.json"
     corpus_jsonl: "collector/corpus.schema.json"
+    markdown_front_matter:
+      description: "When Markdown has front-matter, prefer YAML; otherwise support key:value header blocks above a '---' delimiter."
+      precedence: "Front-matter keys override embedded metadata fields."
   dependencies: [aria2c, jdownloader, pypdf_or_pymupdf]
   observability:
     logs: [download_success_rate, metadata_completion_rate]
@@ -737,6 +747,10 @@ open_decisions:
     question: How to handle tools marked deterministic:false?
     options: [bypass_cache_warn, block_in_ci, allow_with_tag]
     default: bypass_cache_warn
+  - id: markdown_front_matter_precedence
+    question: If both embedded metadata and front-matter exist, which wins?
+    options: [front_matter_overrides, prefer_embedded_metadata, merge_with_priority_front_matter]
+    default: front_matter_overrides
 
 # Test matrix (high-level)
 tests:
@@ -761,5 +775,6 @@ tests:
     - planner_outline_hitl_flow
     - agents_parallel_speedup_and_dedupe
     - vectordb_build_and_search_small_fixture
+    - vectordb_build_md_fixture
   ci:
     coverage_minimum: 85

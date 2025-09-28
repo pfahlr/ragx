@@ -6,81 +6,87 @@ import sys
 from collections.abc import Sequence
 from pathlib import Path
 
-from .ingest.scanner import DocumentRecord, scan_corpus
+from typing import Any
+
+from .ingest.scanner import IngestedDocument, scan_corpus
 
 
-def build_command(args: argparse.Namespace) -> int:
-    corpus_dir = Path(args.corpus_dir)
-    accept_formats: Sequence[str] | None = args.accept_format
-    output_dir = Path(args.out)
-    output_dir.mkdir(parents=True, exist_ok=True)
+def _build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(prog="vectordb-builder")
+    subparsers = parser.add_subparsers(dest="command", required=True)
 
-    records = scan_corpus(corpus_dir, accept_formats=accept_formats)
-    docmap_entries = _build_docmap(records)
-    accepted_formats = sorted(
-        {
-            str(record.metadata["source_format"])
-            for record in records
-            if "source_format" in record.metadata
-        }
+    build = subparsers.add_parser("build", help="Build vector index artifacts from a corpus.")
+    build.add_argument("--corpus-dir", type=Path, required=True, help="Path to corpus directory.")
+    build.add_argument(
+        "--out",
+        type=Path,
+        required=True,
+        help="Output directory for build artifacts.",
     )
-
-    docmap_path = output_dir / "docmap.json"
-    docmap_path.write_text(
-        json.dumps({"documents": docmap_entries}, indent=2, ensure_ascii=False),
-        encoding="utf-8",
+    build.add_argument(
+        "--accept-format",
+        dest="accept_format",
+        action="append",
+        choices=["pdf", "md"],
+        help="Accepted source formats when scanning --corpus-dir.",
     )
+    build.set_defaults(func=_cmd_build)
 
-    summary = {
-        "documents": len(docmap_entries),
-        "docmap_path": str(docmap_path),
-        "formats": accepted_formats,
-    }
+    return parser
+
+
+def _cmd_build(args: argparse.Namespace) -> int:
+    formats: Sequence[str] | None = args.accept_format
+    documents = scan_corpus(args.corpus_dir, accept_formats=formats)
+
+    out_dir: Path = args.out
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    docmap = _build_docmap(args.corpus_dir, documents)
+    docmap_path = out_dir / "docmap.json"
+    docmap_path.write_text(json.dumps(docmap, indent=2, sort_keys=True), encoding="utf-8")
+
+    summary = {"documents": len(documents), "docmap_path": str(docmap_path)}
     print(json.dumps(summary))
     return 0
 
 
-def _build_docmap(records: Sequence[DocumentRecord]) -> list[dict[str, object]]:
-    entries: list[dict[str, object]] = []
-    for index, record in enumerate(records):
+def _build_docmap(corpus_dir: Path, documents: Sequence[IngestedDocument]) -> dict[str, Any]:
+    entries: list[dict[str, Any]] = []
+    seen: dict[str, int] = {}
+
+    for record in documents:
         metadata = dict(record.metadata)
-        doc_id = metadata.get("id") or metadata.get("slug") or metadata.get("source_relpath")
-        if not doc_id:
-            doc_id = f"doc-{index:04d}"
+        doc_id = str(metadata.get("id") or record.path.stem)
+        counter = seen.get(doc_id)
+        if counter is None:
+            seen[doc_id] = 0
+        else:
+            seen[doc_id] = counter + 1
+            doc_id = f"{doc_id}-{seen[doc_id]}"
+
+        try:
+            rel_path = record.path.relative_to(corpus_dir).as_posix()
+        except ValueError:
+            rel_path = record.path.resolve().as_posix()
+
         entries.append(
             {
-                "id": str(doc_id),
-                "text": record.text,
+                "id": doc_id,
+                "path": rel_path,
+                "format": record.format,
                 "metadata": metadata,
+                "text": record.text,
             }
         )
-    return entries
+
+    return {"documents": entries}
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(prog="vectordb-builder")
-    subparsers = parser.add_subparsers(dest="command", required=True)
-
-    build_parser = subparsers.add_parser("build", help="Build vector index artifacts")
-    build_parser.add_argument(
-        "--corpus-dir",
-        required=True,
-        help="Directory containing source documents",
-    )
-    build_parser.add_argument(
-        "--accept-format",
-        action="append",
-        dest="accept_format",
-        choices=["pdf", "md"],
-        help="Accepted source formats when scanning the corpus",
-    )
-    build_parser.add_argument("--out", required=True, help="Output directory for index artifacts")
-    build_parser.set_defaults(func=build_command)
-
+    parser = _build_parser()
     args = parser.parse_args(argv)
-    command = args.func  # type: ignore[attr-defined]
-    return command(args)
-
+    return args.func(args)
 
 if __name__ == "__main__":
     sys.exit(main())
