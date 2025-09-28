@@ -45,12 +45,20 @@ jobs:
           echo "pybind11_DIR=$(python -m pybind11 --cmakedir)" >> $GITHUB_ENV
           echo "Using pybind11_DIR=$pybind11_DIR"
 
-      # Record compiler version for cache key stability (done before caching)
+      # Install ccache (small, fast) so compiler launcher works
+      - name: Install ccache
+        if: ${{ steps.changes.outputs.native == 'true' && hashFiles('cpp/CMakeLists.txt') != '' }}
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ccache
+          ccache --version
+
+      # Detect compiler (for cache key stability)
       - name: Detect compiler
         if: ${{ steps.changes.outputs.native == 'true' }}
         run: |
           echo "CXX_VER=$(g++ --version | head -n1 | tr -s ' ' '_')" >> $GITHUB_ENV
-          which ccache && ccache --version || true
+          echo "CXX_VER=$CXX_VER"
 
       # Compute safe hashes for cmake + sources (no commas/spaces in key)
       - name: Compute hash keys
@@ -62,7 +70,6 @@ jobs:
           if [ -z "$cmake_list" ]; then
             echo "cmake_hash=none" >> $GITHUB_ENV
           else
-            # hash of concatenated per-file hashes (stable)
             cmake_hash=$(xargs -r sha1sum < <(printf '%s\n' "$cmake_list") | sha1sum | cut -d' ' -f1)
             echo "cmake_hash=$cmake_hash" >> $GITHUB_ENV
           fi
@@ -73,7 +80,7 @@ jobs:
             echo "src_hash=$src_hash" >> $GITHUB_ENV
           fi
 
-      # Cache ccache dir directly (fast restore, no compression)
+      # Cache ccache dir directly (fast restore)
       - name: Cache ccache dir
         if: ${{ steps.changes.outputs.native == 'true' && hashFiles('cpp/CMakeLists.txt') != '' }}
         uses: actions/cache@v4
@@ -83,7 +90,6 @@ jobs:
           restore-keys: |
             ccache-${{ runner.os }}-${{ env.CXX_VER }}-
             ccache-${{ runner.os }}-
-          compression-level: 0
 
       # Configure CMake (points to ./cpp as source dir)
       - name: Configure CMake
