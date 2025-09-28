@@ -6,7 +6,6 @@ import urllib.request
 from pathlib import Path
 from typing import cast
 
-
 import pytest
 
 pytestmark = pytest.mark.xfail(reason="MCP Server not implemented yet")

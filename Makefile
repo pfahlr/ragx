@@ -1,3 +1,4 @@
+
 .PHONY: lint typecheck test codex-bootstrap check unit integration e2e acceptance
 
 PYTHON ?= python3
@@ -11,6 +12,7 @@ typecheck:
 $(PYTHON) -m mypy .
 
 test:
+
 $(PYTHON) -m pytest --maxfail=1 --disable-warnings
 
 check: lint typecheck test
