@@ -4,7 +4,7 @@
 # compile CXX with /usr/bin/c++
 CXX_DEFINES = -D_ragcore_cpp_EXPORTS
 
-CXX_INCLUDES = -I/home/rick/Development/ragx/cpp/include -isystem /home/rick/Development/ragx/venv/lib64/python3.13/site-packages/pybind11/include -isystem /usr/include/python3.13
+CXX_INCLUDES = -I/var/home/rick/Development/ragx/cpp/include -isystem /var/home/rick/Development/ragx/venv/lib64/python3.13/site-packages/pybind11/include -isystem /usr/include/python3.13
 
 CXX_FLAGS = -fPIC -fvisibility=hidden -flto=auto -fno-fat-lto-objects
 
