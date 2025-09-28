@@ -1,7 +1,15 @@
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Any
+
 import pytest
 
 np = pytest.importorskip("numpy")
-from numpy.typing import NDArray
+
+if TYPE_CHECKING:
+    from numpy.typing import NDArray
+else:
+    NDArray = Any
 
 
 @pytest.mark.xfail(reason="Vector DB Core not implemented yet", strict=False)
