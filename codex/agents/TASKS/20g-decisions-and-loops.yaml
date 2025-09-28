@@ -1,0 +1,19 @@
+id: 20g-decisions-and-loops
+title: Decision predicates + loop control with stop/budget
+owner: codex
+priority: P0
+depends_on: [20e-policy-and-budget-engine]
+goal: Implement decision nodes and loop controllers; branch policies and loop budgets.
+inputs:
+  - codex/specs/ragx_master_spec.yaml
+outputs:
+  - pkgs/dsl/orchestrator/decisions.py
+  - pkgs/dsl/orchestrator/loops.py
+  - tests/dsl/test_decisions_and_loops.py
+deliverables:
+  - Evaluate decision.when Jinja predicates; set branch policy deltas.
+  - Loop with max_iterations and loop-level budget stop (stop|error).
+acceptance:
+  - Branch selection deterministic on provided inputs
+  - Loop halts on iteration/budget as configured
+  - "pytest -q -k decisions_and_loops" green

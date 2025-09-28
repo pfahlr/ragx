@@ -1,0 +1,15 @@
+id: 41a-retrieval-hybrid-and-rerank
+title: Retrieval – hybrid BM25+vector and cross-encoder rerank
+owner: codex
+priority: P1
+depends_on: [30d-core-tools-canonical, 40a-vectordb-faiss-shim-and-serialize]
+goal: RetrieverFactory with hybrid scoring and optional cross-encoder reranker; NDCG fixtures offline.
+outputs:
+  - pkgs/retrieval/retriever.py
+  - pkgs/retrieval/rerank.py
+  - tests/retrieval/test_hybrid_and_rerank.py
+deliverables:
+  - Deterministic BM25 fallback; rerank fixtures without network download.
+  - NDCG@k test showing improvement with rerank enabled.
+acceptance:
+  - pytest -q tests/retrieval -q green

@@ -1,0 +1,17 @@
+id: 30b-mcp-discovery-and-prompts
+title: MCP – /mcp/discover + prompt registry
+owner: codex
+priority: P0
+depends_on: [30a-mcp-envelope-and-schema]
+goal: Deterministic discovery document and prompt registry with versioned specs.
+outputs:
+  - apps/mcp_server/registry/prompts.py
+  - apps/mcp_server/tests/test_discover_and_prompts.py
+  - apps/mcp_server/prompts/packs/writing/sectioned_draft.spec.yaml
+deliverables:
+  - discover() returns server info, tools[], prompts[], health.
+  - get_prompt(domain,name,major) returns body+specRef; 404 → NOT_FOUND envelope.
+acceptance:
+  - pytest -q apps/mcp_server/tests -k "discover or prompts" green
+
+

@@ -1,0 +1,45 @@
+id: FS-20ac
+title: Integrate rw compile into rw dispatcher
+intent: |
+  Ensure `rw` supports a `compile` subcommand,
+  either by importing cli/rw_compile.py or via a module entrypoint path.
+changes:
+  modify:
+    - path: cli/rw.py
+      strategy: append_or_create
+      contents: |
+        # If a Typer app exists, register a subcommand; else provide a simple dispatcher.
+        try:
+            import typer
+            from cli.rw_compile import main as compile_main
+            app = typer.Typer()
+
+            @app.command("compile")
+            def _compile(inp: str = typer.Option(..., "--in"),
+                         outp: str = typer.Option(None, "--out"),
+                         validate_only: bool = typer.Option(False, "--validate-only"),
+                         pretty: bool = typer.Option(False, "--pretty"),
+                         schema: str = typer.Option("codex/flowscript/flowscript.ast.schema.json", "--schema"),
+                         mapping: str = typer.Option("codex/flowscript/flowscript.mapping.yaml", "--mapping")):
+                import sys
+                # Bridge to argparse-based implementation:
+                import subprocess, shlex
+                args = f'--in "{inp}"' + (f' --out "{outp}"' if outp else '') \
+                       + (' --validate-only' if validate_only else '') \
+                       + (' --pretty' if pretty else '') \
+                       + f' --schema "{schema}" --mapping "{mapping}"'
+                sys.exit(subprocess.call([sys.executable, "-m", "cli.rw_compile"] + shlex.split(args)))
+
+            if __name__ == "__main__":
+                app()
+        except Exception:
+            # Fallback: run as a module wrapper
+            if __name__ == "__main__":
+                import sys
+                from cli.rw_compile import main as compile_main
+                sys.exit(compile_main())
+output_commits:
+  - message: "feat(rw): expose `rw compile` subcommand"
+acceptance_criteria:
+  - "python -m cli.rw compile --help exits 0"
+  - "python -m cli.rw compile --in codex/flowscript/examples/react_self_refine.fs.json --validate-only exits 0 (JSON AST mode)"

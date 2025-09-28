@@ -1,0 +1,14 @@
+id: 70a-docs-foundation
+title: Docs – quickstart, DSL, MCP, VectorDB pages
+owner: codex
+priority: P1
+depends_on: [20j-example-flows-and-docs, 30d-core-tools-canonical, 40b-vectordb-sharding-and-merge]
+goal: Author concise docs pages and link them from README; ensure internal links resolve.
+outputs:
+  - docs/quickstart.md
+  - docs/dsl/overview.md
+  - docs/mcp/overview.md
+  - docs/vdb/overview.md
+  - tests/docs/test_docs_links.py
+acceptance:
+  - pytest -q tests/docs -k docs_links green

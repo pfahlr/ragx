@@ -1,0 +1,14 @@
+id: 40b-vectordb-sharding-and-merge
+title: VectorDB – shard build + merge + resume
+owner: codex
+priority: P0
+depends_on: [40a-vectordb-faiss-shim-and-serialize]
+goal: Build shards up to `--shard-size`, allow resume after crash, and merge into final index.
+outputs:
+  - pkgs/indexer/builder.py
+  - tests/vdb/test_shard_merge_and_resume.py
+deliverables:
+  - Creates `shards/shard_*/{index.bin,docmap.json}` and merges to root.
+  - Resume: skips completed shards; merges remaining.
+acceptance:
+  - pytest -q tests/vdb -k shard_merge green

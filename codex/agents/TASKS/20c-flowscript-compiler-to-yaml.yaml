@@ -1,0 +1,26 @@
+id: 20c-flowscript-compiler-to-yaml
+title: FlowScript compiler → canonical YAML DSL
+owner: codex
+priority: P0
+depends_on: [20b-flowscript-parser-ast]
+goal: Compile FlowScript AST into the canonical YAML DSL (schemas defined in spec).
+inputs:
+  - codex/specs/ragx_master_spec.yaml
+  - pkgs/dsl/flowscript/ast.py
+outputs:
+  - pkgs/dsl/flowscript/compiler.py
+  - tests/dsl/test_flowscript_compile_equivalence.py
+deliverables:
+  - Compiler that emits YAML matching schemas (flow.base/policy/budget/hints).
+  - Golden test: example .fs compiles to byte-identical (normalized) YAML of example flow.
+acceptance:
+  - Validate generated YAML with jsonschema (existing validator harness)
+  - Golden fixtures: any change must update snapshots intentionally
+  - "pytest -q -k compile_equivalence" green
+paths_changed:
+  - pkgs/dsl/flowscript/*
+  - tests/dsl/*
+ci:
+  run:
+    - pytest -q
+
