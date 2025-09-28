@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import tomllib
 from pathlib import Path
 
@@ -18,7 +16,9 @@ def test_pyproject_ci_tooling_configuration():
     assert ruff_config is not None, "pyproject.toml must define [tool.ruff] configuration"
     assert ruff_config.get("line-length") == 100
     assert ruff_config.get("target-version") == "py311"
-    assert ruff_config.get("select") == ["E", "F", "I", "UP", "B"]
+    lint_config = ruff_config.get("lint")
+    assert lint_config is not None, "pyproject.toml must define [tool.ruff.lint] configuration"
+    assert lint_config.get("select") == ["E", "F", "I", "UP", "B"]
 
     mypy_config = tool_config.get("mypy")
     assert mypy_config is not None, "pyproject.toml must define [tool.mypy] configuration"

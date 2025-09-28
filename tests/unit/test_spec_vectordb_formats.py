@@ -1,11 +1,12 @@
-import os
+from pathlib import Path
+
 import yaml
 
 
 def test_vectordb_accept_format_flag_in_spec():
-    spec_path = "codex/specs/ragx_master_spec.yaml"
-    assert os.path.exists(spec_path), "Master spec missing"
-    with open(spec_path, "r") as f:
+    spec_path = Path("codex/specs/ragx_master_spec.yaml")
+    assert spec_path.exists(), "Master spec missing"
+    with spec_path.open() as f:
         spec = yaml.safe_load(f)
     vb = spec["arg_spec"]["vectordb_builder"]
     flags = {entry["flag"]: entry for entry in vb}
@@ -17,8 +18,8 @@ def test_vectordb_accept_format_flag_in_spec():
 
 
 def test_spec_mentions_markdown_and_front_matter_contracts():
-    spec_path = "codex/specs/ragx_master_spec.yaml"
-    with open(spec_path, "r") as f:
+    spec_path = Path("codex/specs/ragx_master_spec.yaml")
+    with spec_path.open() as f:
         spec = yaml.safe_load(f)
     comps = {c["id"]: c for c in spec["components"]}
     assert "vector_db_core" in comps, "vector_db_core component missing"

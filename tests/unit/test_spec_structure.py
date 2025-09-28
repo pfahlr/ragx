@@ -1,7 +1,11 @@
-import os, yaml
+from pathlib import Path
+
+import yaml
+
 
 def test_spec_has_components_and_tool_registry():
-    with open("codex/specs/ragx_master_spec.yaml","r") as f:
+    spec_path = Path("codex/specs/ragx_master_spec.yaml")
+    with spec_path.open() as f:
         spec = yaml.safe_load(f)
     assert "components" in spec and isinstance(spec["components"], list)
     assert "tool_registry" in spec and isinstance(spec["tool_registry"], dict)
