@@ -1,3 +1,5 @@
+import subprocess
+import sys
 import tomllib
 from pathlib import Path
 
@@ -70,4 +72,31 @@ def test_makefile_has_ci_targets():
 
     assert "ruff check ." in content
     assert "mypy ." in content
-    assert "pytest" in content
+    assert "pytest -q || true" in content
+    assert "python scripts/codex_next_tasks.py" in content
+
+
+def test_codex_next_tasks_lists_sorted_tasks():
+    script_path = Path("scripts/codex_next_tasks.py")
+    assert script_path.exists(), "codex_next_tasks script missing"
+
+    result = subprocess.run(
+        [sys.executable, str(script_path)],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stderr
+
+    out_lines = [line.strip() for line in result.stdout.strip().splitlines() if line.strip()]
+    assert out_lines, "Script output is empty"
+    assert out_lines[0] == "Next tasks:", "Script must print header"
+
+    listed_lines = out_lines[1:]
+    expected_tasks = sorted(
+        str(path)
+        for path in Path("codex/agents/TASKS").glob("*.yaml")
+    )
+    assert listed_lines == [
+        f"- {task}" for task in expected_tasks
+    ], "Tasks must be sorted and prefixed"

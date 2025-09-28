@@ -1,6 +1,5 @@
-
 from pathlib import Path
-import os
+
 import pytest
 import yaml
 
