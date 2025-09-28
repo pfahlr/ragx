@@ -4,8 +4,19 @@ from .dummy import DummyBackend
 from .faiss import FaissBackend
 from .hnsw import HnswBackend
 
+try:  # Optional C++ extension backend
+    from .cpp import CppBackend, HAS_CPP_EXTENSION
+except ModuleNotFoundError:  # pragma: no cover - import-time guard
+    CppBackend = None  # type: ignore[assignment]
+    HAS_CPP_EXTENSION = False
 
-DEFAULT_BACKENDS = (DummyBackend, FaissBackend, HnswBackend, CuVSBackend)
+
+
+_DEFAULT = [DummyBackend, FaissBackend, HnswBackend, CuVSBackend]
+if HAS_CPP_EXTENSION and CppBackend is not None:
+    _DEFAULT.append(CppBackend)
+
+DEFAULT_BACKENDS = tuple(_DEFAULT)
 
 
 def register_default_backends() -> None:
@@ -36,5 +47,5 @@ __all__ = [
     "CuVSBackend",
     "FaissBackend",
     "HnswBackend",
+    "CppBackend",
 ]
-
