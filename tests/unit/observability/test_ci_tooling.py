@@ -57,11 +57,16 @@ def test_ci_workflow_runs_linters_typechecks_tests():
     assert setup_python_step.get("with", {}).get("python-version") == "3.11"
 
     run_commands = [step.get("run") for step in steps if step.get("run")]
-    assert "pip install -r requirements.txt || true" in run_commands
-    assert "pip install ruff mypy pytest coverage yamllint || true" in run_commands
-    assert "ruff check . || true" in run_commands
-    assert "mypy . || true" in run_commands
-    assert "pytest --maxfail=1 --disable-warnings || true" in run_commands
+    assert any("pip install -r requirements.txt || true" in cmd for cmd in run_commands)
+    assert any(
+        "pip install pybind11 ruff mypy pytest coverage yamllint || true" in cmd
+        for cmd in run_commands
+    )
+    assert any("ruff check . || true" in cmd for cmd in run_commands)
+    assert any("mypy . || true" in cmd for cmd in run_commands)
+    assert any(
+        "pytest --maxfail=1 --disable-warnings || true" in cmd for cmd in run_commands
+    )
 
 
 def test_makefile_has_ci_targets():

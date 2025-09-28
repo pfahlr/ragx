@@ -15,5 +15,5 @@ deliverables:
   - FlowScript source compiles to YAML; runner executes to completion with stub adapters.
   - Docs page describing the example with policy/budget annotations.
 acceptance:
-  - "pytest -q -k examples_end_to_end" green
+  - '"pytest -q -k examples_end_to_end" green'
   - Linter passes on the compiled YAML

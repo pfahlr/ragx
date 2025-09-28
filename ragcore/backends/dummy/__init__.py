@@ -34,6 +34,7 @@ class DummyBackend:
 class DummyHandle(VectorIndexHandle):
     def __init__(self, spec: IndexSpec) -> None:
         super().__init__(spec, requires_training=False, supports_gpu=False)
+        self._factory_kwargs = {}
 
 
 __all__ = ["DummyBackend", "DummyHandle"]

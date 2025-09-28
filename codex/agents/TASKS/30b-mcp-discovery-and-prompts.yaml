@@ -12,6 +12,6 @@ deliverables:
   - discover() returns server info, tools[], prompts[], health.
   - get_prompt(domain,name,major) returns body+specRef; 404 → NOT_FOUND envelope.
 acceptance:
-  - pytest -q apps/mcp_server/tests -k "discover or prompts" green
+  - 'pytest -q apps/mcp_server/tests -k "discover or prompts" green'
 
 
