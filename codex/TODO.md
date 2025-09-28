@@ -1,3 +1,5 @@
+## Job Runner
+```
 Setup:
 -Review AGENTS.md,  `Review  codex/agents/*`
 -Find the tasks in  `codex/agents/TASKS/*`
@@ -15,7 +17,13 @@ Requirements:
 - it is of the greatest importance that tests continue to function and are created to verify everything about the functionality of every component.
 - consider your development environment broken if tests are not running, stop everything and focus on getting them working before doing anything else
 - consider your code not working if tests are failing, use this output to determine what is wrong with your code
+```
 
+
+## Synthesis
+```
+review the implementations of < list of tasks> in https://github.com/pfahlr/ragx/tree/<competing feature branch> to see if there is anything that might be used to improve our own.
+```
 
 
 - [x] codex/agents/TASKS/04a_vectordb_protocol_and_registry.yaml
