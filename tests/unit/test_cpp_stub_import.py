@@ -10,7 +10,12 @@ import numpy as np
 import pytest
 
 
-def _reload_cpp_module(monkeypatch: pytest.MonkeyPatch, *, force_missing: bool = False):
+def _reload_cpp_module(
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    force_missing: bool = False,
+    force_error: BaseException | None = None,
+):
     """Reload ``ragcore.backends.cpp`` with optional native stub control."""
 
     target_prefix = "ragcore.backends.cpp"
@@ -18,12 +23,15 @@ def _reload_cpp_module(monkeypatch: pytest.MonkeyPatch, *, force_missing: bool =
         if module_name == target_prefix or module_name.startswith(f"{target_prefix}."):
             sys.modules.pop(module_name)
 
-    if force_missing:
+    if force_missing or force_error is not None:
         real_import = importlib.import_module
 
         def fake_import(name: str, package: str | None = None) -> Any:  # pragma: no cover - helper
             if name in {"ragcore.backends._ragcore_cpp", "_ragcore_cpp"}:
-                raise ModuleNotFoundError(name)
+                if force_missing:
+                    raise ModuleNotFoundError(name)
+                assert force_error is not None
+                raise force_error
             return real_import(name, package)
 
         monkeypatch.setattr(importlib, "import_module", fake_import)
@@ -38,6 +46,15 @@ def test_optional_import(monkeypatch: pytest.MonkeyPatch) -> None:
         module.ensure_available()
     with pytest.raises(RuntimeError):
         module.get_backend()
+
+
+def test_optional_import_handles_import_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    error = ImportError("failed to load shared object")
+    module = _reload_cpp_module(monkeypatch, force_error=error)
+    assert module.is_available() is False
+    with pytest.raises(RuntimeError) as excinfo:
+        module.ensure_available()
+    assert excinfo.value.__cause__ is error
 
 
 def test_cpp_backend_stub_roundtrip(monkeypatch: pytest.MonkeyPatch) -> None:

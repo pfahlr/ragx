@@ -25,7 +25,7 @@ def _load_native() -> None:
     global CPPBackend, CPPHandle, _HAS_NATIVE, _NATIVE_ERROR
     try:
         native = importlib.import_module("ragcore.backends._ragcore_cpp")
-    except ModuleNotFoundError as exc:  # pragma: no cover - import path guard
+    except ImportError as exc:  # pragma: no cover - import path guard
         CPPBackend = None
         CPPHandle = None
         _HAS_NATIVE = False
