@@ -62,12 +62,16 @@ def test_makefile_has_ci_targets():
     assert MAKEFILE_PATH.exists(), "Makefile must exist"
     content = MAKEFILE_PATH.read_text(encoding="utf-8")
 
-    assert ".PHONY: lint typecheck test codex-bootstrap" in content
+    assert ".PHONY: lint typecheck test codex-bootstrap check unit integration e2e acceptance" in content
     assert "lint:" in content
     assert "typecheck:" in content
     assert "test:" in content
+    assert "check: lint typecheck test" in content
     assert "codex-bootstrap:" in content
 
-    assert "ruff check ." in content
-    assert "mypy ." in content
-    assert "pytest" in content
+    assert "PYTHON ?= python3" in content
+    assert "ruff check ." in content and "ruff check . || true" not in content
+    assert "yamllint -s codex/ flows/" in content
+    assert "mypy ." in content and "mypy . || true" not in content
+    assert "pytest --maxfail=1 --disable-warnings" in content and "|| true" not in content
+    assert "-m scripts.codex_next_tasks" in content

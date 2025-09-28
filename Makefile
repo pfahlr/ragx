@@ -1,23 +1,31 @@
-.PHONY: lint typecheck test codex-bootstrap unit integration e2e
+.PHONY: lint typecheck test codex-bootstrap check unit integration e2e acceptance
+
+PYTHON ?= python3
+TASK_LIMIT ?= 5
 
 lint:
-	ruff check . || true
-	yamllint -s . || true
+$(PYTHON) -m ruff check .
+yamllint -s codex/ flows/
 
 typecheck:
-	mypy . || true
+$(PYTHON) -m mypy .
 
 test:
-	pytest --maxfail=1 --disable-warnings || true
+$(PYTHON) -m pytest --maxfail=1 --disable-warnings
+
+check: lint typecheck test
 
 codex-bootstrap:
-	python scripts/codex_next_tasks.py || true
+$(PYTHON) -m scripts.codex_next_tasks --limit $(TASK_LIMIT)
 
 unit:
-	pytest -q tests/unit || true
+$(PYTHON) -m pytest -q tests/unit
 
 integration:
-	pytest -q tests/integration || true
+$(PYTHON) -m pytest -q tests/integration
 
 e2e:
-	pytest -q tests/e2e || true
+$(PYTHON) -m pytest -q tests/e2e
+
+acceptance:
+$(PYTHON) -m pytest -q tests/acceptance
