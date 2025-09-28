@@ -1,0 +1,12 @@
+id: 05g_toolpacks_legacy_shim
+title: Toolpacks Legacy Shim
+description: >
+  Provide compatibility shim translating snake_case configs to spec-compliant
+  camelCase, logging a deprecation warning. Optional step to ease migration.
+goals:
+  - Implement shim at load boundary.
+  - Deprecation log warning when legacy keys encountered.
+  - Test coverage for shim path.
+deliverables:
+  - apps/toolpacks/loader.py (shim layer)
+  - tests/unit/test_toolpacks_loader.py (shim tests)

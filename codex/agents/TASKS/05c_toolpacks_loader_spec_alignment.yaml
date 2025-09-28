@@ -1,0 +1,16 @@
+id: 05c_toolpacks_loader_spec_alignment
+title: Toolpacks Loader — Spec Alignment
+description: >
+  Update loader to enforce spec field names (camelCase, not snake_case),
+  validate execution.kind against approved set, and introduce
+  ToolpackValidationError. Ensure $ref schema resolution and jsonschema
+  check_schema are applied on load.
+goals:
+  - Align all field names with ragx_master_spec.yaml (camelCase).
+  - Whitelist execution kinds: [python, node, php, cli, http].
+  - Add ToolpackValidationError class.
+  - Resolve $ref and validate schema structure at load time.
+deliverables:
+  - apps/toolpacks/loader.py updated
+  - tests/unit/test_toolpacks_loader.py with new cases
+  - docs/toolpacks_loader.md updated

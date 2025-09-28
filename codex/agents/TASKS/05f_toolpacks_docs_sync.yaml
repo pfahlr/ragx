@@ -1,0 +1,12 @@
+id: 05f_toolpacks_docs_sync
+title: Toolpacks Docs — Spec Sync
+description: >
+  Write or update docs/toolpacks_loader.md and docs/toolpacks_executor.md to
+  describe invariants (field names, execution kind whitelist, caching contracts,
+  schema validation).
+goals:
+  - Keep docs consistent with ragx_master_spec.yaml.
+  - Document failure semantics and invariants.
+deliverables:
+  - docs/toolpacks_loader.md
+  - docs/toolpacks_executor.md

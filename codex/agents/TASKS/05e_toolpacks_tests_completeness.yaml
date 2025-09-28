@@ -1,0 +1,12 @@
+id: 05e_toolpacks_tests_completeness
+title: Toolpacks Tests — Completeness
+description: >
+  Add regression and property tests covering $ref resolution, duplicate ids,
+  missing fields, cache immutability, and nondeterministic bypass.
+goals:
+  - Unit tests for loader edge cases: nested $ref, duplicate ids, missing fields.
+  - Executor tests for cache deepcopy and nondeterministic packs.
+  - Property tests with hypothesis for schema validation.
+deliverables:
+  - tests/unit/test_toolpacks_loader.py (expanded)
+  - tests/unit/test_toolpacks_exec_python.py (expanded)
