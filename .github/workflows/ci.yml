@@ -1,5 +1,5 @@
 name: ci
-"on":
+on:
   push:
   pull_request:
 
@@ -14,12 +14,51 @@ jobs:
         with:
           python-version: "3.11"
 
-      # Install deps (now benefited by cache)
-      - run: pip install -r requirements.txt || true
+      # Install Python deps (benefits from pip cache)
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt || true
+          # Ensure pybind11 is available for CMake discovery
+          pip install pybind11 || true
+          # Dev tools
+          pip install ruff mypy pytest coverage yamllint || true
 
-      # Tools (these will also hit the pip cache)
-      - run: pip install ruff mypy pytest coverage yamllint || true
+      # Export pybind11_DIR in a portable way (no hardcoded site-packages path)
+      - name: Export pybind11_DIR
+        run: |
+          echo "pybind11_DIR=$(python -m pybind11 --cmakedir)" >> $GITHUB_ENV
+          echo "Using pybind11_DIR=$pybind11_DIR"
 
-      - run: ruff check . || true
-      - run: mypy . || true
-      - run: pytest --maxfail=1 --disable-warnings || true
+      # Optional: build native/pybind11 module if a CMake project exists
+      # Skips cleanly if there's no CMakeLists.txt (hashFiles returns empty)
+      - name: Install C++ toolchain
+        if: ${{ hashFiles('**/CMakeLists.txt') != '' }}
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake ninja-build g++ make
+
+      - name: Configure CMake (native build)
+        if: ${{ hashFiles('**/CMakeLists.txt') != '' }}
+        env:
+          pybind11_DIR: ${{ env.pybind11_DIR }}
+        run: |
+          # Adjust -S/-B to your C++ source root if not at repo root
+          cmake -S . -B build \
+            -G Ninja \
+            -Dpybind11_DIR="$pybind11_DIR" \
+            -DPYBIND11_FINDPYTHON=ON
+
+      - name: Build (native)
+        if: ${{ hashFiles('**/CMakeLists.txt') != '' }}
+        run: cmake --build build -- -j"$(nproc)"
+
+      # Lint / type / tests (kept non-fatal like your original)
+      - name: Ruff
+        run: ruff check . || true
+
+      - name: MyPy
+        run: mypy . || true
+
+      - name: PyTest
+        run: pytest --maxfail=1 --disable-warnings || true
