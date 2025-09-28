@@ -2,13 +2,13 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass, field
-from typing import Any, Protocol, runtime_checkable
+from typing import Any, Protocol, TypeAlias, runtime_checkable
 
 import numpy as np
-from numpy.typing import NDArray
+from numpy import ndarray
 
-FloatArray = NDArray[np.float32]
-IntArray = NDArray[np.int64]
+FloatArray: TypeAlias = ndarray[Any, np.dtype[np.float32]]
+IntArray: TypeAlias = ndarray[Any, np.dtype[np.int64]]
 
 
 @runtime_checkable

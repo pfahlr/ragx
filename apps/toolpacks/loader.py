@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Mapping
+from typing import Any
 
 import yaml
 from jsonschema import validators
@@ -35,7 +36,7 @@ class Toolpack:
     source_path: Path
 
     @classmethod
-    def from_dict(cls, data: Mapping[str, Any], source_path: Path) -> "Toolpack":
+    def from_dict(cls, data: Mapping[str, Any], source_path: Path) -> Toolpack:
         if not isinstance(data, Mapping):
             raise ToolpackValidationError(
                 f"Expected mapping for toolpack {source_path}, got {type(data).__name__}"
@@ -122,14 +123,14 @@ class ToolpackLoader:
     """Load and expose Toolpack configurations."""
 
     def __init__(self) -> None:
-        self._toolpacks: Dict[str, Toolpack] = {}
+        self._toolpacks: dict[str, Toolpack] = {}
 
     def load_dir(self, directory: Path | str) -> None:
         base_dir = Path(directory)
         if not base_dir.exists():
             raise ToolpackValidationError(f"Toolpacks directory not found: {base_dir}")
 
-        toolpacks: Dict[str, Toolpack] = {}
+        toolpacks: dict[str, Toolpack] = {}
         for path in sorted(base_dir.rglob("*.tool.yaml")):
             with path.open("r", encoding="utf-8") as handle:
                 try:
@@ -148,7 +149,7 @@ class ToolpackLoader:
 
         self._toolpacks = dict(sorted(toolpacks.items(), key=lambda item: item[0]))
 
-    def list(self) -> List[Toolpack]:
+    def list(self) -> list[Toolpack]:
         return list(self._toolpacks.values())
 
     def get(self, tool_id: str) -> Toolpack:
