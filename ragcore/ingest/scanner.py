@@ -14,6 +14,7 @@ SUPPORTED_FORMATS = {"md", "pdf"}
 
 
 @dataclass(frozen=True)
+
 class IngestedDocument:
     path: Path
     text: str

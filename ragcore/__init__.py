@@ -1,5 +1,4 @@
-"""Vector DB core package."""
+"""Vector database core orchestrator utilities for RAGX."""
 
-from __future__ import annotations
-
-__all__ = ["ingest"]
+__all__ = ["__version__",]
+__version__ = "0.0.0"

@@ -1,5 +1,5 @@
 name: ci
-on:
+"on":
   push:
   pull_request:
 
@@ -9,15 +9,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # Python with built-in pip cache
+      # Python runtime for lint/type/test steps
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-          cache: "pip"
-          # list every file that should bust the cache when changed
-          cache-dependency-path: |
-            requirements.txt
-            requirements-*.txt
 
       # Install deps (now benefited by cache)
       - run: pip install -r requirements.txt || true

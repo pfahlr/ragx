@@ -5,6 +5,44 @@ import subprocess
 import sys
 from pathlib import Path
 
+def _write(tmp_dir: Path, relative: str, content: str) -> Path:
+    path = tmp_dir / relative
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(content, encoding="utf-8")
+    return path
+
+
+def test_vectordb_builder_ingests_markdown(tmp_path: Path) -> None:
+    corpus_dir = tmp_path / "corpus"
+    corpus_dir.mkdir()
+
+    _write(
+        corpus_dir,
+        "doc_one.md",
+        """title: Doc One
+slug: doc-one
+summary: Preferred summary from front matter
+---
+# Ignored Heading
+
+Body content for doc one.
+""",
+    )
+
+    _write(
+        corpus_dir,
+        "notes/doc_two.md",
+        """# Doc Two Heading
+
+Doc two body paragraph.
+""",
+    )
+
+    output_dir = tmp_path / "index"
+
+    cmd = [
+        "python",
+      
 
 def test_vectordb_build_md_fixture(tmp_path: Path) -> None:
     corpus = tmp_path / "corpus"

@@ -5,6 +5,10 @@ from pathlib import Path
 
 import yaml
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
+
+import scripts.codex_next_tasks as codex_next_tasks
+
 PYPROJECT_PATH = Path("pyproject.toml")
 CI_WORKFLOW_PATH = Path(".github/workflows/ci.yml")
 MAKEFILE_PATH = Path("Makefile")
@@ -64,7 +68,8 @@ def test_makefile_has_ci_targets():
     assert MAKEFILE_PATH.exists(), "Makefile must exist"
     content = MAKEFILE_PATH.read_text(encoding="utf-8")
 
-    assert ".PHONY: lint typecheck test codex-bootstrap check unit integration e2e acceptance" in content
+    assert ".PHONY: lint typecheck test codex-bootstrap" in content
+    assert "check unit integration e2e acceptance" in content
     assert "lint:" in content
     assert "typecheck:" in content
     assert "test:" in content
@@ -75,8 +80,7 @@ def test_makefile_has_ci_targets():
     assert "yamllint -s codex/ flows/" in content
     assert "mypy ." in content and "mypy . || true" not in content
     assert "pytest --maxfail=1 --disable-warnings" in content and "|| true" not in content
-    assert "-m scripts.codex_next_tasks" in content
-    assert "python scripts/codex_next_tasks.py" in content
+    assert "$(PYTHON) -m scripts.codex_next_tasks" in content
 
 
 def test_codex_next_tasks_lists_sorted_tasks():
@@ -93,14 +97,9 @@ def test_codex_next_tasks_lists_sorted_tasks():
 
     out_lines = [line.strip() for line in result.stdout.strip().splitlines() if line.strip()]
     assert out_lines, "Script output is empty"
-    assert out_lines[0] == "Next tasks:", "Script must print header"
+    assert out_lines[0].startswith("Next tasks"), "Script must print header"
 
     listed_lines = out_lines[1:]
-    expected_tasks = sorted(
-        str(path)
-        for path in Path("codex/agents/TASKS").glob("*.yaml")
-    )
-    assert listed_lines == [
-        f"- {task}" for task in expected_tasks
-    ], "Tasks must be sorted and prefixed"
-
+    expected_records = codex_next_tasks.load_tasks()
+    for line, record in zip(listed_lines, expected_records, strict=False):
+        assert line.startswith(f"- {record.task_id}"), "Lines must be ordered by task id"

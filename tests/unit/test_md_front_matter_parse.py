@@ -1,11 +1,7 @@
 from __future__ import annotations
-
 from pathlib import Path
-
 import pytest
-
 from ragcore.ingest.md_parser import parse_markdown
-
 
 def _write(tmp_path: Path, name: str, contents: str) -> Path:
     path = tmp_path / name
@@ -67,6 +63,7 @@ def test_missing_front_matter_returns_plain_text(tmp_path: Path) -> None:
         "key only\n---\nBody\n",
     ],
 )
+
 def test_invalid_header_does_not_raise(tmp_path: Path, header_lines: str) -> None:
     doc = _write(tmp_path, "invalid.md", header_lines)
 

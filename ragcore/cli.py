@@ -1,5 +1,3 @@
-"""CLI entry point for vectordb-builder."""
-
 from __future__ import annotations
 
 import argparse
@@ -7,6 +5,7 @@ import json
 import sys
 from collections.abc import Sequence
 from pathlib import Path
+
 from typing import Any
 
 from .ingest.scanner import IngestedDocument, scan_corpus
@@ -88,7 +87,6 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser = _build_parser()
     args = parser.parse_args(argv)
     return args.func(args)
-
 
 if __name__ == "__main__":
     sys.exit(main())
