@@ -1,0 +1,14 @@
+{
+  "backend": "py_flat",
+  "dim": 768,
+  "is_gpu": false,
+  "is_trained": true,
+  "kind": "flat",
+  "metadata": {
+    "requires_training": false,
+    "supports_gpu": false
+  },
+  "metric": "ip",
+  "ntotal": 5,
+  "params": {}
+}
