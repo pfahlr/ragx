@@ -8,7 +8,7 @@ Setup:
 
 Request:
 
--Complete `codex/agents/TASKS/05a_toolpacks_loader_minimal.yaml`
+-Complete `codex/agents/TASKS/06a_core_tools_minimal_subset.yaml`
 
 Requirements: 
 - verify operation using a combination of the feedback from tests and by running the components in the environment and analyzing their outputs
@@ -25,8 +25,8 @@ Requirements:
 - [x] codex/agents/TASKS/04e_shards_merge_contract_and_tests.yaml
 - [x] codex/agents/TASKS/04f_cli_scanner_and_formats_md_pdf.yaml
 
-- [ ] codex/agents/TASKS/05a_toolpacks_loader_minimal.yaml
-- [ ] codex/agents/TASKS/05b_toolpacks_executor_python_only.yaml
+- [x] codex/agents/TASKS/05a_toolpacks_loader_minimal.yaml
+- [x] codex/agents/TASKS/05b_toolpacks_executor_python_only.yaml
 - [ ] codex/agents/TASKS/06a_core_tools_minimal_subset.yaml
 - [ ] codex/agents/TASKS/06b_mcp_server_bootstrap.yaml
 - [ ] codex/agents/TASKS/06c_mcp_envelope_and_schema_validation.yaml
