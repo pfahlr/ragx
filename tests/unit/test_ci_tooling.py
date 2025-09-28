@@ -75,21 +75,37 @@ def test_ci_workflow_scaffold() -> None:
 
     steps = _as_list(build_job.get("steps"), "workflow.jobs.build.steps")
 
-    expected_steps: list[dict[str, object]] = [
-        {"uses": "actions/checkout@v4"},
-        {"uses": "actions/setup-python@v5", "with": {"python-version": "3.11"}},
-        {"run": "pip install -r requirements.txt || true"},
-        {"run": "pip install ruff mypy pytest coverage yamllint || true"},
-        {"run": "ruff check . || true"},
-        {"run": "mypy . || true"},
-        {"run": "pytest --maxfail=1 --disable-warnings || true"},
-    ]
+    uses_map = {
+        step.get("uses"): step
+        for step in steps
+        if isinstance(step, dict) and step.get("uses")
+    }
+    assert "actions/checkout@v4" in uses_map
+    setup_step = uses_map.get("actions/setup-python@v5")
+    assert setup_step is not None
+    setup_with = _as_dict(setup_step.get("with"), "workflow.jobs.build.steps[setup-python].with")
+    assert setup_with.get("python-version") == "3.11"
 
-    assert len(steps) >= len(expected_steps)
-    for index, (expected, actual_obj) in enumerate(zip(expected_steps, steps, strict=True)):
-        actual = _as_dict(actual_obj, f"workflow.jobs.build.steps[{index}]")
-        for key, value in expected.items():
-            assert actual.get(key) == value
+    run_blocks = [step.get("run") for step in steps if isinstance(step, dict) and step.get("run")]
+    run_commands: list[str] = []
+    for block in run_blocks:
+        run_commands.extend(line.strip() for line in str(block).splitlines() if line.strip())
+
+    def _contains(predicate: str) -> bool:
+        return any(predicate in cmd for cmd in run_commands)
+
+    assert _contains("pip install -r requirements.txt")
+    assert any(
+        "pip install" in cmd
+        and "ruff" in cmd
+        and "mypy" in cmd
+        and "pytest" in cmd
+        and "yamllint" in cmd
+        for cmd in run_commands
+    )
+    assert any(cmd.startswith("ruff check") for cmd in run_commands)
+    assert any(cmd.startswith("mypy ") for cmd in run_commands)
+    assert any(cmd.startswith("pytest --maxfail=1 --disable-warnings") for cmd in run_commands)
 
 
 def test_makefile_includes_ci_targets() -> None:

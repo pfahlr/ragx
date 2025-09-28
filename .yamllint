@@ -1,0 +1,15 @@
+extends: default
+
+ignore: |
+  codex/specs/**
+  codex/agents/TASKS/**
+  .git/**
+  eval/**
+  cpp/build/**
+  flows/**
+
+rules:
+  document-start: disable
+  line-length:
+    max: 200
+    level: warning

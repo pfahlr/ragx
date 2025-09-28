@@ -1,15 +1,20 @@
-import os
 import pathlib
-import random
+from pathlib import Path
+
 import numpy as np
 import pytest
 
-from conftest import skip_if_no_eval
+ROOT = Path(__file__).resolve().parents[2]
+EVAL_DIR = ROOT / "eval" / "verification"
+skip_if_no_eval = pytest.mark.skipif(
+    not EVAL_DIR.exists(),
+    reason="/eval/verification not found; provide gold corpus to run this test",
+)
 
 def _maybe_import_dummy():
     try:
-        from ragcore.registry import register, get, list_backends
         from ragcore.backends.dummy import DummyBackend
+        from ragcore.registry import get, list_backends, register
         return register, get, list_backends, DummyBackend
     except Exception as e:
         pytest.skip(f"ragcore not available yet: {e}")
@@ -31,7 +36,8 @@ def test_dummy_pipeline_index_and_search(eval_dir: pathlib.Path):
     register, get, list_backends, DummyBackend = _maybe_import_dummy()
 
     # Register dummy backend for tests
-    register(DummyBackend())
+    if "dummy" not in list_backends():
+        register(DummyBackend())
     backend = get("dummy")
 
     dim = 64
@@ -44,7 +50,6 @@ def test_dummy_pipeline_index_and_search(eval_dir: pathlib.Path):
 
     # Simple deterministic embedder stub: bag-of-chars hashing into dim
     def embed(text: str) -> np.ndarray:
-        rng = random.Random(1337)
         vec = np.zeros((dim,), dtype=np.float32)
         for ch in text[:2000]:
             i = (ord(ch) + 31) % dim
@@ -63,7 +68,11 @@ def test_dummy_pipeline_index_and_search(eval_dir: pathlib.Path):
     # Query with the first text (should rank itself highest)
     q = embed(texts[0])[None, :]
     res = handle.search(q, k=min(5, xb.shape[0]))
-    ids, dists = res["ids"], res["dists"]
+    ids = res["ids"]
+    dists = res.get("distances")
+    if dists is None:
+        dists = res.get("dists")
+    assert dists is not None
     assert ids.shape == dists.shape
     assert ids.shape[0] == 1
     assert ids.shape[1] >= 1

@@ -1,18 +1,20 @@
 from __future__ import annotations
 
-from typing import Dict, Iterable
+from collections.abc import Iterable
 
-from ragcore.backends.base import Backend
+from ragcore.interfaces import Backend
 
-
-_REGISTRY: Dict[str, Backend] = {}
+_REGISTRY: dict[str, Backend] = {}
 
 
 def register(backend: Backend) -> None:
     """Register a backend instance by name."""
 
+    if not isinstance(backend, Backend):  # type: ignore[arg-type]
+        raise TypeError("Backend protocol not satisfied")
+
     name = getattr(backend, "name", None)
-    if not name:
+    if not isinstance(name, str) or not name:
         raise ValueError("backend must define a non-empty 'name' attribute")
     if name in _REGISTRY:
         raise ValueError(f"backend '{name}' already registered")
@@ -23,7 +25,7 @@ def get(name: str) -> Backend:
     try:
         return _REGISTRY[name]
     except KeyError as exc:
-        raise KeyError(f"backend '{name}' is not registered") from exc
+        raise LookupError(f"backend '{name}' is not registered") from exc
 
 
 def list_backends() -> Iterable[str]:

@@ -12,9 +12,9 @@ outputs:
   - tests/dsl/test_linter_rules.py
   - .github/workflows/ci.yml (amend)
 deliverables:
-  - CLI: `task-runner lint --spec flows/x.yaml --strict-missing-pricing`
+  - "CLI: `task-runner lint --spec flows/x.yaml --strict-missing-pricing`"
   - Lints: impossible budgets, loop risks, missing pricing, unreachable policies.
 acceptance:
   - Linter flags known-bad fixtures; passes known-good fixtures
   - CI runs linter; PR fails on ERRORs
-  - "pytest -q -k linter_rules" green
+  - '"pytest -q -k linter_rules" green'
