@@ -3,7 +3,7 @@ title: Transform sandbox – jinja/python (shell opt-in via flag)
 owner: codex
 priority: P1
 depends_on: [20d-runner-execution-core]
-goal: Safe execution of transform nodes with resource bounds; default: jinja + python only.
+goal: "Safe execution of transform nodes with resource bounds; default: jinja + python only."
 inputs:
   - codex/specs/ragx_master_spec.yaml
 outputs:
@@ -14,4 +14,4 @@ deliverables:
   - Time/memory guard stubs + network-off default; shell behind explicit allow flag.
 acceptance:
   - Deterministic outputs; stderr/stdout captured for errors
-  - "pytest -q -k transforms_sandbox" green
+  - '"pytest -q -k transforms_sandbox" green'

@@ -16,5 +16,5 @@ deliverables:
   - Middleware that validates outbound envelopes against schema.
   - Parity tests: same request via HTTP and STDIO yields byte-identical data payloads (excluding meta.traceId).
 acceptance:
-  - pytest -q apps/mcp_server/tests -k "envelope or parity" green
+  - 'pytest -q apps/mcp_server/tests -k "envelope or parity" green'
   - Invalid responses are rejected with 500 + INTERNAL code in envelope.errors

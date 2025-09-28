@@ -39,6 +39,7 @@ class CuVSBackend:
 class CuVSHandle(VectorIndexHandle):
     def __init__(self, spec: IndexSpec) -> None:
         super().__init__(spec, requires_training=True, supports_gpu=True)
+        self._factory_kwargs = {}
 
 
 __all__ = ["CuVSBackend", "CuVSHandle"]

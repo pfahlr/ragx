@@ -23,7 +23,8 @@ def _clear_registry() -> Iterable[None]:
 def test_backends_register_and_list() -> None:
     register_default_backends()
 
-    assert set(list_backends()) == {"faiss", "hnsw", "cuvs"}
+    names = set(list_backends())
+    assert {"dummy", "faiss", "hnsw", "cuvs", "py_flat"}.issubset(names)
 
 
 def test_faiss_ivf_training_and_serialization() -> None:

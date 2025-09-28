@@ -1,8 +1,11 @@
+from __future__ import annotations
+
 import pathlib
 
 import numpy as np
 import pytest
-from conftest import skip_if_no_eval
+
+from tests.conftest import skip_if_no_eval
 
 
 def _maybe_import_dummy():
@@ -61,7 +64,7 @@ def test_dummy_pipeline_index_and_search(eval_dir: pathlib.Path):
     # Query with the first text (should rank itself highest)
     q = embed(texts[0])[None, :]
     res = handle.search(q, k=min(5, xb.shape[0]))
-    ids, dists = res["ids"], res["dists"]
+    ids, dists = res["ids"], res["distances"]
     assert ids.shape == dists.shape
     assert ids.shape[0] == 1
     assert ids.shape[1] >= 1

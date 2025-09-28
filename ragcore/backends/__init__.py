@@ -8,11 +8,13 @@ from .cuvs import CuVSBackend
 from .dummy import DummyBackend
 from .faiss import FaissBackend
 from .hnsw import HnswBackend
+from .pyflat import PyFlatBackend
 
 _backend_classes: list[type[Backend]] = [
     DummyBackend,
     FaissBackend,
     HnswBackend,
+    PyFlatBackend,
     CuVSBackend,
 ]
 
@@ -56,6 +58,7 @@ __all__ = [
     "DEFAULT_BACKENDS",
     "register_default_backends",
     "DummyBackend",
+    "PyFlatBackend",
     "CuVSBackend",
     "FaissBackend",
     "HnswBackend",

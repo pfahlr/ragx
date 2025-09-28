@@ -16,4 +16,4 @@ deliverables:
 acceptance:
   - Unreachable tool calls are blocked; fallbacks triggered and traced
   - Budget breach produces expected stop/error per mode
-  - "pytest -q -k policy_budget_enforcement" green
+  - '"pytest -q -k policy_budget_enforcement" green'

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
-from typing import Any, Protocol, TypedDict, TypeAlias, cast, runtime_checkable
+from typing import Any, Protocol, TypeAlias, TypedDict, cast, runtime_checkable
 
 import numpy as np
 from numpy.typing import NDArray
