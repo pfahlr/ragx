@@ -1,19 +1,21 @@
 import json
 import subprocess
-
 import numpy as np
 import pytest
+from pathlib import Path
+
+np = pytest.importorskip("numpy")
 
 pytestmark = pytest.mark.xfail(reason="FAISS backend not wired yet")
 
-def test_vdb_build_and_search_smoke(tmp_path):
+def test_vdb_build_and_search_smoke(tmp_path: Path) -> None:
     # Prepare spec JSON
     spec = {
         "dim": 8,
         "metric": "ip",
         "kind": "flat",
         "params": {},
-        "version": "v1"
+        "version": "v1",
     }
     spec_path = tmp_path / "spec.json"
     spec_path.write_text(json.dumps(spec))
