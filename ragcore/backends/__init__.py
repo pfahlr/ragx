@@ -1,10 +1,12 @@
-from .base import Backend, Handle, IndexSpec, SerializedIndex, VectorIndexHandle
+from ragcore.interfaces import Backend, Handle, IndexSpec, SerializedIndex, VectorIndexHandle
+
 from .cuvs import CuVSBackend
+from .dummy import DummyBackend
 from .faiss import FaissBackend
 from .hnsw import HnswBackend
 
 
-DEFAULT_BACKENDS = (FaissBackend, HnswBackend, CuVSBackend)
+DEFAULT_BACKENDS = (DummyBackend, FaissBackend, HnswBackend, CuVSBackend)
 
 
 def register_default_backends() -> None:
@@ -28,6 +30,7 @@ __all__ = [
     "VectorIndexHandle",
     "DEFAULT_BACKENDS",
     "register_default_backends",
+    "DummyBackend",
     "CuVSBackend",
     "FaissBackend",
     "HnswBackend",

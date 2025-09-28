@@ -45,6 +45,7 @@ arg_spec:
     - { flag: "--format",            dest: format,            type: enum, choices: [text,json,sarif], default: text }
 
   vectordb_builder:
+    - { flag: "--backend",          dest: backend,          type: enum,   choices: [dummy,faiss,hnsw,cuvs], default: dummy }
     - { flag: "--index-kind",        dest: index_kind,        type: enum,   choices: [flat,ivf_flat,ivf_pq,hnsw], default: ivf_flat }
     - { flag: "--metric",            dest: metric,            type: enum,   choices: [l2,ip], default: ip }
     - { flag: "--dim",               dest: dim,               type: int,    default: 384 }
@@ -472,6 +473,7 @@ components:
     cli:
       command: "vectordb-builder"
       subcommands:
+        - { name: "list" }
         - { name: "build", flags_ref: vectordb_builder }
         - { name: "merge", flags_ref: vectordb_builder }
     python:
