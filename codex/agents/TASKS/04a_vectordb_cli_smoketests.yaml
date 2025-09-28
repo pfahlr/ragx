@@ -1,0 +1,49 @@
+id: 04a_vectordb_cli_smoketests
+title: "VectorDB builder CLI E2E: MD/PDF tiny corpus -> index -> search (goldens)"
+priority: 60
+deps: [ "03_md_pdf_ingestion", "04_vectordb_backends" ]
+steps:
+  - name: "Create tiny corpus"
+    run: |
+      mkdir -p eval/fixtures/corpus_smoke
+      cat > eval/fixtures/corpus_smoke/doc1.md <<'MD'
+      ---
+      id: "md-1"
+      title: "Neuroplasticity basics"
+      author: "Ada"
+      ---
+      Neuroplasticity is the brain's ability to adapt.
+      MD
+      echo '{"id":"pdf-1","text":"Synaptic pruning in adolescence improves efficiency","metadata":{"title":"Pruning","author":"Lee"}}' \
+        > eval/fixtures/corpus_smoke/corpus.jsonl
+
+  - name: "Build flat index with mock embeddings"
+    run: |
+      python -m ragcore.cli build \
+        --backend dummy \
+        --spec codex/specs/index_spec.flat.ip.json \
+        --add eval/fixtures/vectors/smoke_xb.npy \
+        --out .cache/indexes/smoke/index.bin
+
+  - name: "Run vectordb-builder on MD corpus"
+    run: |
+      python -m vectordb_builder.cli build \
+        --index-kind flat --metric ip --dim 4 \
+        --corpus-dir eval/fixtures/corpus_smoke \
+        --index-dir .cache/indexes/smoke_md
+
+  - name: "Search smoke"
+    run: |
+      python -m vectordb_builder.cli search \
+        --index-dir .cache/indexes/smoke_md \
+        --query "brain adaptability" --k 3 \
+        > eval/fixtures/goldens/smoke_search.json
+
+  - name: "Verify golden"
+    run: |
+      python -m pytest tests/e2e/test_vectordb_smoke.py -q
+artifacts:
+  - eval/fixtures/goldens/smoke_search.json
+success_criteria:
+  - "pytest e2e passes and produces stable top-1 id set"
+

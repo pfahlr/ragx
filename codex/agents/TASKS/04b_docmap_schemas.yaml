@@ -1,0 +1,45 @@
+id: 04b_docmap_schemas
+title: "Define/validate JSON Schemas for docmap.json and corpus.jsonl"
+priority: 61
+deps: [ "03_md_pdf_ingestion" ]
+steps:
+  - name: "Add schemas"
+    run: |
+      mkdir -p specs/schemas/corpus
+      cat > specs/schemas/corpus/docmap.schema.json <<'JSON'
+      {
+        "$schema":"https://json-schema.org/draft/2020-12/schema",
+        "type":"object",
+        "required":["ids"],
+        "properties":{
+          "ids":{"type":"array","items":{"type":"string"}}
+        },
+        "additionalProperties":true
+      }
+      JSON
+      cat > specs/schemas/corpus/corpus.schema.json <<'JSON'
+      {
+        "$schema":"https://json-schema.org/draft/2020-12/schema",
+        "type":"object",
+        "required":["id","text"],
+        "properties":{
+          "id":{"type":"string"},
+          "text":{"type":"string"},
+          "metadata":{"type":"object"}
+        },
+        "additionalProperties":true
+      }
+      JSON
+
+  - name: "Wire validation into build step"
+    run: |
+      applypatch codex/patches/04b_validate_docmap.patch
+
+  - name: "Tests"
+    run: |
+      pytest tests/unit/test_docmap_schema.py -q
+      pytest tests/e2e/test_corpus_validation.py -q
+success_criteria:
+  - "Schemas present"
+  - "builder rejects invalid docmap/corpus lines and reports offsets"
+

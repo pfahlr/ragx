@@ -1,0 +1,19 @@
+id: 04d_search_server
+title: "FastAPI search server wrapping ragcore Handle (CPU/GPU)"
+priority: 63
+deps: [ "04_vectordb_backends" ]
+steps:
+  - name: "Implement server"
+    run: |
+      applypatch codex/patches/04d_search_server.patch
+      uvicorn apps/search_server.app:app --port 9876 --reload &
+      echo $! > .runs/search_server.pid
+      sleep 1
+  - name: "Health + search tests"
+    run: |
+      pytest tests/integration/test_search_server.py -q
+  - name: "Shutdown"
+    run: |
+      kill $(cat .runs/search_server.pid) || true
+success_criteria:
+  - "GET /health ok; POST /search returns ids/dists; GPU optional works when available"
