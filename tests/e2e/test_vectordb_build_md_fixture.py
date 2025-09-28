@@ -137,10 +137,14 @@ def test_vectordb_build_md_fixture(tmp_path: Path) -> None:
     doc_one = documents["doc-one"]
     assert doc_one["metadata"]["title"] == "Document One"
     assert doc_one["metadata"]["category"] == "reference"
+    assert doc_one["metadata"]["source_format"] == "md"
+    assert doc_one["metadata"]["source_relpath"].endswith("doc1.md")
 
     doc_two = documents["doc2"]
     assert doc_two["metadata"]["title"] == "Document Two"
     assert doc_two["metadata"]["tags"] == "t1, t2"
+    assert doc_two["metadata"]["source_format"] == "md"
+    assert doc_two["metadata"]["source_relpath"].endswith("doc2.md")
 
     assert doc_one["path"].endswith("doc1.md")
     assert doc_two["path"].endswith("doc2.md")

@@ -14,7 +14,6 @@ SUPPORTED_FORMATS = {"md", "pdf"}
 
 
 @dataclass(frozen=True)
-
 class IngestedDocument:
     path: Path
     text: str
@@ -43,9 +42,11 @@ def scan_corpus(
             continue
 
         parser = _get_parser(suffix)
-        text, metadata = parser(file_path, base_metadata={"format": suffix})
-        merged = dict(metadata)
-        merged.setdefault("format", suffix)
+
+        base_metadata = _build_base_metadata(corpus_dir, file_path, suffix)
+        text, metadata = parser(file_path, base_metadata=base_metadata)
+        merged = dict(base_metadata)
+        merged.update(metadata)
 
         documents.append(
             IngestedDocument(
@@ -72,3 +73,16 @@ def _get_parser(fmt: str):
     if fmt == "pdf":
         return parse_pdf
     raise ValueError(f"Unsupported format: {fmt}")
+
+
+def _build_base_metadata(corpus_dir: Path, file_path: Path, fmt: str) -> dict[str, Any]:
+    try:
+        rel_path = file_path.relative_to(corpus_dir).as_posix()
+    except ValueError:
+        rel_path = file_path.resolve().as_posix()
+
+    return {
+        "source_path": file_path.resolve().as_posix(),
+        "source_relpath": rel_path,
+        "source_format": fmt,
+    }
