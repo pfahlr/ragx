@@ -1,0 +1,22 @@
+id: 11_transforms_sandbox
+title: Implement Transform Sandbox
+description: >
+  Safe execution layer for DSL transform nodes supporting jinja and python;
+  optional shell behind an explicitly enabled flag. Enforce time/memory limits.
+goals:
+  - Deterministic, resource-limited transforms
+  - Shell disabled by default; opt-in policy respected
+steps:
+  - Implement Sandbox class with run_python(), run_jinja(), run_shell() (guarded).
+  - Add CPU/mem/time limit enforcement and stdout/stderr capture (first 2KB).
+  - Integrate with FlowRunner.transforms and policy flag `shell_transform_policy`.
+  - Add configuration path via task-runner CLI and spec.
+tests:
+  - file: tests/unit/test_sandbox_python.py
+    purpose: Limits respected; exceptions mapped; stdout captured.
+  - file: tests/unit/test_sandbox_jinja.py
+    purpose: Template rendering and variable scoping.
+  - file: tests/unit/test_sandbox_shell_guard.py
+    purpose: Shell blocked unless explicitly enabled.
+docs:
+  - docs/transforms_sandbox.md

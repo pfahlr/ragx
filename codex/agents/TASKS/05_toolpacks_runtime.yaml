@@ -1,0 +1,18 @@
+id: 05_toolpacks_runtime
+title: Implement Toolpacks Runtime
+description: >
+  Load and execute declarative toolpacks (*.tool.yaml) with JSON schema validation.
+  Support in-proc Python, subprocess Node/PHP/CLI, and HTTP endpoints. Enforce
+  deterministic execution, schema validation, and timeouts.
+steps:
+  - Implement ToolpackLoader (load_dir, list, get).
+  - Implement Executor (run_toolpack) with adapters for python/node/php/cli/http.
+  - Add schema validation for stdin/stdout.
+  - Implement idempotency cache for deterministic runs.
+tests:
+  - file: tests/unit/test_toolpacks_loader.py
+    purpose: Ensure toolpacks load and resolve references.
+  - file: tests/unit/test_toolpacks_exec.py
+    purpose: Verify execution across all adapter types.
+docs:
+  - docs/toolpacks_runtime.md

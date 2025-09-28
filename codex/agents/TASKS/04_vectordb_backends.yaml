@@ -1,0 +1,20 @@
+id: 04_vectordb_backends
+title: Implement Vector DB Backends
+description: >
+  Implement FAISS (CPU+GPU), HNSWlib, and cuVS backends in C++ with pybind11,
+  wired into the Vector DB Core registry. Must conform to Handle protocol and
+  pass spec tests. Include shard merge semantics.
+steps:
+  - Generate C++ interface `ragcore::IIndex` with required methods.
+  - Implement FAISS backend (flat, ivf_flat, ivfpq).
+  - Implement HNSW backend (via hnswlib).
+  - Implement GPU backend (cuVS) with CPU serialize/merge fallback.
+  - Add pybind11 bindings exposing `Handle`.
+  - Register all backends in Python registry.
+tests:
+  - file: tests/unit/test_spec_vectordb_backends.py
+    purpose: Verify each backend registers and implements required methods.
+  - file: tests/e2e/test_vectordb_build_and_search.py
+    purpose: Build/search small indexes across all backends.
+docs:
+  - docs/vectordb_backends.md

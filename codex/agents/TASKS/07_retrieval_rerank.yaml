@@ -1,0 +1,17 @@
+id: 07_retrieval_rerank
+title: Implement Enhanced Retrieval + Re-Ranking
+description: >
+  Implement RetrieverFactory with Bing/Tavily connectors via MCP, hybrid BM25+vector
+  scoring, and optional cross-encoder reranker. Ensure deterministic scoring and NDCG improvements.
+steps:
+  - Implement RetrieverFactory (make_retriever).
+  - Add hybrid BM25+vector scoring with weight param.
+  - Add CrossEncoderReranker (rerank).
+  - Normalize results via MCP web.search outputs.
+tests:
+  - file: tests/unit/test_retriever_factory.py
+    purpose: Verify retrievers construct correctly and hybrid scoring works.
+  - file: tests/e2e/test_retrieval_rerank.py
+    purpose: Run hybrid + rerank flow, check NDCG fixture improvements.
+docs:
+  - docs/retrieval_rerank.md

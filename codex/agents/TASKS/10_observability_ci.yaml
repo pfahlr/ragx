@@ -1,0 +1,27 @@
+id: 10_observability_ci
+title: Set up Observability & CI
+description: >
+  Establish repo-wide lint/type/test pipelines and minimal observability hooks.
+  Provide GitHub Actions workflows, ruff+mypy+pytest config, and JSONL trace utilities.
+goals:
+  - CI green on lint/type/unit/e2e
+  - JSONL trace utility functions exposed and used by runner and MCP
+steps:
+  - Add .github/workflows/{lint.yml,tests.yml,conformance.yml}.
+  - Add pyproject.toml with ruff/mypy/pytest settings.
+  - Implement tracing utils in dsl runner & MCP server (JSONL append-only).
+  - Add Makefile targets: lint, type, unit, e2e, cov, format.
+tests:
+  - file: tests/unit/test_trace_writer.py
+    purpose: Emits well-formed JSONL and rotates on size threshold.
+  - file: tests/unit/test_ci_configs_present.py
+    purpose: Ensures workflows and configs exist and parse.
+  - file: tests/e2e/test_repo_smoketest.py
+    purpose: Runs `make unit` and `make e2e` on a tiny fixture.
+artifacts:
+  - path: .github/workflows/lint.yml
+  - path: .github/workflows/tests.yml
+  - path: pyproject.toml
+  - path: Makefile
+docs:
+  - docs/observability_ci.md

@@ -1,0 +1,17 @@
+id: 08_planner_hitl
+title: Implement Planner + Human-in-the-Loop
+description: >
+  Implement multiperspective planner, concept graph (mind-map), and HITL checkpoints
+  (outline approval, question injection, source review). Provide CLI + MCP methods.
+steps:
+  - Implement Perspective + MindMap classes.
+  - Implement planner CLI (rw plan) and MCP method.
+  - Implement Checkpointer + MindMapView.
+  - Add CLI (rw mindmap) and HITL MCP methods.
+tests:
+  - file: tests/unit/test_planner_mindmap.py
+    purpose: Verify mind-map graph roundtrip and perspective diversity.
+  - file: tests/e2e/test_hitl_flow.py
+    purpose: Run outline approval + question injection flow end-to-end.
+docs:
+  - docs/planner_hitl.md
