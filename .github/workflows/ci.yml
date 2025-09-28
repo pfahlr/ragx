@@ -9,22 +9,22 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # Figure out if native (C/C++) changed — avoids needless ccache restore
+      # Detect if native code changed (under ./cpp)
       - name: Detect native changes
         id: changes
         uses: dorny/paths-filter@v3
         with:
           filters: |
             native:
-              - '**/CMakeLists.txt'
-              - '**/*.cmake'
-              - '**/*.c'
-              - '**/*.cc'
-              - '**/*.cpp'
-              - '**/*.cxx'
-              - '**/*.h'
-              - '**/*.hpp'
-              - '**/*.hxx'
+              - 'cpp/CMakeLists.txt'
+              - 'cpp/**/*.cmake'
+              - 'cpp/**/*.c'
+              - 'cpp/**/*.cc'
+              - 'cpp/**/*.cpp'
+              - 'cpp/**/*.cxx'
+              - 'cpp/**/*.h'
+              - 'cpp/**/*.hpp'
+              - 'cpp/**/*.hxx'
 
       # Python runtime with pip caching
       - uses: actions/setup-python@v5
@@ -32,26 +32,50 @@ jobs:
           python-version: "3.11"
           cache: "pip"
 
+      # Install Python deps (incl. pybind11 for cmake discovery) + dev tools
       - name: Install Python dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt || true
           pip install pybind11 ruff mypy pytest coverage yamllint || true
 
+      # Export pybind11_DIR so CMake can find it (portable)
       - name: Export pybind11_DIR
         run: |
           echo "pybind11_DIR=$(python -m pybind11 --cmakedir)" >> $GITHUB_ENV
           echo "Using pybind11_DIR=$pybind11_DIR"
 
-      # Compute hashes safely (no commas)
-      - name: Compute hash keys
-        id: hash
+      # Record compiler version for cache key stability (done before caching)
+      - name: Detect compiler
+        if: ${{ steps.changes.outputs.native == 'true' }}
         run: |
-          echo "cmake_hash=$(sha1sum $(find . -name 'CMakeLists.txt' -o -name '*.cmake' | sort) | sha1sum | cut -d' ' -f1)" >> $GITHUB_ENV
-          echo "src_hash=$(sha1sum $(find . -name '*.cpp' -o -name '*.cc' -o -name '*.c' -o -name '*.hpp' -o -name '*.h' | sort) | sha1sum | cut -d' ' -f1)" >> $GITHUB_ENV
+          echo "CXX_VER=$(g++ --version | head -n1 | tr -s ' ' '_')" >> $GITHUB_ENV
+          which ccache && ccache --version || true
 
+      # Compute safe hashes for cmake + sources (no commas/spaces in key)
+      - name: Compute hash keys
+        if: ${{ steps.changes.outputs.native == 'true' }}
+        run: |
+          set -e
+          cmake_list="$(find cpp -type f \( -name 'CMakeLists.txt' -o -name '*.cmake' \) | sort)"
+          src_list="$(find cpp -type f \( -name '*.c' -o -name '*.cc' -o -name '*.cpp' -o -name '*.cxx' -o -name '*.h' -o -name '*.hpp' -o -name '*.hxx' \) | sort)"
+          if [ -z "$cmake_list" ]; then
+            echo "cmake_hash=none" >> $GITHUB_ENV
+          else
+            # hash of concatenated per-file hashes (stable)
+            cmake_hash=$(xargs -r sha1sum < <(printf '%s\n' "$cmake_list") | sha1sum | cut -d' ' -f1)
+            echo "cmake_hash=$cmake_hash" >> $GITHUB_ENV
+          fi
+          if [ -z "$src_list" ]; then
+            echo "src_hash=none" >> $GITHUB_ENV
+          else
+            src_hash=$(xargs -r sha1sum < <(printf '%s\n' "$src_list") | sha1sum | cut -d' ' -f1)
+            echo "src_hash=$src_hash" >> $GITHUB_ENV
+          fi
+
+      # Cache ccache dir directly (fast restore, no compression)
       - name: Cache ccache dir
-        if: steps.changes.outputs.native == 'true'
+        if: ${{ steps.changes.outputs.native == 'true' && hashFiles('cpp/CMakeLists.txt') != '' }}
         uses: actions/cache@v4
         with:
           path: ~/.cache/ccache
@@ -61,20 +85,12 @@ jobs:
             ccache-${{ runner.os }}-
           compression-level: 0
 
-      # Record the compiler version into env (better cache key)
-      - name: Detect compiler
-        if: steps.changes.outputs.native == 'true'
-        run: |
-          echo "CXX_VER=$(g++ --version | head -n1 | tr -s ' ' '_')" >> $GITHUB_ENV
-          which ccache && ccache --version || true
-
-      # Configure CMake only when native changed (avoids cache restore on pure-Python edits)
+      # Configure CMake (points to ./cpp as source dir)
       - name: Configure CMake
-        if: steps.changes.outputs.native == 'true' && hashFiles('**/CMakeLists.txt') != ''
+        if: ${{ steps.changes.outputs.native == 'true' && hashFiles('cpp/CMakeLists.txt') != '' }}
         env:
           pybind11_DIR: ${{ env.pybind11_DIR }}
         run: |
-          # keep ccache small; this controls on-disk size (~ download size)
           mkdir -p ~/.cache/ccache
           ccache --max-size=200M || true
           cmake -S ./cpp -B build \
@@ -85,10 +101,10 @@ jobs:
             -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
 
       - name: Build (native)
-        if: steps.changes.outputs.native == 'true' && hashFiles('**/CMakeLists.txt') != ''
+        if: ${{ steps.changes.outputs.native == 'true' && hashFiles('cpp/CMakeLists.txt') != '' }}
         run: cmake --build build -- -j"$(nproc)"
 
-      # Lint / type / tests
+      # Lint / type / tests (non-fatal like your original)
       - name: Ruff
         run: ruff check . || true
 
