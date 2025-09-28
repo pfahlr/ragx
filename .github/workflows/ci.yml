@@ -9,29 +9,35 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # Python runtime for lint/type/test steps
+      # Python runtime
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+          cache: "pip"   # built-in pip cache keyed on requirements.txt
 
-      # Install Python deps (benefits from pip cache)
+      # Cache for CMake build artifacts
+      - name: Cache CMake build
+        uses: actions/cache@v4
+        with:
+          path: build
+          key: cmake-${{ runner.os }}-${{ hashFiles('**/CMakeLists.txt') }}
+          restore-keys: |
+            cmake-${{ runner.os }}-
+
       - name: Install Python dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt || true
-          # Ensure pybind11 is available for CMake discovery
+          # Ensure pybind11 is present
           pip install pybind11 || true
           # Dev tools
           pip install ruff mypy pytest coverage yamllint || true
 
-      # Export pybind11_DIR in a portable way (no hardcoded site-packages path)
       - name: Export pybind11_DIR
         run: |
           echo "pybind11_DIR=$(python -m pybind11 --cmakedir)" >> $GITHUB_ENV
           echo "Using pybind11_DIR=$pybind11_DIR"
 
-      # Optional: build native/pybind11 module if a CMake project exists
-      # Skips cleanly if there's no CMakeLists.txt (hashFiles returns empty)
       - name: Install C++ toolchain
         if: ${{ hashFiles('**/CMakeLists.txt') != '' }}
         run: |
@@ -43,8 +49,7 @@ jobs:
         env:
           pybind11_DIR: ${{ env.pybind11_DIR }}
         run: |
-          # Adjust -S/-B to your C++ source root if not at repo root
-          cmake -S ./cpp  -B build \
+          cmake -S ./cpp -B build \
             -G Ninja \
             -Dpybind11_DIR="$pybind11_DIR" \
             -DPYBIND11_FINDPYTHON=ON
@@ -53,7 +58,7 @@ jobs:
         if: ${{ hashFiles('**/CMakeLists.txt') != '' }}
         run: cmake --build build -- -j"$(nproc)"
 
-      # Lint / type / tests (kept non-fatal like your original)
+      # Lint / type / tests
       - name: Ruff
         run: ruff check . || true
 
