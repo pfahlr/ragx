@@ -1,5 +1,5 @@
 name: ci
-"on":
+on:
   push:
   pull_request:
 
@@ -8,11 +8,23 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
+      # Python with built-in pip cache
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+          cache: "pip"
+          # list every file that should bust the cache when changed
+          cache-dependency-path: |
+            requirements.txt
+            requirements-*.txt
+
+      # Install deps (now benefited by cache)
       - run: pip install -r requirements.txt || true
+
+      # Tools (these will also hit the pip cache)
       - run: pip install ruff mypy pytest coverage yamllint || true
+
       - run: ruff check . || true
       - run: mypy . || true
       - run: pytest --maxfail=1 --disable-warnings || true
