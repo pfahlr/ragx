@@ -1,0 +1,16 @@
+id: 30c-toolpacks-loader-and-exec
+title: Toolpacks – loader + exec (python|cli|http) with $ref and limits
+owner: codex
+priority: P0
+depends_on: [30a-mcp-envelope-and-schema]
+goal: Load *.tool.yaml; resolve $ref schemas; execute tools with stdin/stdout JSON; enforce time/size limits; deterministic cache.
+outputs:
+  - apps/toolpacks/loader.py
+  - apps/toolpacks/executor.py
+  - apps/toolpacks/tests/test_loader_and_exec.py
+deliverables:
+  - Cache key: sha256(tool + "\n" + json.dumps(input, sort_keys=True)).
+  - Limits: input ≤64KB, output ≤256KB, timeout default 30s (configurable).
+  - stderr head (≤2KB) saved on failure.
+acceptance:
+  - pytest -q apps/toolpacks/tests -q green
