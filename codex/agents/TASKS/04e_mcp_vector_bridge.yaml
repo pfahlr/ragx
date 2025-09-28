@@ -1,0 +1,55 @@
+id: 04e_mcp_vector_bridge
+title: "MCP tool vector.query.search -> search server (or in-proc fallback)"
+priority: 64
+deps: [ "mcp_server", "04d_search_server" ]
+steps:
+  - name: "Schemas & toolpack"
+    run: |
+      mkdir -p apps/mcp_server/schemas/tools
+      cat > apps/mcp_server/schemas/tools/vector_query_search.input.schema.json <<'JSON'
+      { "$schema":"https://json-schema.org/draft/2020-12/schema",
+        "type":"object",
+        "required":["query","k"],
+        "properties":{
+          "query":{"type":"string"},
+          "k":{"type":"integer","minimum":1,"maximum":100},
+          "server_url":{"type":"string","format":"uri"},
+          "index_dir":{"type":"string"}
+        },
+        "oneOf":[{"required":["server_url"]},{"required":["index_dir"]}]
+      }
+      JSON
+      cat > apps/mcp_server/schemas/tools/vector_query_search.output.schema.json <<'JSON'
+      { "$schema":"https://json-schema.org/draft/2020-12/schema",
+        "type":"object",
+        "required":["ids","dists"],
+        "properties":{
+          "ids":{"type":"array","items":{"type":"array","items":{"type":"integer"}}},
+          "dists":{"type":"array","items":{"type":"array","items":{"type":"number"}}}
+        }
+      }
+      JSON
+      cat > apps/mcp_server/toolpacks/vector.query.search.tool.yaml <<'YAML'
+      id: vector.query.search
+      version: 1.0.0
+      deterministic: true
+      timeoutMs: 20000
+      limits: { maxInputBytes: 32768, maxOutputBytes: 131072 }
+      inputSchema:  { $ref: "../schemas/tools/vector_query_search.input.schema.json" }
+      outputSchema: { $ref: "../schemas/tools/vector_query_search.output.schema.json" }
+      execution:
+        kind: http
+        url: "{{ input.server_url | default('http://127.0.0.1:9876/search') }}"
+        headers: {}
+        method: POST
+        bodyTemplate: |
+          { "q": "{{ input.query }}", "k": {{ input.k }},
+            {% if input.index_dir is defined %}"index_dir":"{{ input.index_dir }}",{% endif %}
+            "normalize": true }
+      YAML
+
+  - name: "Conformance tests"
+    run: |
+      pytest tests/e2e/test_mcp_vector_query_bridge.py -q
+success_criteria:
+  - "MCP discover shows vector.query.search; tool passes schema I/O and hits server"
