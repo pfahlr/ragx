@@ -1,0 +1,13 @@
+id: 43a-agents-research-pipeline
+title: Agents – planner → executor → publisher end-to-end
+owner: codex
+priority: P1
+depends_on: [41a-retrieval-hybrid-and-rerank, 42b-hitl-outline-and-merge]
+goal: E2E pipeline returning notes, sources, and artifacts (report/outline/bibliography) with snapshots.
+outputs:
+  - pkgs/research/pipeline.py
+  - tests/research/test_pipeline_e2e.py
+deliverables:
+  - Snapshot tests under tests/snapshots/.
+acceptance:
+  - pytest -q tests/research -q green

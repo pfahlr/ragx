@@ -1,0 +1,14 @@
+id: 50b-ci-coverage-and-cache
+title: CI – coverage gate + ccache sanity + build matrix guard
+owner: codex
+priority: P0
+depends_on: []
+goal: Enforce coverage ≥ spec minimum; confirm ccache active; matrix skips when no native code changes.
+outputs:
+  - .github/workflows/ci.yml (amend)
+  - tests/ci/test_ccache_sanity.py
+deliverables:
+  - Coverage job fails under target; prints summary.
+  - Native build steps gated by path filters / hashFiles.
+acceptance:
+  - CI green on main; fails when coverage dips below threshold

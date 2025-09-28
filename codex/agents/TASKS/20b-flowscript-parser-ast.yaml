@@ -1,0 +1,25 @@
+id: 20b-flowscript-parser-ast
+title: FlowScript parser → AST (deterministic, no codegen yet)
+owner: codex
+priority: P0
+depends_on: [20a-flowscript-spec-and-grammar]
+goal: Implement a deterministic parser for FlowScript (.fs) producing a typed AST.
+inputs:
+  - pkgs/dsl/flowscript/grammar.ebnf
+outputs:
+  - pkgs/dsl/flowscript/parser.py
+  - pkgs/dsl/flowscript/ast.py
+  - tests/dsl/test_flowscript_parser.py
+deliverables:
+  - Parser with clear errors (line/col), round-trip golden tests for examples.
+  - Typed AST nodes with dataclasses (readability-first naming).
+acceptance:
+  - "pytest -q tests/dsl/test_flowscript_parser.py -q" green
+  - Coverage for parser+ast ≥ 85%
+  - Parser rejects malformed inputs with precise diagnostics
+paths_changed:
+  - pkgs/dsl/flowscript/*
+  - tests/dsl/*
+ci:
+  run:
+    - pytest -q --maxfail=1 --disable-warnings --cov=pkgs/dsl/flowscript

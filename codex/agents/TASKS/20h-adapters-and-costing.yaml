@@ -1,0 +1,18 @@
+id: 20h-adapters-and-costing
+title: Tool/LLM/MCP adapters + costing from tool_registry
+owner: codex
+priority: P0
+depends_on: [20e-policy-and-budget-engine, 06b_mcp_server_bootstrap, 05b_toolpacks_executor_python_only]
+goal: Uniform adapter interface with cost estimation (tokens/calls/usd) using tool_registry.
+inputs:
+  - codex/specs/ragx_master_spec.yaml
+outputs:
+  - pkgs/dsl/orchestrator/adapters.py
+  - tests/dsl/test_adapters_costing.py
+deliverables:
+  - estimate_min_cost(spec,hints), call(spec,context) with policy allowlist enforcement.
+  - Mock MCP client; deterministic caching (read|readwrite|off) keyed by args hash.
+acceptance:
+  - Budget checks fire using estimated costs before call
+  - Cache hit ratio measurable in trace
+  - "pytest -q -k adapters_costing" green

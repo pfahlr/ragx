@@ -1,0 +1,19 @@
+id: 20j-example-flows-and-docs
+title: Example flows (ReAct + Self-Refine) in FlowScript + YAML + docs
+owner: codex
+priority: P0
+depends_on: [20c-flowscript-compiler-to-yaml, 20g-decisions-and-loops, 20i-dsl-linter-and-ci]
+goal: Provide canonical examples and end-to-end tests from FlowScript → YAML → run.
+inputs:
+  - codex/specs/ragx_master_spec.yaml
+outputs:
+  - flows/example.react_self_refine.yaml
+  - pkgs/dsl/flowscript/examples/react_self_refine.fs
+  - docs/dsl/examples.md
+  - tests/dsl/test_examples_end_to_end.py
+deliverables:
+  - FlowScript source compiles to YAML; runner executes to completion with stub adapters.
+  - Docs page describing the example with policy/budget annotations.
+acceptance:
+  - "pytest -q -k examples_end_to_end" green
+  - Linter passes on the compiled YAML
