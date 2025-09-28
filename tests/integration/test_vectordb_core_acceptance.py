@@ -27,4 +27,4 @@ def test_backend_registry_and_dummy_backend() -> None:
     h.add(xb)
     res = h.search(q, k=3)
     assert res["ids"].shape == (2, 3)
-    assert res["dists"].shape == (2, 3)
+    assert res["distances"].shape == (2, 3)

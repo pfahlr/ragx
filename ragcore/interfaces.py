@@ -4,13 +4,20 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
-from typing import Any, Protocol, runtime_checkable
+from typing import Any, Protocol, TypedDict, TypeAlias, cast, runtime_checkable
 
 import numpy as np
 from numpy.typing import NDArray
 
-FloatArray = NDArray[np.float32]
-IntArray = NDArray[np.int64]
+FloatArray: TypeAlias = NDArray[np.float32]
+IntArray: TypeAlias = NDArray[np.int64]
+
+
+class SearchResults(TypedDict):
+    """Typed result mapping returned by :meth:`Handle.search`."""
+
+    ids: IntArray
+    distances: FloatArray
 
 
 @runtime_checkable
@@ -44,7 +51,7 @@ class Handle(Protocol):
         queries: FloatArray,
         k: int,
         **kwargs: Any,
-    ) -> dict[str, FloatArray | IntArray]: ...
+    ) -> SearchResults: ...
 
     def ntotal(self) -> int: ...
 
@@ -142,7 +149,7 @@ def _ensure_2d_float32(data: FloatArray, *, dim: int) -> FloatArray:
         raise ValueError("expected a 2D array of float32 vectors")
     if array.shape[1] != dim:
         raise ValueError(f"expected vectors with dimension {dim}, got {array.shape[1]}")
-    return array
+    return cast(FloatArray, array)
 
 
 def _ensure_ids(ids: IntArray | None, *, count: int) -> IntArray | None:
@@ -151,22 +158,22 @@ def _ensure_ids(ids: IntArray | None, *, count: int) -> IntArray | None:
     array = np.asarray(ids, dtype=np.int64)
     if array.ndim != 1 or array.shape[0] != count:
         raise ValueError("ids must be a 1D array matching the number of vectors")
-    return array
+    return cast(IntArray, array)
 
 
 def _distance_matrix(vectors: FloatArray, queries: FloatArray, metric: str) -> FloatArray:
     if metric == "l2":
         diffs = queries[:, None, :] - vectors[None, :, :]
-        return np.sum(diffs * diffs, axis=2)
+        return cast(FloatArray, np.sum(diffs * diffs, axis=2))
     if metric == "ip":
         sims = queries @ vectors.T
-        return -sims
+        return cast(FloatArray, -sims)
     if metric == "cosine":
         vectors_norm = np.linalg.norm(vectors, axis=1)
         queries_norm = np.linalg.norm(queries, axis=1)
         denom = np.clip(np.outer(queries_norm, vectors_norm), a_min=1e-12, a_max=None)
         cosine = (queries @ vectors.T) / denom
-        return 1.0 - cosine
+        return cast(FloatArray, 1.0 - cosine)
     raise ValueError(f"unsupported metric '{metric}'")
 
 
@@ -187,8 +194,8 @@ class VectorIndexHandle:
             "requires_training": requires_training,
             "supports_gpu": supports_gpu,
         }
-        self._vectors: FloatArray = np.empty((0, spec.dim), dtype=np.float32)
-        self._ids: IntArray = np.empty((0,), dtype=np.int64)
+        self._vectors = cast(FloatArray, np.empty((0, spec.dim), dtype=np.float32))
+        self._ids = cast(IntArray, np.empty((0,), dtype=np.int64))
         self._next_id = 0
         self._is_trained = not requires_training
         self.is_gpu = False
@@ -210,17 +217,20 @@ class VectorIndexHandle:
         batch = _ensure_2d_float32(vectors, dim=self._spec.dim)
         ids_array = _ensure_ids(ids, count=batch.shape[0])
         if ids_array is None:
-            ids_array = np.arange(self._next_id, self._next_id + batch.shape[0], dtype=np.int64)
+            ids_array = cast(
+                IntArray,
+                np.arange(self._next_id, self._next_id + batch.shape[0], dtype=np.int64),
+            )
         self._next_id = max(self._next_id, int(ids_array.max()) + 1)
-        self._vectors = np.concatenate([self._vectors, batch], axis=0)
-        self._ids = np.concatenate([self._ids, ids_array], axis=0)
+        self._vectors = cast(FloatArray, np.concatenate([self._vectors, batch], axis=0))
+        self._ids = cast(IntArray, np.concatenate([self._ids, ids_array], axis=0))
 
     def search(
         self,
         queries: FloatArray,
         k: int,
         **_: Any,
-    ) -> dict[str, FloatArray | IntArray]:
+    ) -> SearchResults:
         if self._vectors.shape[0] == 0:
             raise RuntimeError("cannot search an empty index")
         query_array = _ensure_2d_float32(queries, dim=self._spec.dim)
@@ -228,9 +238,9 @@ class VectorIndexHandle:
         distances = _distance_matrix(self._vectors, query_array, self._spec.metric)
         order = np.argsort(distances, axis=1)
         topk = order[:, :k]
-        ids_matrix = np.tile(self._ids, (query_array.shape[0], 1))
-        top_distances = np.take_along_axis(distances, topk, axis=1)
-        top_ids = np.take_along_axis(ids_matrix, topk, axis=1)
+        ids_matrix = cast(IntArray, np.tile(self._ids, (query_array.shape[0], 1)))
+        top_distances = cast(FloatArray, np.take_along_axis(distances, topk, axis=1))
+        top_ids = cast(IntArray, np.take_along_axis(ids_matrix, topk, axis=1))
         return {"ids": top_ids, "distances": top_distances}
 
     def ntotal(self) -> int:
@@ -243,8 +253,8 @@ class VectorIndexHandle:
         }
         return SerializedIndex(
             spec=self._spec.as_dict(),
-            vectors=self._vectors.copy(),
-            ids=self._ids.copy(),
+            vectors=cast(FloatArray, self._vectors.copy()),
+            ids=cast(IntArray, self._ids.copy()),
             metadata=metadata,
             is_trained=self._is_trained,
             is_gpu=self.is_gpu,
@@ -263,8 +273,11 @@ class VectorIndexHandle:
         if other._spec != self._spec:
             raise ValueError("cannot merge indexes with different specs")
         merged = self._clone(empty=True)
-        merged._vectors = np.concatenate([self._vectors, other._vectors], axis=0)
-        merged._ids = np.arange(merged._vectors.shape[0], dtype=np.int64)
+        merged._vectors = cast(
+            FloatArray,
+            np.concatenate([self._vectors, other._vectors], axis=0),
+        )
+        merged._ids = cast(IntArray, np.arange(merged._vectors.shape[0], dtype=np.int64))
         merged._next_id = merged._ids.shape[0]
         merged._is_trained = self._is_trained or other._is_trained
         merged.is_gpu = self.is_gpu or other.is_gpu
@@ -280,8 +293,8 @@ class VectorIndexHandle:
         clone._supports_gpu = self._supports_gpu
         clone._is_trained = self._is_trained
         if not empty:
-            clone._vectors = self._vectors.copy()
-            clone._ids = self._ids.copy()
+            clone._vectors = cast(FloatArray, self._vectors.copy())
+            clone._ids = cast(IntArray, self._ids.copy())
             clone._next_id = self._next_id
             clone.is_gpu = self.is_gpu
             clone.device = self.device
@@ -304,5 +317,6 @@ __all__ = [
     "VectorIndexHandle",
     "FloatArray",
     "IntArray",
+    "SearchResults",
 ]
 

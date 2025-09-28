@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from typing import Any
+from typing import Any, Mapping
 
 import numpy as np
 import pytest
@@ -24,7 +24,7 @@ class _StubBackend:
     def capabilities(self) -> dict[str, Any]:
         return {"name": self.name, "kinds": ["flat"]}
 
-    def build(self, spec: dict[str, Any]) -> Handle:
+    def build(self, spec: Mapping[str, Any]) -> Handle:
         self._built_with = dict(spec)
         parsed = IndexSpec.from_mapping(spec, default_backend=self.name)
         return VectorIndexHandle(parsed, requires_training=False)
@@ -111,7 +111,8 @@ def test_vector_index_handle_merge_and_serialize_roundtrip() -> None:
 
 
 def test_backend_protocol_builds_vector_index_handle() -> None:
-    backend: Backend = _StubBackend()
+    backend_impl = _StubBackend()
+    backend: Backend = backend_impl
     handle = backend.build({"kind": "flat", "metric": "l2", "dim": 2})
     assert isinstance(handle, VectorIndexHandle)
-    assert backend._built_with == {"kind": "flat", "metric": "l2", "dim": 2}
+    assert backend_impl._built_with == {"kind": "flat", "metric": "l2", "dim": 2}

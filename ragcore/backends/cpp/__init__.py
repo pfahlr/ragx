@@ -10,7 +10,7 @@ CPPBackend: type[Any] | None = None
 CPPHandle: type[Any] | None = None
 _HAS_NATIVE = False
 _NATIVE_ERROR: Exception | None = None
-__all__ = ("is_available", "ensure_available", "build_native", "get_backend")
+__all__ = ["is_available", "ensure_available", "build_native", "get_backend"]
 
 
 def _refresh_exports() -> None:
@@ -18,7 +18,7 @@ def _refresh_exports() -> None:
     exposed = ["is_available", "ensure_available", "build_native", "get_backend"]
     if _HAS_NATIVE:
         exposed.extend(["CPPBackend", "CPPHandle"])
-    __all__ = tuple(exposed)
+    __all__ = exposed
 
 
 def _load_native() -> None:
