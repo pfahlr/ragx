@@ -2,8 +2,9 @@ import json
 import subprocess
 from pathlib import Path
 
-import numpy as np
 import pytest
+
+np = pytest.importorskip("numpy")
 
 pytestmark = pytest.mark.xfail(reason="FAISS backend not wired yet")
 
