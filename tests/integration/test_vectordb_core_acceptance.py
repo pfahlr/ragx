@@ -4,6 +4,9 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 
+from ragcore.backends.dummy import DummyBackend
+from ragcore.registry import get, register
+
 np = pytest.importorskip("numpy")
 
 if TYPE_CHECKING:
@@ -15,9 +18,6 @@ else:
 def test_backend_registry_and_dummy_backend() -> None:
     # Once ragcore is wired, agents should register a dummy backend and run a simple search
 
-    from ragcore.registry import register, get  # noqa: I001
-    # File exists in the spec pack later.
-    from ragcore.backends.dummy import DummyBackend  # noqa: I001
     register(DummyBackend())
     b = get("dummy")
     h = b.build({"dim": 4, "metric": "ip", "kind": "flat"})

@@ -5,6 +5,7 @@ import subprocess
 import sys
 from pathlib import Path
 
+
 def _write(tmp_dir: Path, relative: str, content: str) -> Path:
     path = tmp_dir / relative
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -42,7 +43,11 @@ Doc two body paragraph.
 
     cmd = [
         "python",
-      
+    ]
+
+    # Placeholder assertions until the CLI wiring is implemented.
+    assert output_dir == tmp_path / "index"
+    assert cmd == ["python"]
 
 def test_vectordb_build_md_fixture(tmp_path: Path) -> None:
     corpus = tmp_path / "corpus"

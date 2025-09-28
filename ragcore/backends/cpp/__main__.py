@@ -11,7 +11,11 @@ from . import build_native
 def main(argv: list[str] | None = None) -> Path:
     parser = argparse.ArgumentParser(description="Build the ragcore C++ backend stub")
     parser.add_argument("build", nargs="?", default="build", help=argparse.SUPPRESS)
-    parser.add_argument("--force", action="store_true", help="Force recompilation even if up-to-date")
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Force recompilation even if up-to-date",
+    )
     parser.add_argument("--verbose", action="store_true", help="Enable verbose build output")
     args = parser.parse_args(argv)
 
