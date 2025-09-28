@@ -1,0 +1,50 @@
+id: FS-20b
+title: Add unit tests and CI job for FlowScript
+intent: |
+  Add minimal tests to keep the FlowScript AST schema valid and ensure
+  compile_to_yaml produces a sane node with default outputs for units.
+changes:
+  create:
+    - path: tests/flowscript/test_ast_schema_loads.py
+      contents: |
+        import json, pathlib
+        from jsonschema import Draft202012Validator
+
+        def test_ast_schema_loads():
+            schema = json.loads(pathlib.Path("codex/flowscript/flowscript.ast.schema.json").read_text())
+            Draft202012Validator.check_schema(schema)
+    - path: tests/flowscript/test_compile_roundtrip_min.py
+      contents: |
+        import json, pathlib, yaml
+        from pkgs.flowscript.compiler import FlowScriptCompiler
+
+        def test_compile_minimal_ast_to_yaml():
+            comp = FlowScriptCompiler(
+                "codex/flowscript/flowscript.ast.schema.json",
+                "codex/flowscript/flowscript.mapping.yaml",
+            )
+            ast = {
+              "kind":"flowscript","version":"0.1",
+              "body":{"blocks":[
+                {"kind":"globals","run_budget":{"mode":"hard","max_usd":1.0}},
+                {"kind":"unit","id":"seed","spec":{"type":"llm","tool_ref":"gpt"}}
+              ]}
+            }
+            comp.validate_ast(ast)
+            out = comp.compile_to_yaml(ast)
+            node = out["graph"]["nodes"][0]
+            assert node["id"] == "seed"
+            assert node["outputs"] == ["text"]
+  modify:
+    - path: .github/workflows/ci.yaml
+      inject_after: "pytest --maxfail=1"
+      block: |
+        - name: FlowScript unit tests
+          run: |
+            pip install jsonschema pyyaml pytest || true
+            pytest -q tests/flowscript
+output_commits:
+  - message: "test(flowscript): add schema and compile tests; wire into CI"
+acceptance_criteria:
+  - "pytest -q tests/flowscript exits 0 locally"
+  - "CI shows FlowScript job green"

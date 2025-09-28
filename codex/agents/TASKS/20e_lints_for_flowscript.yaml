@@ -1,0 +1,55 @@
+id: FS-20e
+title: Add FlowScript-specific lints (unused vars, missing outputs, unknown tool_ref)
+intent: |
+  Extend the linter to cover common FlowScript mistakes, while leaving core DSL lints unchanged.
+changes:
+  create:
+    - path: pkgs/flowscript/lints.py
+      contents: |
+        from __future__ import annotations
+
+        def lint_unused_vars(ast: dict) -> list[str]:
+            declared = [b["name"] for b in ast.get("body",{}).get("blocks",[]) if b.get("kind")=="var"]
+            used = []
+            for b in ast.get("body",{}).get("blocks",[]):
+                if "inputs" in b and isinstance(b["inputs"], dict):
+                    used.extend(b["inputs"].keys())
+            return [f"FS0102 unused variable: {v}" for v in declared if v not in used]
+
+        def lint_missing_outputs(ast: dict) -> list[str]:
+            msgs=[]
+            for b in ast.get("body",{}).get("blocks",[]):
+                if b.get("kind")=="unit" and "outputs" not in b:
+                    msgs.append(f"FS0201 unit `{b.get('id')}` has no outputs (defaults to ['text'])")
+            return msgs
+
+        def lint_unknown_tool_ref(ast: dict, known_tools: set[str]) -> list[str]:
+            msgs=[]
+            for b in ast.get("body",{}).get("blocks",[]):
+                if b.get("kind")=="unit":
+                    ref = b.get("spec",{}).get("tool_ref")
+                    if ref and ref not in known_tools:
+                        msgs.append(f"FS0101 unknown tool_ref `{ref}`")
+            return msgs
+  modify:
+    - path: cli/rw_compile.py
+      inject_after: "ast = comp.parse(text)"
+      block: |
+        # Optional lint pass (non-fatal)
+        try:
+            from pkgs.flowscript.lints import lint_unused_vars, lint_missing_outputs, lint_unknown_tool_ref
+            known = set()
+            globs = next((b for b in ast.get("body",{}).get("blocks",[]) if b.get("kind")=="globals"), {})
+            known.update((globs.get("tools") or {}).keys())
+            issues = []
+            issues += lint_unused_vars(ast)
+            issues += lint_missing_outputs(ast)
+            issues += lint_unknown_tool_ref(ast, known)
+            for m in issues:
+                print(f"[flowscript-lint] {m}")
+        except Exception:
+            pass
+output_commits:
+  - message: "feat(flowscript): add minimal lint pass to `rw compile`"
+acceptance_criteria:
+  - "Running `rw compile` prints non-fatal lint warnings when applicable"

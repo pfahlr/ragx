@@ -1,0 +1,25 @@
+id: FS-20f
+title: CI: add dedicated FlowScript job (idempotent)
+intent: |
+  Ensure CI includes a focused FlowScript job that installs jsonschema/pyyaml/pytest and runs the tests.
+changes:
+  modify:
+    - path: .github/workflows/ci.yaml
+      ensure_job:
+        job_id: flowscript
+        contents: |
+          flowscript:
+            runs-on: ubuntu-latest
+            steps:
+              - uses: actions/checkout@v4
+              - uses: actions/setup-python@v5
+                with:
+                  python-version: "3.11"
+                  cache: "pip"
+              - run: pip install jsonschema pyyaml pytest || true
+              - name: FlowScript tests
+                run: pytest -q tests/flowscript
+output_commits:
+  - message: "ci: add dedicated FlowScript job"
+acceptance_criteria:
+  - "CI contains a 'flowscript' job and it passes"

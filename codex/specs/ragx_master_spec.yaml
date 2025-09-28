@@ -459,6 +459,39 @@ components:
   risks:
     - backpressure_and_streaming_policies
 
+  - id: flowscript_frontend
+    phase: P1
+    title: FlowScript Frontend (human-readable DSL -> YAML DSL)
+    description: A friendlier textual DSL that compiles to the existing YAML DSL. Ships grammar, AST schema, compiler, and lints.
+    responsibilities:
+      - Define PEG grammar and JSON Schema for FlowScript AST.
+      - Compile FlowScript -> YAML DSL 1:1 preserving policies, budgets, hints, and IO.
+      - Validate AST against schema before compilation; emit precise errors with line/col.
+      - Provide editor niceties: syntax highlight spec, error codes, and quick-fixes.
+    interfaces:
+      cli:
+        command: "rw"
+        subcommands:
+          - { name: "compile", flags: ["--in", "--out", "--validate-only", "--pretty"] }
+      classes:
+        - { name: FlowScriptCompiler, methods: [parse, validate_ast, compile_to_yaml] }
+        - { name: FlowScriptLints, methods: [unused_vars, missing_outputs_default, invalid_tool_refs] }
+    schemas:
+      ast: "codex/flowscript/flowscript.ast.schema.json"
+      mapping: "codex/flowscript/flowscript.mapping.yaml"
+      grammar: "codex/flowscript/flowscript.grammar.pegjs"
+    data_contracts:
+      examples_dir: "codex/flowscript/examples/"
+    dependencies: [jsonschema]
+    observability:
+      logs: [fs_parse_ms, fs_validate_ms, fs_compile_ms]
+      metrics: [flowscript_files_compiled_total, flowscript_compile_errors_total]
+    risks:
+      - grammar_ambiguities_vs_yaml_semantics
+      - drift_between_mapping_and_runner
+    outputs:
+      - { type: artifact, id: flowscript_yaml, path_template: "runs/{run_id}/compiled.yaml" }
+
 # ===== Vector DB area split for maintainability =====
 
 - id: vector_db_core
@@ -778,3 +811,16 @@ tests:
     - vectordb_build_md_fixture
   ci:
     coverage_minimum: 85
+
+  - id: flowscript_parser_engine
+    question: Which runtime parses FlowScript in P1?
+    options: [peggy_node_subprocess, lark_python_inproc, tree_sitter_subprocess]
+    default: peggy_node_subprocess
+  - id: flowscript_error_surface
+    question: How to surface parse/compile errors?
+    options: [stderr_plain, envelope_structured, yaml_problem_markers]
+    default: envelope_structured
+  - id: flowscript_expr_interp
+    question: Expression semantics inside Expr strings?
+    options: [pass_through, jinja_eval_at_runtime, limited_expr_eval_at_compile]
+    default: pass_through

@@ -1,0 +1,40 @@
+id: FS-20d
+title: Parser engine contract (future peggy integration)
+intent: |
+  Define an interface for a pluggable parser engine so we can swap the temporary
+  JSON-AST mode for a real PEG parser without changing callers.
+changes:
+  create:
+    - path: pkgs/flowscript/parser_engine.py
+      contents: |
+        from __future__ import annotations
+        import json
+
+        class ParserEngine:
+            """
+            Contract for FlowScript parsing.
+            For P1, we accept JSON text and return dict(AST).
+            Later, this class will shell out to a peggy-built parser (Node).
+            """
+            def parse_to_ast(self, text: str) -> dict:
+                return json.loads(text)
+  modify:
+    - path: pkgs/flowscript/compiler.py
+      replace_regex:
+        pattern: "(class FlowScriptCompiler:)"
+        replacement: |
+          from pkgs.flowscript.parser_engine import ParserEngine
+
+          class FlowScriptCompiler:
+  modify_blocks:
+    - path: pkgs/flowscript/compiler.py
+      find: "def parse(self, text: str) -> dict:"
+      replace_block: |
+        def parse(self, text: str) -> dict:
+            engine = ParserEngine()
+            return engine.parse_to_ast(text)
+output_commits:
+  - message: "refactor(flowscript): introduce ParserEngine contract for pluggable PEG parser"
+acceptance_criteria:
+  - "tests/flowscript still pass"
+  - "compiler still accepts JSON AST text"

@@ -1,0 +1,122 @@
+id: FS-20a
+title: Scaffold FlowScript Frontend (files, dirs, placeholders)
+intent: |
+  Create the initial FlowScript frontend structure and drop in the machine-readable
+  spec bundle (AST schema, PEG grammar, mapping, example). Provide a minimal
+  reference compiler stub and wire a basic CLI for compilation.
+prerequisites:
+  - repo_contains: ragx_master_spec.yaml
+  - tool_versions:
+      python: ">=3.11"
+      node: ">=18"
+changes:
+  create:
+    - path: codex/flowscript/flowscript.ast.schema.json
+      contents_from: "TASK_INPUT:flowscript.ast.schema.json"     # paste the JSON user provided
+    - path: codex/flowscript/flowscript.grammar.pegjs
+      contents_from: "TASK_INPUT:flowscript.grammar.pegjs"       # paste the PEG.js grammar user provided
+    - path: codex/flowscript/flowscript.mapping.yaml
+      contents_from: "TASK_INPUT:flowscript.mapping.yaml"        # paste the mapping YAML user provided
+    - path: codex/flowscript/examples/react_self_refine.fs
+      contents_from: "TASK_INPUT:react_self_refine.fs"           # paste the example file user provided
+    - path: pkgs/flowscript/__init__.py
+      contents: ""
+    - path: pkgs/flowscript/compiler.py
+      contents_from: "TASK_INPUT:compiler_py"                    # use the compiler stub provided below
+    - path: cli/rw_compile.py
+      contents_from: "TASK_INPUT:rw_compile_py"                  # use the CLI stub provided below
+  modify:
+    - path: .gitignore
+      ensure_lines:
+        - ".cache/"
+        - "runs/"
+output_commits:
+  - message: "feat(flowscript): scaffold AST schema, grammar, mapping, example, compiler, CLI"
+acceptance_criteria:
+  - file_exists: codex/flowscript/flowscript.ast.schema.json
+  - file_exists: codex/flowscript/flowscript.grammar.pegjs
+  - file_exists: codex/flowscript/flowscript.mapping.yaml
+  - file_exists: codex/flowscript/examples/react_self_refine.fs
+  - file_exists: pkgs/flowscript/compiler.py
+  - file_exists: cli/rw_compile.py
+  - "python -m cli.rw_compile --help exits 0"
+notes:
+  - "The compiler.parse() initially accepts JSON AST text for CI greenness; grammar integration lands later."
+task_inputs:
+  compiler_py: |
+    from __future__ import annotations
+    import json, pathlib, yaml
+    from jsonschema import Draft202012Validator
+
+    class FlowScriptCompiler:
+        def __init__(self, schema_path: str, mapping_path: str):
+            self.schema = json.loads(pathlib.Path(schema_path).read_text())
+            self.mapping = yaml.safe_load(pathlib.Path(mapping_path).read_text())
+
+        def parse(self, text: str) -> dict:
+            try:
+                return json.loads(text)  # TEMP: accept JSON AST input
+            except json.JSONDecodeError as e:
+                raise ValueError(f"Parse error (temporary JSON mode): {e}")
+
+        def validate_ast(self, ast: dict) -> None:
+            Draft202012Validator.check_schema(self.schema)
+            v = Draft202012Validator(self.schema)
+            errors = sorted(v.iter_errors(ast), key=lambda e: e.path)
+            if errors:
+                msgs = [f\"{'/'.join(map(str, e.path))}: {e.message}\" for e in errors]
+                raise ValueError(\"AST validation failed:\\n\" + \"\\n\".join(msgs))
+
+        def compile_to_yaml(self, ast: dict) -> dict:
+            out = {\"version\": self.mapping[\"rules\"][\"flow_to_yaml\"][\"out.version\"],
+                   \"globals\": {}, \"graph\": {\"nodes\": [], \"control\": []}}
+            blocks = ast.get(\"body\", {}).get(\"blocks\", [])
+            for b in blocks:
+                if b.get(\"kind\") == \"globals\":
+                    if \"run_budget\" in b: out[\"globals\"][\"run_budget\"] = b[\"run_budget\"]
+                    if \"tools\" in b: out[\"globals\"][\"tools\"] = b[\"tools\"]
+                    if \"tool_sets\" in b: out[\"globals\"][\"tool_sets\"] = b[\"tool_sets\"]
+            for b in blocks:
+                k = b.get(\"kind\")
+                if k in (\"unit\", \"transform\", \"decision\", \"end\"):
+                    node = {\"id\": b.get(\"id\"), \"kind\": k}
+                    for key in (\"policy\",\"budget\",\"hints\",\"inputs\",\"outputs\",\"spec\"):
+                        if key in b: node[key] = b[key]
+                    if k == \"unit\" and \"outputs\" not in node:
+                        node[\"outputs\"] = [\"text\"]
+                    out[\"graph\"][\"nodes\"].append(node)
+                elif k == \"loop\":
+                    ctl = {\"id\": b[\"id\"], \"kind\": \"loop\",
+                           \"target_subgraph\": b.get(\"target_subgraph\", []),
+                           \"stop\": b.get(\"stop\", {})}
+                    if \"policy\" in b: ctl[\"policy\"] = b[\"policy\"]
+                    out[\"graph\"][\"control\"].append(ctl)
+            return out
+  rw_compile_py: |
+    import argparse, pathlib, sys, yaml, json
+    from pkgs.flowscript.compiler import FlowScriptCompiler
+
+    def main():
+        ap = argparse.ArgumentParser(prog=\"rw compile\", description=\"Compile FlowScript to YAML DSL\")
+        ap.add_argument(\"--in\", dest=\"inp\", required=True)
+        ap.add_argument(\"--out\", dest=\"outp\", required=False)
+        ap.add_argument(\"--validate-only\", action=\"store_true\")
+        ap.add_argument(\"--pretty\", action=\"store_true\")
+        ap.add_argument(\"--schema\", default=\"codex/flowscript/flowscript.ast.schema.json\")
+        ap.add_argument(\"--mapping\", default=\"codex/flowscript/flowscript.mapping.yaml\")
+        args = ap.parse_args()
+
+        comp = FlowScriptCompiler(args.schema, args.mapping)
+        text = pathlib.Path(args.inp).read_text()
+        ast = comp.parse(text)
+        comp.validate_ast(ast)
+        if args.validate_only:
+            print(\"OK: AST validated.\"); return 0
+        dsl = comp.compile_to_yaml(ast)
+        s = yaml.safe_dump(dsl, sort_keys=False) if args.pretty else yaml.safe_dump(dsl)
+        if args.outp: pathlib.Path(args.outp).write_text(s)
+        else: sys.stdout.write(s)
+        return 0
+
+    if __name__ == \"__main__\":
+        raise SystemExit(main())
