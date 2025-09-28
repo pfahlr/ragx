@@ -1,5 +1,6 @@
 import pytest
 
+
 @pytest.mark.xfail(reason="MCP server not implemented yet", strict=False)
 def test_mcp_envelope_schema_contract():
     # Minimal envelope contract example the server must uphold

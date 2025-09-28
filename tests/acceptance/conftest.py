@@ -2,9 +2,11 @@ from pathlib import Path
 
 import pytest
 
+
 @pytest.fixture(scope="session")
 def repo_root():
     return Path(".").resolve()
+
 
 @pytest.fixture(scope="session")
 def spec_path(repo_root):

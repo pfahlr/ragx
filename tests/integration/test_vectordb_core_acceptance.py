@@ -1,6 +1,7 @@
 import numpy as np
 import pytest
 
+
 @pytest.mark.xfail(reason="Vector DB Core not implemented yet", strict=False)
 def test_backend_registry_and_dummy_backend():
     # Once ragcore is wired, agents should register a dummy backend and run a simple search
