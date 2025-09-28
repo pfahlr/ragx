@@ -1,0 +1,13 @@
+id: 05a_toolpacks_loader_minimal
+title: Toolpacks loader + schema resolution (no execution yet)
+description: >
+  Load *.tool.yaml, resolve $ref to schemas, validate config.
+
+acceptance:
+  - tests/unit/test_toolpacks_loader.py pass
+  - Listing tools works without runtimes
+
+steps:
+  - Implement ToolpackLoader.load_dir, list, get.
+  - Validate schemas.
+  - Docs: docs/toolpacks_loader.md.

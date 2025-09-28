@@ -1,0 +1,14 @@
+id: 06a_core_tools_minimal_subset
+title: Core tools minimal subset over Python toolpacks
+description: >
+  Implement minimal Python toolpacks for exports.render.markdown,
+  vector.query.search (dummy), docs.load.fetch (local).
+
+acceptance:
+  - tests/unit/test_core_tools_schemas.py pass
+  - tests/e2e/test_mcp_minimal_core_tools.py pass
+
+steps:
+  - Provide schema files under apps/mcp_server/schemas/tools/.
+  - Implement dummy Python toolpacks.
+  - Wire MCP server to load/serve these.

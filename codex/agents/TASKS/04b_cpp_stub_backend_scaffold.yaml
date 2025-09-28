@@ -1,0 +1,16 @@
+id: 04b_cpp_stub_backend_scaffold
+title: C++ backend scaffold with pybind11 (no FAISS yet)
+description: >
+  Create a buildable pybind11 module `_ragcore_cpp` that exposes CPPBackend + Handle
+  with no-op/stub logic (std::vector storage). Make it optional at import time.
+
+acceptance:
+  - tests/unit/test_cpp_stub_import.py must pass
+  - Optional import works; fallback if .so missing
+  - capabilities() returns stubbed info
+
+steps:
+  - Write tests guarding optional import behavior.
+  - Add cpp/ build files and stub class methods.
+  - Provide shim in ragcore/backends/cpp/.
+  - Docs: docs/native_backend_setup.md.

@@ -1,0 +1,13 @@
+id: 05b_toolpacks_executor_python_only
+title: Toolpacks executor (Python kind) with schema validation
+description: >
+  Execute Python toolpacks with schema validation and idempotency cache.
+
+acceptance:
+  - tests/unit/test_toolpacks_exec_python.py pass
+  - tests/e2e/test_mcp_core_tools_python_only.py pass
+
+steps:
+  - Executor.run_toolpack() for python kind.
+  - JSON schema validation IO.
+  - Deterministic cache.

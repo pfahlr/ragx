@@ -1,0 +1,15 @@
+id: 04e_shards_merge_contract_and_tests
+title: Shard merge contract + docmap offsets (tests first)
+description: >
+  Define merge semantics across handles; implement for py_flat and cpp stub.
+
+acceptance:
+  - tests/unit/test_shard_merge_contract.py pass
+  - tests/e2e/test_vectordb_merge_flow.py pass
+  - Index dir contains index.bin, index_spec.json, docmap.json
+
+steps:
+  - Write tests for merge edge-cases.
+  - Implement merge_with for backends.
+  - Emit index_spec.json + docmap.json.
+  - Docs: docs/merge_semantics.md.

@@ -1,0 +1,15 @@
+id: 04c_python_flat_index_baseline
+title: Python flat index (IP/L2) – baseline search
+description: >
+  Implement a pure-Python "flat" backend that is correct but not optimized.
+
+acceptance:
+  - tests/unit/test_python_flat_index.py pass (IP/L2 search, shapes)
+  - tests/e2e/test_vectordb_build_and_search_small.py pass
+  - serialize_cpu() round-trips
+
+steps:
+  - Write tests for correctness and determinism.
+  - Implement backend ragcore/backends/pyflat/.
+  - Registry: register "py_flat".
+  - CLI integration.

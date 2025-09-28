@@ -1,0 +1,14 @@
+id: 04f_cli_scanner_and_formats_md_pdf
+title: CLI scanner + PDF/Markdown ingestion with front-matter
+description: >
+  Implement scanner that walks corpus-dir and parses PDFs/Markdown.
+
+acceptance:
+  - tests/unit/test_md_front_matter_parse.py pass
+  - tests/e2e/test_vectordb_build_md_fixture.py pass
+  - vectordb-builder build works with md/pdf
+
+steps:
+  - Implement md_parser.py and pdf_parser.py.
+  - scanner.py yields chunks+metadata.
+  - Update CLI and docs/ingestion.md.

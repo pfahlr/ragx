@@ -1,0 +1,17 @@
+id: 04a_vectordb_protocol_and_registry
+title: Define Vector DB protocols + registry (tests first)
+description: >
+  Lock down the Python protocols (Backend, Handle), the registry, and CLI stubs.
+  Provide a pure-Python dummy backend so tests can run without native deps.
+
+acceptance:
+  - tests/unit/test_vectordb_protocols.py must pass
+  - tests/unit/test_registry.py must pass
+  - ragcore/cli.py "list" and "build --backend dummy" smoke test passes
+
+steps:
+  - Write tests for protocols and registry behaviors.
+  - Implement ragcore/interfaces.py, ragcore/registry.py.
+  - Add dummy backend under ragcore/backends/dummy/.
+  - Add minimal CLI ragcore/cli.py with "list" and "build".
+  - Docs: docs/vdb_interfaces.md.

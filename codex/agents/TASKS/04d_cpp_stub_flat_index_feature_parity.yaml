@@ -1,0 +1,14 @@
+id: 04d_cpp_stub_flat_index_feature_parity
+title: C++ stub flat index behavioral parity with Python baseline
+description: >
+  Make the C++ stub mimic Python flat index results for small fixtures.
+
+acceptance:
+  - tests/unit/test_cpp_flat_parity.py pass
+  - tests/e2e/test_vectordb_build_and_search_small.py pass with cpp_faiss
+  - serialize_cpu() non-empty and round-trippable
+
+steps:
+  - Implement search in C++ stub with loops and stable sort.
+  - Implement dummy serialize_cpu.
+  - Register alias "cpp_faiss".
