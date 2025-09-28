@@ -1,0 +1,17 @@
+id: 40a-vectordb-faiss-shim-and-serialize
+title: VectorDB – FAISS shim + CPU serialize + docmap contract
+owner: codex
+priority: P0
+depends_on: []
+goal: Ship Python shim and minimal backend (dummy or FAISS if available) honoring serialize contract and index dir layout.
+outputs:
+  - ragcore/interfaces.py
+  - ragcore/registry.py
+  - ragcore/backends/dummy/backend.py
+  - ragcore/cli.py
+  - tests/vdb/test_registry_and_serialize.py
+deliverables:
+  - Save `index.bin`, `index_spec.json`, `docmap.json` under `index_dir`.
+  - Deterministic search results on small fixture.
+acceptance:
+  - pytest -q tests/vdb -q green

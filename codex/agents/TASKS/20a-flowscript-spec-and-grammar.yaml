@@ -1,0 +1,32 @@
+id: 20a-flowscript-spec-and-grammar
+title: FlowScript v0.1 – human-readable DSL spec + grammar
+owner: codex
+priority: P0
+depends_on: [03_vectordb_md_ingest, 05a_toolpacks_loader_minimal, 06b_mcp_server_bootstrap]
+goal: >
+  Define the human-readable FlowScript language that compiles to the canonical YAML DSL
+  in codex/specs/ragx_master_spec.yaml (components: dsl). Ship a formal grammar + examples.
+inputs:
+  - codex/specs/ragx_master_spec.yaml
+outputs:
+  - docs/dsl/flowscript.md
+  - pkgs/dsl/flowscript/grammar.ebnf
+  - pkgs/dsl/flowscript/examples/*.fs
+deliverables:
+  - Human-readable spec with mapping tables (FlowScript → YAML DSL).
+  - EBNF grammar file (no parser yet).
+  - 5 minimal example programs (.fs) mirroring the example YAML flow.
+acceptance:
+  - "pytest -q -k test_flowscript_spec_links" passes
+  - docs reference anchors resolve to sections in ragx_master_spec.yaml
+  - examples compile by placeholder script (no-op) and are referenced in docs
+paths_changed:
+  - docs/dsl/flowscript.md
+  - pkgs/dsl/flowscript/grammar.ebnf
+  - pkgs/dsl/flowscript/examples/
+ci:
+  run:
+    - make lint
+    - pytest -q
+notes:
+  - Keep wording consistent with 'components: dsl' schemas & node kinds: unit|transform|decision|loop|end

@@ -1,0 +1,20 @@
+id: 20i-dsl-linter-and-ci
+title: Static DSL linter + CI gate (unreachable tools, budget blow-ups)
+owner: codex
+priority: P0
+depends_on: [20h-adapters-and-costing]
+goal: Ship linter CLI and wire into CI as a required step.
+inputs:
+  - codex/specs/ragx_master_spec.yaml
+outputs:
+  - tools/flow_linter.py
+  - pkgs/dsl/cli.py
+  - tests/dsl/test_linter_rules.py
+  - .github/workflows/ci.yml (amend)
+deliverables:
+  - CLI: `task-runner lint --spec flows/x.yaml --strict-missing-pricing`
+  - Lints: impossible budgets, loop risks, missing pricing, unreachable policies.
+acceptance:
+  - Linter flags known-bad fixtures; passes known-good fixtures
+  - CI runs linter; PR fails on ERRORs
+  - "pytest -q -k linter_rules" green

@@ -1,0 +1,20 @@
+id: 30a-mcp-envelope-and-schema
+title: MCP – Envelope + schema validation (HTTP & STDIO parity)
+owner: codex
+priority: P0
+depends_on: [20d-runner-execution-core]
+goal: Implement uniform Envelope model and JSON Schema validation for all MCP responses; ensure HTTP/STDIO parity.
+inputs:
+  - codex/specs/ragx_master_spec.yaml
+outputs:
+  - apps/mcp_server/models/envelope.py
+  - apps/mcp_server/schemas/envelope.schema.json
+  - apps/mcp_server/tests/test_envelope_schema.py
+  - apps/mcp_server/tests/test_stdio_http_parity.py
+deliverables:
+  - Pydantic Envelope class + schema file.
+  - Middleware that validates outbound envelopes against schema.
+  - Parity tests: same request via HTTP and STDIO yields byte-identical data payloads (excluding meta.traceId).
+acceptance:
+  - pytest -q apps/mcp_server/tests -k "envelope or parity" green
+  - Invalid responses are rejected with 500 + INTERNAL code in envelope.errors
