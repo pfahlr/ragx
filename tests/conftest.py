@@ -1,5 +1,6 @@
 import os
 import pathlib
+
 import pytest
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[1]
@@ -25,9 +26,17 @@ skip_if_no_eval = pytest.mark.skipif(
 )
 
 skip_if_no_native = pytest.mark.skipif(
-    not NATIVE_AVAILABLE, reason="native toolchain/backends not available (set RAGX_NATIVE_OK=1 to enable)"
+    not NATIVE_AVAILABLE,
+    reason=(
+        "native toolchain/backends not available "
+        "(set RAGX_NATIVE_OK=1 to enable)"
+    ),
 )
 
 skip_if_no_gpu = pytest.mark.skipif(
-    not GPU_AVAILABLE, reason="GPU runtime not available (set RAGX_GPU_OK=1 to enable)"
+    not GPU_AVAILABLE,
+    reason=(
+        "GPU runtime not available "
+        "(set RAGX_GPU_OK=1 to enable)"
+    ),
 )

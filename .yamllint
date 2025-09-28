@@ -1,0 +1,16 @@
+extends: default
+
+ignore: |
+  codex/specs/ragx_master_spec.yaml
+  codex/agents/TASKS/
+  flows/
+
+rules:
+  empty-lines: disable
+  document-start: disable
+  line-length:
+    max: 300
+    level: warning
+  braces: disable
+  commas: disable
+  truthy: disable

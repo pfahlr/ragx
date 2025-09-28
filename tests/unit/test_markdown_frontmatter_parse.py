@@ -1,5 +1,6 @@
-import textwrap
 import importlib
+import textwrap
+
 import pytest
 
 MODULE_PATH = "pkgs.ingest.markdown_frontmatter"  # implement here per spec

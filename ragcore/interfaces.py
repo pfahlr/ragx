@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
-from typing import Any, Dict, Iterable, Mapping, Protocol, runtime_checkable
+from typing import Any, Protocol, runtime_checkable
 
 import numpy as np
 from numpy.typing import NDArray
-
 
 FloatArray = NDArray[np.float32]
 IntArray = NDArray[np.int64]
@@ -22,7 +22,7 @@ class Backend(Protocol):
     def capabilities(self) -> Mapping[str, Any]:
         """Return a JSON-serialisable description of backend capabilities."""
 
-    def build(self, spec: Mapping[str, Any]) -> "Handle":
+    def build(self, spec: Mapping[str, Any]) -> Handle:
         """Construct a handle implementing :class:`Handle` for the given spec."""
 
 
@@ -39,15 +39,20 @@ class Handle(Protocol):
 
     def add(self, vectors: FloatArray, ids: IntArray | None = None) -> None: ...
 
-    def search(self, queries: FloatArray, k: int, **kwargs: Any) -> Dict[str, FloatArray | IntArray]: ...
+    def search(
+        self,
+        queries: FloatArray,
+        k: int,
+        **kwargs: Any,
+    ) -> dict[str, FloatArray | IntArray]: ...
 
     def ntotal(self) -> int: ...
 
-    def serialize_cpu(self) -> "SerializedIndex": ...
+    def serialize_cpu(self) -> SerializedIndex: ...
 
-    def to_gpu(self, device: str | None = None) -> "Handle": ...
+    def to_gpu(self, device: str | None = None) -> Handle: ...
 
-    def merge_with(self, other: "Handle") -> "Handle": ...
+    def merge_with(self, other: Handle) -> Handle: ...
 
     def spec(self) -> Mapping[str, Any]: ...
 
@@ -63,7 +68,12 @@ class IndexSpec:
     params: Mapping[str, Any] = field(default_factory=dict)
 
     @classmethod
-    def from_mapping(cls, mapping: Mapping[str, Any], *, default_backend: str | None = None) -> "IndexSpec":
+    def from_mapping(
+        cls,
+        mapping: Mapping[str, Any],
+        *,
+        default_backend: str | None = None,
+    ) -> IndexSpec:
         backend_value = mapping.get("backend", default_backend)
         if backend_value is None:
             raise ValueError("index spec must include a backend")
@@ -92,7 +102,7 @@ class IndexSpec:
             params=dict(params_value),
         )
 
-    def as_dict(self) -> Dict[str, Any]:
+    def as_dict(self) -> dict[str, Any]:
         return {
             "backend": self.backend,
             "kind": self.kind,
@@ -113,7 +123,7 @@ class SerializedIndex:
     is_trained: bool
     is_gpu: bool
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Return a JSON-friendly representation of the serialised index."""
 
         return {
@@ -163,11 +173,17 @@ def _distance_matrix(vectors: FloatArray, queries: FloatArray, metric: str) -> F
 class VectorIndexHandle:
     """Concrete handle implementation shared by simulated backends."""
 
-    def __init__(self, spec: IndexSpec, *, requires_training: bool, supports_gpu: bool = False) -> None:
+    def __init__(
+        self,
+        spec: IndexSpec,
+        *,
+        requires_training: bool,
+        supports_gpu: bool = False,
+    ) -> None:
         self._spec = spec
         self._requires_training = requires_training
         self._supports_gpu = supports_gpu
-        self._factory_kwargs: Dict[str, Any] = {
+        self._factory_kwargs: dict[str, Any] = {
             "requires_training": requires_training,
             "supports_gpu": supports_gpu,
         }
@@ -199,7 +215,12 @@ class VectorIndexHandle:
         self._vectors = np.concatenate([self._vectors, batch], axis=0)
         self._ids = np.concatenate([self._ids, ids_array], axis=0)
 
-    def search(self, queries: FloatArray, k: int, **_: Any) -> Dict[str, FloatArray | IntArray]:
+    def search(
+        self,
+        queries: FloatArray,
+        k: int,
+        **_: Any,
+    ) -> dict[str, FloatArray | IntArray]:
         if self._vectors.shape[0] == 0:
             raise RuntimeError("cannot search an empty index")
         query_array = _ensure_2d_float32(queries, dim=self._spec.dim)
@@ -216,7 +237,7 @@ class VectorIndexHandle:
         return int(self._vectors.shape[0])
 
     def serialize_cpu(self) -> SerializedIndex:
-        metadata = {
+        metadata: dict[str, Any] = {
             "requires_training": self._requires_training,
             "supports_gpu": self._supports_gpu,
         }
@@ -229,14 +250,14 @@ class VectorIndexHandle:
             is_gpu=self.is_gpu,
         )
 
-    def to_gpu(self, device: str | None = None) -> "VectorIndexHandle":
+    def to_gpu(self, device: str | None = None) -> VectorIndexHandle:
         clone = self._clone()
         if self._supports_gpu:
             clone.is_gpu = True
             clone.device = device or "cuda:0"
         return clone
 
-    def merge_with(self, other: Handle) -> "VectorIndexHandle":
+    def merge_with(self, other: Handle) -> VectorIndexHandle:
         if not isinstance(other, VectorIndexHandle):
             raise TypeError("can only merge with another VectorIndexHandle")
         if other._spec != self._spec:
@@ -253,7 +274,7 @@ class VectorIndexHandle:
     def spec(self) -> Mapping[str, Any]:
         return self._spec.as_dict()
 
-    def _clone(self, *, empty: bool = False) -> "VectorIndexHandle":
+    def _clone(self, *, empty: bool = False) -> VectorIndexHandle:
         clone = self.__class__(self._spec, **self._factory_kwargs)
         clone._requires_training = self._requires_training
         clone._supports_gpu = self._supports_gpu

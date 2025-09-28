@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Iterable
+from collections.abc import Iterable
 
 import numpy as np
 import pytest
@@ -8,7 +8,7 @@ import pytest
 from ragcore.backends.cuvs import CuVSBackend
 from ragcore.backends.faiss import FaissBackend
 from ragcore.backends.hnsw import HnswBackend
-from ragcore.registry import get, register, _reset_registry
+from ragcore.registry import _reset_registry, get, register
 
 
 @pytest.fixture(autouse=True)
