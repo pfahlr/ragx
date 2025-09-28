@@ -3,7 +3,6 @@ from pathlib import Path
 
 import yaml
 
-
 PYPROJECT_PATH = Path("pyproject.toml")
 CI_WORKFLOW_PATH = Path(".github/workflows/ci.yml")
 MAKEFILE_PATH = Path("Makefile")
@@ -19,7 +18,9 @@ def test_pyproject_ci_tooling_config():
     assert ruff_config is not None, "tool.ruff configuration missing"
     assert ruff_config.get("line-length") == 100
     assert ruff_config.get("target-version") == "py311"
-    assert ruff_config.get("select") == ["E", "F", "I", "UP", "B"]
+    lint_config = ruff_config.get("lint")
+    assert lint_config is not None, "tool.ruff.lint configuration missing"
+    assert lint_config.get("select") == ["E", "F", "I", "UP", "B"]
 
     mypy_config = tool_config.get("mypy")
     assert mypy_config is not None, "tool.mypy configuration missing"
