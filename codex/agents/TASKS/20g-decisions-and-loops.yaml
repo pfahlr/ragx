@@ -16,4 +16,4 @@ deliverables:
 acceptance:
   - Branch selection deterministic on provided inputs
   - Loop halts on iteration/budget as configured
-  - "pytest -q -k decisions_and_loops" green
+  - '"pytest -q -k decisions_and_loops" green'

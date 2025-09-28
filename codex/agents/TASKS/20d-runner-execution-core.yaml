@@ -17,7 +17,7 @@ deliverables:
 acceptance:
   - Schema validation called prior to run
   - Deterministic outputs for stub adapters
-  - "pytest -q -k runner_sequential" green
+  - '"pytest -q -k runner_sequential" green'
 paths_changed:
   - pkgs/dsl/orchestrator/*
   - tests/dsl/*

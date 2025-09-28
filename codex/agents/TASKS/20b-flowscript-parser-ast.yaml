@@ -14,7 +14,7 @@ deliverables:
   - Parser with clear errors (line/col), round-trip golden tests for examples.
   - Typed AST nodes with dataclasses (readability-first naming).
 acceptance:
-  - "pytest -q tests/dsl/test_flowscript_parser.py -q" green
+  - '"pytest -q tests/dsl/test_flowscript_parser.py -q" green'
   - Coverage for parser+ast ≥ 85%
   - Parser rejects malformed inputs with precise diagnostics
 paths_changed:

@@ -15,4 +15,4 @@ deliverables:
 acceptance:
   - Budget checks fire using estimated costs before call
   - Cache hit ratio measurable in trace
-  - "pytest -q -k adapters_costing" green
+  - '"pytest -q -k adapters_costing" green'

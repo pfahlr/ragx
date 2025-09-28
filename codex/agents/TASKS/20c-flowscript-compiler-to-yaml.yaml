@@ -16,11 +16,10 @@ deliverables:
 acceptance:
   - Validate generated YAML with jsonschema (existing validator harness)
   - Golden fixtures: any change must update snapshots intentionally
-  - "pytest -q -k compile_equivalence" green
+  - '"pytest -q -k compile_equivalence" green'
 paths_changed:
   - pkgs/dsl/flowscript/*
   - tests/dsl/*
 ci:
   run:
     - pytest -q
-

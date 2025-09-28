@@ -17,7 +17,7 @@ deliverables:
   - EBNF grammar file (no parser yet).
   - 5 minimal example programs (.fs) mirroring the example YAML flow.
 acceptance:
-  - "pytest -q -k test_flowscript_spec_links" passes
+  - '"pytest -q -k test_flowscript_spec_links" passes'
   - docs reference anchors resolve to sections in ragx_master_spec.yaml
   - examples compile by placeholder script (no-op) and are referenced in docs
 paths_changed:
@@ -29,4 +29,4 @@ ci:
     - make lint
     - pytest -q
 notes:
-  - Keep wording consistent with 'components: dsl' schemas & node kinds: unit|transform|decision|loop|end
+  - "Keep wording consistent with 'components: dsl' schemas & node kinds: unit|transform|decision|loop|end"
