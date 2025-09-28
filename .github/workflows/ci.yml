@@ -9,42 +9,35 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # Python runtime
+      # Python runtime with pip caching
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-          cache: "pip"   # built-in pip cache keyed on requirements.txt
+          cache: "pip"
 
-      # Cache for CMake build artifacts
-      - name: Cache CMake build
-        uses: actions/cache@v4
-        with:
-          path: build
-          key: cmake-${{ runner.os }}-${{ hashFiles('**/CMakeLists.txt') }}
-          restore-keys: |
-            cmake-${{ runner.os }}-
-
+      # Install Python dependencies
       - name: Install Python dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt || true
-          # Ensure pybind11 is present
           pip install pybind11 || true
-          # Dev tools
           pip install ruff mypy pytest coverage yamllint || true
 
+      # Export pybind11_DIR (so CMake can find it)
       - name: Export pybind11_DIR
         run: |
           echo "pybind11_DIR=$(python -m pybind11 --cmakedir)" >> $GITHUB_ENV
           echo "Using pybind11_DIR=$pybind11_DIR"
 
-      - name: Install C++ toolchain
-        if: ${{ hashFiles('**/CMakeLists.txt') != '' }}
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y cmake ninja-build g++ make
+      # Enable ccache to cache compiled C++ objects
+      - name: Enable ccache
+        uses: hendrikmuhs/ccache-action@v2
+        with:
+          key: ccache-${{ runner.os }}-${{ hashFiles('**/CMakeLists.txt') }}
+          max-size: 500M
 
-      - name: Configure CMake (native build)
+      # Configure CMake (only if CMakeLists.txt exists)
+      - name: Configure CMake
         if: ${{ hashFiles('**/CMakeLists.txt') != '' }}
         env:
           pybind11_DIR: ${{ env.pybind11_DIR }}
@@ -52,13 +45,16 @@ jobs:
           cmake -S ./cpp -B build \
             -G Ninja \
             -Dpybind11_DIR="$pybind11_DIR" \
-            -DPYBIND11_FINDPYTHON=ON
+            -DPYBIND11_FINDPYTHON=ON \
+            -DCMAKE_C_COMPILER_LAUNCHER=ccache \
+            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
 
-      - name: Build (native)
+      # Build project (native CMake/Ninja)
+      - name: Build
         if: ${{ hashFiles('**/CMakeLists.txt') != '' }}
         run: cmake --build build -- -j"$(nproc)"
 
-      # Lint / type / tests
+      # Run lint / type checks / tests (non-fatal like your original)
       - name: Ruff
         run: ruff check . || true
 
