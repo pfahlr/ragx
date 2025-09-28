@@ -6,10 +6,10 @@ import urllib.request
 from pathlib import Path
 from typing import cast
 
+
 import pytest
 
 pytestmark = pytest.mark.xfail(reason="MCP Server not implemented yet")
-
 
 def _free_port() -> int:
     with socket.socket() as sock:
@@ -31,7 +31,13 @@ def test_mcp_http_envelope_and_discover(tmp_path: Path) -> None:
         "--port",
         str(port),
     ]
-    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+
+    proc = subprocess.Popen(
+        cmd,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
     try:
         # Wait for server
         time.sleep(1.0)

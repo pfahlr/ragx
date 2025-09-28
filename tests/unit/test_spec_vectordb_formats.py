@@ -1,5 +1,6 @@
-from pathlib import Path
 
+from pathlib import Path
+import os
 import pytest
 import yaml
 
@@ -12,6 +13,7 @@ def test_vectordb_accept_format_flag_in_spec() -> None:
             spec = yaml.safe_load(f)
         except yaml.YAMLError as exc:
             pytest.xfail(f"Master spec not yet valid YAML: {exc}")
+
     vb = spec["arg_spec"]["vectordb_builder"]
     flags = {entry["flag"]: entry for entry in vb}
     assert "--accept-format" in flags, "Missing --accept-format in vectordb_builder"
