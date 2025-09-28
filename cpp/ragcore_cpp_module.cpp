@@ -190,16 +190,10 @@ class CPPHandle {
                 float distance = compute_distance(query_vector, stored_vector, dim_, metric_, query_norm);
                 ranking.emplace_back(distance, vi);
             }
-            std::partial_sort(
+            std::stable_sort(
                 ranking.begin(),
-                ranking.begin() + topk,
                 ranking.end(),
-                [](const auto& lhs, const auto& rhs) {
-                    if (lhs.first == rhs.first) {
-                        return lhs.second < rhs.second;
-                    }
-                    return lhs.first < rhs.first;
-                }
+                [](const auto& lhs, const auto& rhs) { return lhs.first < rhs.first; }
             );
             for (std::size_t rank = 0; rank < topk; ++rank) {
                 const auto index = ranking[rank].second;
@@ -330,7 +324,7 @@ class CPPBackend {
         py::object parsed = index_spec.attr("from_mapping")(spec, py::arg("default_backend") = "cpp");
 
         std::string backend = py::str(parsed.attr("backend"));
-        if (backend != "cpp") {
+        if (backend != "cpp" && backend != "cpp_faiss") {
             throw std::invalid_argument("CPP backend cannot build other backends");
         }
 
