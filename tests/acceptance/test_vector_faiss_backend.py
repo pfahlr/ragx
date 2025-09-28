@@ -1,12 +1,13 @@
 import json
 import subprocess
+from pathlib import Path
 
 import numpy as np
 import pytest
 
 pytestmark = pytest.mark.xfail(reason="FAISS backend not wired yet")
 
-def test_vdb_build_and_search_smoke(tmp_path):
+def test_vdb_build_and_search_smoke(tmp_path: Path) -> None:
     # Prepare spec JSON
     spec = {
         "dim": 8,

@@ -3,19 +3,23 @@ import socket
 import subprocess
 import time
 import urllib.request
+from pathlib import Path
+from typing import cast
 
 import pytest
 
 pytestmark = pytest.mark.xfail(reason="MCP Server not implemented yet")
 
-def _free_port():
-    s = socket.socket()
-    s.bind(("", 0))
-    port = s.getsockname()[1]
-    s.close()
+
+def _free_port() -> int:
+    with socket.socket() as sock:
+        sock.bind(("", 0))
+        address = cast(tuple[str, int], sock.getsockname())
+        port = address[1]
     return port
 
-def test_mcp_http_envelope_and_discover(tmp_path):
+
+def test_mcp_http_envelope_and_discover(tmp_path: Path) -> None:
     port = _free_port()
     cmd = [
         "python",

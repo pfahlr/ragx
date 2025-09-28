@@ -1,12 +1,14 @@
 import json
 import subprocess
 import textwrap
+from pathlib import Path
 
 import pytest
 
 pytestmark = pytest.mark.xfail(reason="DSL Runner not implemented yet")
 
-def test_task_runner_executes_example_flow(repo_root):
+
+def test_task_runner_executes_example_flow(repo_root: Path) -> None:
     # Arrange: example flow (minimal)
     flows_dir = repo_root / "flows"
     flows_dir.mkdir(exist_ok=True)

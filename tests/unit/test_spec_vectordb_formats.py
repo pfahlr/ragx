@@ -3,7 +3,7 @@ from pathlib import Path
 import yaml
 
 
-def test_vectordb_accept_format_flag_in_spec():
+def test_vectordb_accept_format_flag_in_spec() -> None:
     spec_path = Path("codex/specs/ragx_master_spec.yaml")
     assert spec_path.exists(), "Master spec missing"
     with spec_path.open() as f:
@@ -17,7 +17,7 @@ def test_vectordb_accept_format_flag_in_spec():
     assert sorted(entry.get("default", [])) == ["md", "pdf"]
 
 
-def test_spec_mentions_markdown_and_front_matter_contracts():
+def test_spec_mentions_markdown_and_front_matter_contracts() -> None:
     spec_path = Path("codex/specs/ragx_master_spec.yaml")
     with spec_path.open() as f:
         spec = yaml.safe_load(f)

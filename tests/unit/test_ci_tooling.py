@@ -1,59 +1,80 @@
 import tomllib
+from collections.abc import Mapping, Sequence
 from pathlib import Path
+from typing import cast
 
 import yaml
 
 
-def test_pyproject_ci_tooling_configuration():
+def _as_mapping(value: object, context: str) -> Mapping[str, object]:
+    assert isinstance(value, Mapping), f"{context} must be a mapping"
+    return cast(Mapping[str, object], value)
+
+
+def _as_sequence(value: object, context: str) -> Sequence[object]:
+    assert isinstance(value, Sequence), f"{context} must be a sequence"
+    return cast(Sequence[object], value)
+
+
+def _as_list(value: object, context: str) -> list[object]:
+    assert isinstance(value, list), f"{context} must be a list"
+    return cast(list[object], value)
+
+
+def _as_dict(value: object, context: str) -> dict[str, object]:
+    assert isinstance(value, dict), f"{context} must be a mapping"
+    return cast(dict[str, object], value)
+
+
+def test_pyproject_ci_tooling_configuration() -> None:
     pyproject_path = Path("pyproject.toml")
     assert pyproject_path.exists(), "pyproject.toml must exist at project root"
 
-    data = tomllib.loads(pyproject_path.read_text())
-    tool_config = data.get("tool")
-    assert tool_config is not None, "pyproject.toml must define [tool] table"
+    data_raw = tomllib.loads(pyproject_path.read_text())
+    tool_config = _as_mapping(data_raw, "[tool]").get("tool")
+    tool_mapping = _as_mapping(tool_config, "[tool]")
 
-    ruff_config = tool_config.get("ruff")
-    assert ruff_config is not None, "pyproject.toml must define [tool.ruff] configuration"
-    assert ruff_config.get("line-length") == 100
-    assert ruff_config.get("target-version") == "py311"
-    lint_config = ruff_config.get("lint")
-    assert lint_config is not None, "pyproject.toml must define [tool.ruff.lint] configuration"
-    assert lint_config.get("select") == ["E", "F", "I", "UP", "B"]
+    ruff_mapping = _as_mapping(tool_mapping.get("ruff"), "[tool.ruff]")
+    line_length = ruff_mapping.get("line-length")
+    target_version = ruff_mapping.get("target-version")
+    lint_mapping = _as_mapping(ruff_mapping.get("lint"), "[tool.ruff.lint]")
+    select = _as_sequence(lint_mapping.get("select"), "[tool.ruff.lint].select")
 
-    mypy_config = tool_config.get("mypy")
-    assert mypy_config is not None, "pyproject.toml must define [tool.mypy] configuration"
-    assert mypy_config.get("python_version") == "3.11"
-    assert mypy_config.get("ignore_missing_imports") is True
-    assert mypy_config.get("strict") is True
+    assert line_length == 100
+    assert target_version == "py311"
+    assert list(select) == ["E", "F", "I", "UP", "B"]
 
-    pytest_config = tool_config.get("pytest")
-    assert (
-        pytest_config is not None
-    ), "pyproject.toml must define [tool.pytest.ini_options] configuration"
-    ini_options = pytest_config.get("ini_options")
-    assert ini_options is not None
+    mypy_mapping = _as_mapping(tool_mapping.get("mypy"), "[tool.mypy]")
+    assert mypy_mapping.get("python_version") == "3.11"
+    assert mypy_mapping.get("ignore_missing_imports") is True
+    assert mypy_mapping.get("strict") is True
+
+    pytest_mapping = _as_mapping(tool_mapping.get("pytest"), "[tool.pytest]")
+    ini_options = _as_mapping(
+        pytest_mapping.get("ini_options"), "[tool.pytest.ini_options]"
+    )
     assert ini_options.get("testpaths") == ["tests"]
     assert ini_options.get("addopts") == "-q"
 
 
-def test_ci_workflow_scaffold():
+def test_ci_workflow_scaffold() -> None:
     workflow_path = Path(".github/workflows/ci.yml")
     assert workflow_path.exists(), "CI workflow configuration must exist"
 
-    workflow = yaml.safe_load(workflow_path.read_text())
+    workflow_raw = yaml.safe_load(workflow_path.read_text())
+    workflow = _as_dict(workflow_raw, "workflow root")
     assert workflow.get("name") == "ci"
-    assert set(workflow.get("on", [])) == {"push", "pull_request"}
 
-    jobs = workflow.get("jobs")
-    assert jobs is not None and "build" in jobs
+    triggers = _as_sequence(workflow.get("on"), "workflow.on")
+    assert set(triggers) == {"push", "pull_request"}
 
-    build_job = jobs["build"]
+    jobs = _as_dict(workflow.get("jobs"), "workflow.jobs")
+    build_job = _as_dict(jobs.get("build"), "workflow.jobs.build")
     assert build_job.get("runs-on") == "ubuntu-latest"
 
-    steps = build_job.get("steps")
-    assert isinstance(steps, list) and steps, "CI workflow must define build steps"
+    steps = _as_list(build_job.get("steps"), "workflow.jobs.build.steps")
 
-    expected_steps = [
+    expected_steps: list[dict[str, object]] = [
         {"uses": "actions/checkout@v4"},
         {"uses": "actions/setup-python@v5", "with": {"python-version": "3.11"}},
         {"run": "pip install -r requirements.txt || true"},
@@ -63,12 +84,14 @@ def test_ci_workflow_scaffold():
         {"run": "pytest --maxfail=1 --disable-warnings"},
     ]
 
-    for expected, actual in zip(expected_steps, steps, strict=True):
+    assert len(steps) >= len(expected_steps)
+    for index, (expected, actual_obj) in enumerate(zip(expected_steps, steps, strict=True)):
+        actual = _as_dict(actual_obj, f"workflow.jobs.build.steps[{index}]")
         for key, value in expected.items():
             assert actual.get(key) == value
 
 
-def test_makefile_includes_ci_targets():
+def test_makefile_includes_ci_targets() -> None:
     makefile_path = Path("Makefile")
     assert makefile_path.exists(), "Makefile must exist"
 
