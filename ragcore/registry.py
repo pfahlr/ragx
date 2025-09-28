@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Dict, Iterable
 
-from ragcore.backends.base import Backend
+from ragcore.interfaces import Backend
 
 
 _REGISTRY: Dict[str, Backend] = {}
@@ -10,6 +10,9 @@ _REGISTRY: Dict[str, Backend] = {}
 
 def register(backend: Backend) -> None:
     """Register a backend instance by name."""
+
+    if not isinstance(backend, Backend):
+        raise TypeError("backend must implement the Backend protocol")
 
     name = getattr(backend, "name", None)
     if not name:
