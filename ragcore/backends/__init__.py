@@ -1,14 +1,15 @@
 from ragcore.interfaces import Backend, Handle, IndexSpec, SerializedIndex, VectorIndexHandle
+
 from .cuvs import CuVSBackend
 from .dummy import DummyBackend
 from .faiss import FaissBackend
 from .hnsw import HnswBackend
 
-
 DEFAULT_BACKENDS = (DummyBackend, FaissBackend, HnswBackend, CuVSBackend)
 
 try:  # pragma: no cover - optional native dependency
-    from .cpp import CPPBackend as _CPPBackend, is_available as _cpp_is_available
+    from .cpp import CPPBackend as _CPPBackend
+    from .cpp import is_available as _cpp_is_available
 except Exception:  # pragma: no cover - extension missing during import
     _CPPBackend = None
 else:  # pragma: no cover - importable extension, exercised in unit tests

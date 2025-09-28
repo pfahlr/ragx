@@ -1,11 +1,10 @@
 from __future__ import annotations
 
-from typing import Dict, Iterable
+from collections.abc import Iterable
 
 from ragcore.interfaces import Backend
 
-
-_REGISTRY: Dict[str, Backend] = {}
+_REGISTRY: dict[str, Backend] = {}
 
 
 def register(backend: Backend) -> None:

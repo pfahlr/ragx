@@ -5,9 +5,9 @@ from __future__ import annotations
 import argparse
 import json
 import sys
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any
 
 from ragcore import registry
 from ragcore.backends import DEFAULT_BACKENDS, register_default_backends
@@ -24,13 +24,21 @@ def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="vectordb-builder")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
-    list_parser = subparsers.add_parser("list", help="List available backends and their capabilities.")
+    list_parser = subparsers.add_parser(
+        "list",
+        help="List available backends and their capabilities.",
+    )
     list_parser.set_defaults(func=_cmd_list)
 
     build = subparsers.add_parser("build", help="Build vector index artifacts from a corpus.")
     build.add_argument("--backend", choices=_available_backend_names(), default="dummy")
     build.add_argument("--corpus-dir", type=Path, required=True, help="Path to corpus directory.")
-    build.add_argument("--out", type=Path, required=True, help="Output directory for build artifacts.")
+    build.add_argument(
+        "--out",
+        type=Path,
+        required=True,
+        help="Output directory for build artifacts.",
+    )
     build.add_argument("--index-kind", dest="index_kind", default="ivf_flat")
     build.add_argument("--metric", choices=["l2", "ip"], default="ip")
     build.add_argument("--dim", type=int, default=384)

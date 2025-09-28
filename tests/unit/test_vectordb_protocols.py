@@ -55,7 +55,10 @@ def test_index_spec_requires_backend_kind_metric_dim() -> None:
     with pytest.raises(ValueError):
         IndexSpec.from_mapping({"kind": "flat", "metric": "ip", "dim": 2})
 
-    spec = IndexSpec.from_mapping({"kind": "flat", "metric": "ip", "dim": 2}, default_backend="fallback")
+    spec = IndexSpec.from_mapping(
+        {"kind": "flat", "metric": "ip", "dim": 2},
+        default_backend="fallback",
+    )
     assert spec.backend == "fallback"
 
     with pytest.raises(ValueError):

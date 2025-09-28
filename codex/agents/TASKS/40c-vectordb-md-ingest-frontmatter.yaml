@@ -1,0 +1,16 @@
+id: 40c-vectordb-md-ingest-frontmatter
+title: VectorDB – Markdown ingestion with YAML front-matter
+owner: codex
+priority: P0
+depends_on: [40b-vectordb-sharding-and-merge]
+goal: Index builder accepts .md alongside PDFs; extracts optional front-matter (YAML or RFC822-style) into metadata.
+inputs:
+  - eval/verification/rag_gold_corpus_neuroplasticity.zip
+outputs:
+  - pkgs/indexer/ingest_md.py
+  - tests/vdb/test_md_ingest_frontmatter.py
+deliverables:
+  - Support `---\nkey: value\n...\n---` and simple key:value headers.
+  - Emits normalized corpus JSONL records with metadata fields.
+acceptance:
+  - pytest -q tests/vdb -k md_ingest green

@@ -1,0 +1,15 @@
+id: 60a-codex-bootstrap-and-guardrails
+title: Agents – bootstrap guard (stop until tests pass) + env checks
+owner: codex
+priority: P0
+depends_on: []
+goal: Provide scripts and docs that force Codex to run tests first and abort if red; check OpenAI key when needed.
+outputs:
+  - codex/agents/CODEX_BOOTSTRAP.md
+  - codex/agents/scripts/preflight.sh
+  - Makefile (amend) targets: codex-bootstrap, codex-preflight
+  - tests/agents/test_preflight_stub.py
+deliverables:
+  - preflight checks: python version, deps, pytest green, env flags.
+acceptance:
+  - Running `make codex-bootstrap` prints next tasks only when tests are green

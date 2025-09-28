@@ -4,8 +4,8 @@ import json
 import subprocess
 import sys
 from pathlib import Path
-
 import pytest
+
 
 def _write(tmp_dir: Path, relative: str, content: str) -> Path:
     path = tmp_dir / relative
