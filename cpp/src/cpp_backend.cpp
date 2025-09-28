@@ -94,8 +94,8 @@ dict CppHandle::serialize_cpu() const {
     payload["is_gpu"] = false;
 
     if (dim_ == 0 || ids_.empty()) {
-        payload["vectors"] = array_t<float>({0, 0});
-        payload["ids"] = array_t<std::int64_t>({0});
+        payload["vectors"] = array_t<float>(pybind11::array::ShapeContainer{0, 0});
+        payload["ids"] = array_t<std::int64_t>(pybind11::array::ShapeContainer{0});
         return payload;
     }
 
