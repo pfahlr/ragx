@@ -1,11 +1,11 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass, field
-from typing import Any, Dict, Mapping, Protocol, runtime_checkable
+from typing import Any, Protocol, runtime_checkable
 
 import numpy as np
 from numpy.typing import NDArray
-
 
 FloatArray = NDArray[np.float32]
 IntArray = NDArray[np.int64]
@@ -20,7 +20,7 @@ class Backend(Protocol):
     def capabilities(self) -> Mapping[str, Any]:
         """Return a JSON-serialisable description of backend capabilities."""
 
-    def build(self, spec: Mapping[str, Any]) -> "Handle":
+    def build(self, spec: Mapping[str, Any]) -> Handle:
         """Construct a new handle that implements :class:`Handle`."""
 
 
@@ -46,11 +46,11 @@ class Handle(Protocol):
 
     def ntotal(self) -> int: ...
 
-    def serialize_cpu(self) -> "SerializedIndex": ...
+    def serialize_cpu(self) -> SerializedIndex: ...
 
-    def to_gpu(self, device: str | None = None) -> "Handle": ...
+    def to_gpu(self, device: str | None = None) -> Handle: ...
 
-    def merge_with(self, other: "Handle") -> "Handle": ...
+    def merge_with(self, other: Handle) -> Handle: ...
 
     def spec(self) -> Mapping[str, Any]: ...
 
@@ -71,7 +71,7 @@ class IndexSpec:
         mapping: Mapping[str, Any],
         *,
         default_backend: str | None = None,
-    ) -> "IndexSpec":
+    ) -> IndexSpec:
         backend_value = mapping.get("backend", default_backend)
         if backend_value is None:
             raise ValueError("index spec must include a backend")
@@ -89,9 +89,15 @@ class IndexSpec:
         params = mapping.get("params") or {}
         if not isinstance(params, Mapping):
             raise ValueError("params must be a mapping if provided")
-        return cls(backend=backend, kind=kind, metric=metric, dim=int(dim_value), params=dict(params))
+        return cls(
+            backend=backend,
+            kind=kind,
+            metric=metric,
+            dim=int(dim_value),
+            params=dict(params),
+        )
 
-    def as_dict(self) -> Dict[str, Any]:
+    def as_dict(self) -> dict[str, Any]:
         return {
             "backend": self.backend,
             "kind": self.kind,
@@ -112,7 +118,7 @@ class SerializedIndex:
     is_trained: bool
     is_gpu: bool
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Return a JSON-friendly representation of the serialised index."""
 
         return {
@@ -133,4 +139,3 @@ __all__ = [
     "FloatArray",
     "IntArray",
 ]
-

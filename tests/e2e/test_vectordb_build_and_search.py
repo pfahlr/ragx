@@ -1,21 +1,15 @@
 from __future__ import annotations
 
-import sys
-from pathlib import Path
-from typing import Iterable
+from collections.abc import Iterable
 
 import numpy as np
 import pytest
-
-ROOT = Path(__file__).resolve().parents[2]
-if str(ROOT) not in sys.path:
-    sys.path.insert(0, str(ROOT))
 
 from ragcore.backends.cuvs import CuVSBackend
 from ragcore.backends.faiss import FaissBackend
 from ragcore.backends.hnsw import HnswBackend
 from ragcore.backends.pyflat import PyFlatBackend
-from ragcore.registry import get, register, _reset_registry
+from ragcore.registry import _reset_registry, get, register
 
 
 @pytest.fixture(autouse=True)

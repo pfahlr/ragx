@@ -5,14 +5,15 @@ echo "[ensure_green] linting..."
 ruff check .
 
 echo "[ensure_green] type checking..."
-mypy .
+python -m mypy .
 
 echo "[ensure_green] yaml lint..."
-yamllint .
+python -m yamllint .
 
 echo "[ensure_green] unit + e2e tests..."
 # Markers allow optional skips for gpu/native when unsupported.
 # You can add -m "not slow" etc via PYTEST_ADDOPTS if needed.
-pytest --maxfail=1 --disable-warnings ${PYTEST_ADDOPTS:-}
+export PYTEST_DISABLE_PLUGIN_AUTOLOAD=1
+python -m pytest --maxfail=1 --disable-warnings ${PYTEST_ADDOPTS:-}
 
 echo "[ensure_green] OK"

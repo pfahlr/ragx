@@ -1,15 +1,10 @@
 from __future__ import annotations
 
-import sys
-from pathlib import Path
 import json
+from pathlib import Path
 
 import numpy as np
 import pytest
-
-ROOT = Path(__file__).resolve().parents[2]
-if str(ROOT) not in sys.path:
-    sys.path.insert(0, str(ROOT))
 
 from ragcore.backends.pyflat import PyFlatBackend
 from ragcore.cli import main
@@ -76,3 +71,6 @@ def test_cli_build_with_pyflat_backend(tmp_path: Path, backend_name: str) -> Non
     serialized = handle.serialize_cpu()
     np.testing.assert_allclose(serialized.vectors, vectors)
     np.testing.assert_array_equal(serialized.ids, np.array([0, 1], dtype=np.int64))
+
+    docmap = json.loads(docmap_path.read_text(encoding="utf-8"))["documents"]
+    assert all("vector_offset" in entry for entry in docmap)

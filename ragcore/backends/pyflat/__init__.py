@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from typing import Any, Mapping
+from collections.abc import Mapping
+from typing import Any
 
 from ragcore.backends.base import VectorIndexHandle
 from ragcore.interfaces import IndexSpec
@@ -24,7 +25,7 @@ class PyFlatBackend:
             },
         }
 
-    def build(self, spec: Mapping[str, Any]) -> "PyFlatHandle":
+    def build(self, spec: Mapping[str, Any]) -> PyFlatHandle:
         config = IndexSpec.from_mapping(spec, default_backend=self.name)
         if config.kind != "flat":
             raise ValueError("PyFlat backend only supports kind='flat'")

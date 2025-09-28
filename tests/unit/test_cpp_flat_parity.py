@@ -34,7 +34,12 @@ def test_cpp_stub_matches_pyflat(metric: str) -> None:
     cpp_result = cpp_handle.search(queries, k=3)
 
     np.testing.assert_array_equal(cpp_result["ids"], py_result["ids"])
-    np.testing.assert_allclose(cpp_result["distances"], py_result["distances"], rtol=1e-6, atol=1e-6)
+    np.testing.assert_allclose(
+        cpp_result["distances"],
+        py_result["distances"],
+        rtol=1e-6,
+        atol=1e-6,
+    )
 
     py_serialized = py_handle.serialize_cpu()
     cpp_serialized = cpp_handle.serialize_cpu()

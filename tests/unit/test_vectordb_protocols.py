@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import inspect
-from typing import Any, Mapping
+from collections.abc import Mapping
+from typing import Any
 
 import numpy as np
 import pytest
@@ -33,8 +34,16 @@ def test_backend_protocol_contract(interfaces) -> None:
             if ids is not None and ids.shape[0] != vectors.shape[0]:
                 raise ValueError("ids/vectors mismatch")
 
-        def search(self, queries: np.ndarray, k: int, **kwargs: Any) -> Mapping[str, np.ndarray]:
-            return {"ids": np.arange(len(queries))[:, None], "distances": np.zeros((len(queries), 1))}
+        def search(
+            self,
+            queries: np.ndarray,
+            k: int,
+            **kwargs: Any,
+        ) -> Mapping[str, np.ndarray]:
+            return {
+                "ids": np.arange(len(queries))[:, None],
+                "distances": np.zeros((len(queries), 1)),
+            }
 
         def ntotal(self) -> int:
             return 0
@@ -70,10 +79,10 @@ def test_backend_protocol_contract(interfaces) -> None:
     backend = FakeBackend()
     assert isinstance(backend, Backend)
 
-    capabilities_sig = inspect.signature(getattr(Backend, "capabilities"))
+    capabilities_sig = inspect.signature(Backend.capabilities)
     assert list(capabilities_sig.parameters) == ["self"]
 
-    build_sig = inspect.signature(getattr(Backend, "build"))
+    build_sig = inspect.signature(Backend.build)
     assert list(build_sig.parameters) == ["self", "spec"]
     annotation = build_sig.return_annotation
     if isinstance(annotation, str):
@@ -115,10 +124,10 @@ def test_handle_protocol_contract(interfaces) -> None:
                 is_gpu=False,
             )
 
-        def to_gpu(self, device: str | None = None) -> "ImplementsHandle":
+        def to_gpu(self, device: str | None = None) -> ImplementsHandle:
             return self
 
-        def merge_with(self, other: "ImplementsHandle") -> "ImplementsHandle":
+        def merge_with(self, other: ImplementsHandle) -> ImplementsHandle:
             return self
 
         def spec(self) -> Mapping[str, Any]:
@@ -127,7 +136,7 @@ def test_handle_protocol_contract(interfaces) -> None:
     handle = ImplementsHandle()
     assert isinstance(handle, Handle)
 
-    search_sig = inspect.signature(getattr(Handle, "search"))
+    search_sig = inspect.signature(Handle.search)
     param_names = list(search_sig.parameters)
     assert param_names[:3] == ["self", "queries", "k"]
     assert param_names[3] == "kwargs"
@@ -174,5 +183,6 @@ def test_index_spec_validation(interfaces) -> None:
         interfaces.IndexSpec.from_mapping({"backend": "dummy", "metric": "ip", "dim": 1})
 
     with pytest.raises(ValueError, match="dim must be a positive integer"):
-        interfaces.IndexSpec.from_mapping({"backend": "dummy", "kind": "flat", "metric": "ip", "dim": 0})
-
+        interfaces.IndexSpec.from_mapping(
+            {"backend": "dummy", "kind": "flat", "metric": "ip", "dim": 0}
+        )

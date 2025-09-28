@@ -75,7 +75,11 @@ def test_ci_workflow_scaffold() -> None:
 
     steps = _as_list(build_job.get("steps"), "workflow.jobs.build.steps")
 
-    uses_map = {step.get("uses"): step for step in steps if isinstance(step, dict) and step.get("uses")}
+    uses_map = {
+        step.get("uses"): step
+        for step in steps
+        if isinstance(step, dict) and step.get("uses")
+    }
     assert "actions/checkout@v4" in uses_map
     setup_step = uses_map.get("actions/setup-python@v5")
     assert setup_step is not None
@@ -91,7 +95,14 @@ def test_ci_workflow_scaffold() -> None:
         return any(predicate in cmd for cmd in run_commands)
 
     assert _contains("pip install -r requirements.txt")
-    assert any("pip install" in cmd and "ruff" in cmd and "mypy" in cmd and "pytest" in cmd and "yamllint" in cmd for cmd in run_commands)
+    assert any(
+        "pip install" in cmd
+        and "ruff" in cmd
+        and "mypy" in cmd
+        and "pytest" in cmd
+        and "yamllint" in cmd
+        for cmd in run_commands
+    )
     assert any(cmd.startswith("ruff check") for cmd in run_commands)
     assert any(cmd.startswith("mypy ") for cmd in run_commands)
     assert any(cmd.startswith("pytest --maxfail=1 --disable-warnings") for cmd in run_commands)

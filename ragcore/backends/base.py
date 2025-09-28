@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from typing import Any, Dict, Mapping
+from collections.abc import Mapping
+from typing import Any
 
 import numpy as np
 
@@ -51,11 +52,17 @@ def _distance_matrix(vectors: FloatArray, queries: FloatArray, metric: str) -> F
 class VectorIndexHandle:
     """Concrete implementation shared by all simulated backends."""
 
-    def __init__(self, spec: IndexSpec, *, requires_training: bool, supports_gpu: bool = False) -> None:
+    def __init__(
+        self,
+        spec: IndexSpec,
+        *,
+        requires_training: bool,
+        supports_gpu: bool = False,
+    ) -> None:
         self._spec = spec
         self._requires_training = requires_training
         self._supports_gpu = supports_gpu
-        self._factory_kwargs: Dict[str, Any] = {}
+        self._factory_kwargs: dict[str, Any] = {}
         self._vectors: FloatArray = np.empty((0, spec.dim), dtype=np.float32)
         self._ids: IntArray = np.empty((0,), dtype=np.int64)
         self._next_id = 0
@@ -80,11 +87,12 @@ class VectorIndexHandle:
         ids_array = _ensure_ids(ids, count=batch.shape[0])
         if ids_array is None:
             ids_array = np.arange(self._next_id, self._next_id + batch.shape[0], dtype=np.int64)
-        self._next_id = max(self._next_id, int(ids_array.max()) + 1) if ids_array.size else self._next_id
+        if ids_array.size:
+            self._next_id = max(self._next_id, int(ids_array.max()) + 1)
         self._vectors = np.concatenate([self._vectors, batch], axis=0)
         self._ids = np.concatenate([self._ids, ids_array], axis=0)
 
-    def search(self, queries: FloatArray, k: int, **_: Any) -> Dict[str, FloatArray | IntArray]:
+    def search(self, queries: FloatArray, k: int, **_: Any) -> dict[str, FloatArray | IntArray]:
         if self._vectors.shape[0] == 0:
             raise RuntimeError("cannot search an empty index")
         query_array = _ensure_2d_float32(queries, dim=self._spec.dim)
@@ -114,14 +122,14 @@ class VectorIndexHandle:
             is_gpu=self.is_gpu,
         )
 
-    def to_gpu(self, device: str | None = None) -> "VectorIndexHandle":
+    def to_gpu(self, device: str | None = None) -> VectorIndexHandle:
         clone = self._clone()
         if self._supports_gpu:
             clone.is_gpu = True
             clone.device = device or "cuda:0"
         return clone
 
-    def merge_with(self, other: Handle) -> "VectorIndexHandle":
+    def merge_with(self, other: Handle) -> VectorIndexHandle:
         if not isinstance(other, VectorIndexHandle):
             raise TypeError("can only merge with another VectorIndexHandle")
         if other._spec != self._spec:
@@ -138,7 +146,7 @@ class VectorIndexHandle:
     def spec(self) -> Mapping[str, Any]:
         return self._spec.as_dict()
 
-    def _clone(self, *, empty: bool = False) -> "VectorIndexHandle":
+    def _clone(self, *, empty: bool = False) -> VectorIndexHandle:
         clone = self.__class__(self._spec, **self._factory_kwargs)
         clone._requires_training = self._requires_training
         clone._supports_gpu = self._supports_gpu
@@ -161,4 +169,3 @@ __all__ = [
     "FloatArray",
     "IntArray",
 ]
-

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from typing import Any, Mapping
+from collections.abc import Mapping
+from typing import Any
 
 from ragcore.interfaces import IndexSpec
 
@@ -27,12 +28,14 @@ class DummyBackend:
             "supports_gpu": False,
         }
 
-    def build(self, spec: Mapping[str, Any]) -> "DummyHandle":
+    def build(self, spec: Mapping[str, Any]) -> DummyHandle:
         config = IndexSpec.from_mapping(spec, default_backend=self.name)
         if config.kind not in self._SUPPORTED_KINDS:
-            raise ValueError(f"dummy backend only supports kinds: {sorted(self._SUPPORTED_KINDS)}")
+            supported = sorted(self._SUPPORTED_KINDS)
+            raise ValueError(f"dummy backend only supports kinds: {supported}")
         if config.metric not in self._SUPPORTED_METRICS:
-            raise ValueError(f"dummy backend only supports metrics: {sorted(self._SUPPORTED_METRICS)}")
+            supported = sorted(self._SUPPORTED_METRICS)
+            raise ValueError(f"dummy backend only supports metrics: {supported}")
         if config.backend != self.name:
             raise ValueError(f"dummy backend cannot build for '{config.backend}'")
         handle = DummyHandle(config)
@@ -48,4 +51,3 @@ class DummyHandle(VectorIndexHandle):
 
 
 __all__ = ["DummyBackend", "DummyHandle"]
-

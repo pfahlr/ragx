@@ -1,9 +1,14 @@
 import os
 import pathlib
+import sys
+
 import pytest
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[1]
 EVAL_DIR = REPO_ROOT / "eval" / "verification"
+
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
 
 def _env_true(name: str) -> bool:
     return os.getenv(name, "").strip() in {"1", "true", "yes", "on"}
@@ -25,7 +30,10 @@ skip_if_no_eval = pytest.mark.skipif(
 )
 
 skip_if_no_native = pytest.mark.skipif(
-    not NATIVE_AVAILABLE, reason="native toolchain/backends not available (set RAGX_NATIVE_OK=1 to enable)"
+    not NATIVE_AVAILABLE,
+    reason=(
+        "native toolchain/backends not available (set RAGX_NATIVE_OK=1 to enable)"
+    ),
 )
 
 skip_if_no_gpu = pytest.mark.skipif(

@@ -1,10 +1,11 @@
 from __future__ import annotations
 
-from typing import Any, Mapping
+from collections.abc import Mapping
+from typing import Any
 
 import pytest
 
-from ragcore.registry import get, list_backends, register, _reset_registry
+from ragcore.registry import _reset_registry, get, list_backends, register
 
 
 class StubBackend:

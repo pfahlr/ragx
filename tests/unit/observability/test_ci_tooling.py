@@ -61,7 +61,14 @@ def test_ci_workflow_runs_linters_typechecks_tests():
     for block in run_blocks:
         run_commands.extend(line.strip() for line in block.splitlines() if line.strip())
     assert any(cmd.startswith("pip install -r requirements.txt") for cmd in run_commands)
-    assert any("pip install" in cmd and "ruff" in cmd and "mypy" in cmd and "pytest" in cmd and "yamllint" in cmd for cmd in run_commands)
+    assert any(
+        "pip install" in cmd
+        and "ruff" in cmd
+        and "mypy" in cmd
+        and "pytest" in cmd
+        and "yamllint" in cmd
+        for cmd in run_commands
+    )
     assert any(cmd.startswith("ruff check") for cmd in run_commands)
     assert any(cmd.startswith("mypy ") for cmd in run_commands)
     assert any(cmd.startswith("pytest --maxfail=1 --disable-warnings") for cmd in run_commands)

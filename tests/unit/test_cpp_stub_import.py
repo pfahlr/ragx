@@ -27,7 +27,9 @@ def _import_cpp_module(
     return importlib.import_module("ragcore.backends.cpp")
 
 
-def test_cpp_backend_import_falls_back_when_extension_missing(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_cpp_backend_import_falls_back_when_extension_missing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     module = _import_cpp_module(monkeypatch, disable_env=True)
 
     assert module.HAS_CPP_EXTENSION is False
@@ -74,4 +76,3 @@ def test_cpp_backend_uses_extension_when_available(monkeypatch: pytest.MonkeyPat
     info = backend.capabilities()
     assert info["available"] is True
     assert info["kinds"] == ["flat"]
-

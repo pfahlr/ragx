@@ -5,6 +5,7 @@ import subprocess
 import sys
 from pathlib import Path
 
+
 def _write(tmp_dir: Path, relative: str, content: str) -> Path:
     path = tmp_dir / relative
     path.parent.mkdir(parents=True, exist_ok=True)
