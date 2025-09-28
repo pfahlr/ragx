@@ -1,0 +1,16 @@
+*** Begin Patch
+*** Update File: Makefile
+@@
+ .PHONY: lint typecheck test codex-bootstrap
+ lint:
+ 	ruff check . || true
+ 	yamllint -s . || true
+ typecheck:
+ 	mypy . || true
+ test:
+ 	pytest -q || true
+ codex-bootstrap:
+ 	python scripts/codex_next_tasks.py
++acceptance:
++	pytest -q tests/acceptance || true
+*** End Patch

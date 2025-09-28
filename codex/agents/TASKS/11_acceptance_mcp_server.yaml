@@ -1,0 +1,12 @@
+version: 1
+id: 11_acceptance_mcp_server
+title: Implement MCP HTTP discover/envelope to satisfy acceptance test
+component_ids: [mcp_server, toolpacks_runtime, core_tools]
+actions:
+  - implement_module: apps/mcp_server/main.py
+  - scaffold_discovery: apps/mcp_server/registry.py
+  - scaffold_envelope_schema: apps/mcp_server/schemas/envelope.schema.json
+  - minimal_endpoint: GET /mcp/discover returns ok envelope with tools[]
+done_criteria:
+  - "pytest -q tests/acceptance/test_mcp_server.py passes (xfail removed)"
+  - "Envelope fields: ok, data, meta, errors"
