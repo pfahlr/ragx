@@ -1,0 +1,44 @@
+version: 1
+id: 03_vectordb_md_ingest
+title: "VectorDB: Add Markdown ingestion with optional front-matter"
+component_ids: [vector_db_core]
+preconditions:
+  - "codex/specs/ragx_master_spec.yaml exists"
+  - "Makefile, tests harness present"
+actions:
+  - implement:
+      path: ragcore/ingest/md_parser.py
+      description: |
+        Add a Markdown parser that:
+          - Accepts .md files
+          - Extracts optional front-matter (YAML or 'key: value' header block) above a '---' delimiter
+          - Returns (text, metadata) with front-matter keys merged (front-matter overrides)
+  - implement:
+      path: ragcore/ingest/pdf_parser.py
+      description: "Ensure PDF parsing path remains unchanged; refactor to shared interface if needed."
+  - implement:
+      path: ragcore/ingest/scanner.py
+      description: |
+        Directory scanner honoring:
+          - --corpus-dir
+          - --accept-format (repeatable: pdf, md; default both)
+        Emits normalized records for builder (text + metadata + source path).
+  - wire_cli:
+      path: ragcore/cli.py
+      description: "Extend vectordb-builder 'build' to use scanner and accepted formats."
+  - tests:
+      unit:
+        - path: tests/unit/test_md_front_matter_parse.py
+          description: "TDD: front-matter precedence, YAML vs key:value header, content extraction."
+      e2e:
+        - path: tests/e2e/test_vectordb_build_md_fixture.py
+          description: |
+            Use fixtures under /eval/verification (added by user) if present.
+            Build a tiny index from a couple of .md docs; assert docmap contains expected ids/titles.
+  - docs:
+      - path: docs/ingestion.md
+        description: "Document Markdown support and front-matter rules with examples."
+acceptance:
+  - "CLI accepts --accept-format md and builds without errors"
+  - "Front-matter overrides embedded metadata when both present (per open_decisions default)"
+  - "Unit + e2e tests pass locally (ruff, mypy, pytest)"
