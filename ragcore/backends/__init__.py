@@ -1,10 +1,11 @@
-from .base import Backend, Handle, IndexSpec, SerializedIndex, VectorIndexHandle
+from .base import Backend, FloatArray, Handle, IndexSpec, IntArray, SerializedIndex, VectorIndexHandle
 from .cuvs import CuVSBackend
+from .dummy import DummyBackend
 from .faiss import FaissBackend
 from .hnsw import HnswBackend
 
 
-DEFAULT_BACKENDS = (FaissBackend, HnswBackend, CuVSBackend)
+DEFAULT_BACKENDS = (DummyBackend, FaissBackend, HnswBackend, CuVSBackend)
 
 
 def register_default_backends() -> None:
@@ -20,14 +21,18 @@ def register_default_backends() -> None:
         register(backend_cls())
         existing.add(name)
 
+
 __all__ = [
     "Backend",
     "Handle",
     "IndexSpec",
     "SerializedIndex",
     "VectorIndexHandle",
+    "FloatArray",
+    "IntArray",
     "DEFAULT_BACKENDS",
     "register_default_backends",
+    "DummyBackend",
     "CuVSBackend",
     "FaissBackend",
     "HnswBackend",
