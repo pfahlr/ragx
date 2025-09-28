@@ -1,0 +1,7 @@
+jinja2
+jsonschema
+pyyaml
+pytest
+ruff
+mypy
+yamllint

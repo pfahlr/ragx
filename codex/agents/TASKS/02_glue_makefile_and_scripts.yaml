@@ -1,0 +1,25 @@
+version: 1
+id: 02_glue_makefile_and_scripts
+title: Add Makefile and codex helper scripts
+component_ids: [observability_ci]
+actions:
+  - create_files:
+      - path: Makefile
+        content: |
+          .PHONY: lint typecheck test codex-bootstrap
+          lint:
+          	ruff check . || true
+          	yamllint -s . || true
+          typecheck:
+          	mypy . || true
+          test:
+          	pytest -q || true
+          codex-bootstrap:
+          	python scripts/codex_next_tasks.py
+      - path: scripts/codex_next_tasks.py
+        content: |
+          import os, glob, yaml
+          tasks = sorted(glob.glob("codex/agents/TASKS/*.yaml"))
+          print("Next tasks:")
+          for t in tasks:
+            print("-", t)

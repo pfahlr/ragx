@@ -1,0 +1,41 @@
+version: 1
+id: 01_ci_and_tooling
+title: Configure lint, typecheck, pytest, and CI pipeline
+component_ids: [observability_ci]
+actions:
+  - create_files:
+      - path: pyproject.toml
+        content: |
+          [tool.ruff]
+          line-length = 100
+          target-version = "py311"
+          select = ["E","F","I","UP","B"]
+          
+          [tool.mypy]
+          python_version = "3.11"
+          ignore_missing_imports = true
+          strict = true
+
+          [tool.pytest.ini_options]
+          testpaths = ["tests"]
+          addopts = "-q"
+      - path: .github/workflows/ci.yml
+        content: |
+          name: ci
+          on: [push, pull_request]
+          jobs:
+            build:
+              runs-on: ubuntu-latest
+              steps:
+                - uses: actions/checkout@v4
+                - uses: actions/setup-python@v5
+                  with: { python-version: "3.11" }
+                - run: pip install -r requirements.txt || true
+                - run: pip install ruff mypy pytest coverage yamllint
+                - run: ruff check .
+                - run: mypy .
+                - run: pytest --maxfail=1 --disable-warnings
+  - modify_makefile:
+      ensure_targets: ["lint","typecheck","test","codex-bootstrap"]
+done_criteria:
+  - "CI runs and passes with scaffolds"

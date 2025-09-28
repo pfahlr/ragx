@@ -1,0 +1,31 @@
+version: 1
+id: 00_scaffold_directories
+title: Create initial directories and placeholder files
+component_ids: [observability_ci, dsl, mcp_server, toolpacks_runtime, vector_db_core]
+actions:
+  - ensure_dirs:
+      - pkgs/dsl
+      - apps/mcp_server
+      - apps/toolpacks
+      - ragcore
+      - codex/specs
+      - docs
+      - tests/unit
+      - tests/integration
+      - tests/e2e
+      - scripts
+      - .github/workflows
+  - create_files:
+      - path: pkgs/dsl/README.md
+        content: "# DSL Runner\nSee codex/specs/ragx_master_spec.yaml for schemas and CLI flags."
+      - path: apps/mcp_server/README.md
+        content: "# MCP Server\nExposes tools and prompt registry over HTTP/STDIO."
+      - path: apps/toolpacks/README.md
+        content: "# Toolpacks\nYAML-defined tools executed by the MCP server."
+      - path: ragcore/README.md
+        content: "# Vector DB Core\nBackend/Handle protocols, registry, and CLI wrappers."
+      - path: docs/README.md
+        content: "# RAGX Docs\nGenerated from spec."
+done_criteria:
+  - "Directories exist"
+  - "Readme placeholders exist"
