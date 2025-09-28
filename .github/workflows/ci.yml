@@ -9,39 +9,71 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Figure out if native (C/C++) changed — avoids needless ccache restore
+      - name: Detect native changes
+        id: changes
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            native:
+              - '**/CMakeLists.txt'
+              - '**/*.cmake'
+              - '**/*.c'
+              - '**/*.cc'
+              - '**/*.cpp'
+              - '**/*.cxx'
+              - '**/*.h'
+              - '**/*.hpp'
+              - '**/*.hxx'
+
       # Python runtime with pip caching
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
           cache: "pip"
 
-      # Install Python dependencies
       - name: Install Python dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt || true
-          pip install pybind11 || true
-          pip install ruff mypy pytest coverage yamllint || true
+          pip install pybind11 ruff mypy pytest coverage yamllint || true
 
-      # Export pybind11_DIR (so CMake can find it)
       - name: Export pybind11_DIR
         run: |
           echo "pybind11_DIR=$(python -m pybind11 --cmakedir)" >> $GITHUB_ENV
           echo "Using pybind11_DIR=$pybind11_DIR"
 
-      # Enable ccache to cache compiled C++ objects
-      - name: Enable ccache
-        uses: hendrikmuhs/ccache-action@v1.2
+      # Cache ~/.cache/ccache directly (fast restore, no compression)
+      - name: Cache ccache dir
+        if: steps.changes.outputs.native == 'true' && hashFiles('**/CMakeLists.txt') != ''
+        uses: actions/cache@v4
         with:
-          key: ccache-${{ runner.os }}-${{ hashFiles('**/CMakeLists.txt') }}
-          max-size: 500M
+          path: ~/.cache/ccache
+          key: >
+            ccache-${{ runner.os }}-${{ env.CXX_VER }}-
+            ${!! hashFiles('**/CMakeLists.txt') && hashFiles('**/CMakeLists.txt') || 'no-cmake' }-
+            ${!! hashFiles('**/*.cpp','**/*.cc','**/*.c','**/*.hpp','**/*.h') && hashFiles('**/*.cpp','**/*.cc','**/*.c','**/*.hpp','**/*.h') || 'no-src' }
+          restore-keys: |
+            ccache-${{ runner.os }}-${{ env.CXX_VER }}-
+            ccache-${{ runner.os }}-
+          compression-level: 0
 
-      # Configure CMake (only if CMakeLists.txt exists)
+      # Record the compiler version into env (better cache key)
+      - name: Detect compiler
+        if: steps.changes.outputs.native == 'true'
+        run: |
+          echo "CXX_VER=$(g++ --version | head -n1 | tr -s ' ' '_')" >> $GITHUB_ENV
+          which ccache && ccache --version || true
+
+      # Configure CMake only when native changed (avoids cache restore on pure-Python edits)
       - name: Configure CMake
-        if: ${{ hashFiles('**/CMakeLists.txt') != '' }}
+        if: steps.changes.outputs.native == 'true' && hashFiles('**/CMakeLists.txt') != ''
         env:
           pybind11_DIR: ${{ env.pybind11_DIR }}
         run: |
+          # keep ccache small; this controls on-disk size (~ download size)
+          mkdir -p ~/.cache/ccache
+          ccache --max-size=200M || true
           cmake -S ./cpp -B build \
             -G Ninja \
             -Dpybind11_DIR="$pybind11_DIR" \
@@ -49,12 +81,11 @@ jobs:
             -DCMAKE_C_COMPILER_LAUNCHER=ccache \
             -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
 
-      # Build project (native CMake/Ninja)
-      - name: Build
-        if: ${{ hashFiles('**/CMakeLists.txt') != '' }}
+      - name: Build (native)
+        if: steps.changes.outputs.native == 'true' && hashFiles('**/CMakeLists.txt') != ''
         run: cmake --build build -- -j"$(nproc)"
 
-      # Run lint / type checks / tests (non-fatal like your original)
+      # Lint / type / tests
       - name: Ruff
         run: ruff check . || true
 
