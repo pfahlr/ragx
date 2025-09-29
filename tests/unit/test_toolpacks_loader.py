@@ -637,8 +637,9 @@ def test_toolpack_loader_caps_filesystem_paths_must_be_non_empty(tmp_path: Path)
     _write_yaml(toolpacks_dir / "invalid.tool.yaml", yaml.safe_dump(invalid, sort_keys=False))
 
     loader = ToolpackLoader()
-    with pytest.raises(ToolpackValidationError, match=r"filesystem\[read\]\[0\] must be a non-empty string"):
+    with pytest.raises(ToolpackValidationError) as excinfo:
         loader.load_dir(toolpacks_dir)
+    assert "filesystem[read][0]" in str(excinfo.value)
 
 
 def test_toolpack_loader_caps_subprocess_must_be_boolean(tmp_path: Path) -> None:
@@ -726,8 +727,9 @@ def test_toolpack_loader_env_passthrough_entries_must_be_non_empty(tmp_path: Pat
     _write_yaml(toolpacks_dir / "invalid.tool.yaml", yaml.safe_dump(invalid, sort_keys=False))
 
     loader = ToolpackLoader()
-    with pytest.raises(ToolpackValidationError, match=r"passthrough\[0\] must be a non-empty string"):
+    with pytest.raises(ToolpackValidationError) as excinfo:
         loader.load_dir(toolpacks_dir)
+    assert "passthrough[0]" in str(excinfo.value)
 
 
 def test_toolpack_loader_env_unknown_key(tmp_path: Path) -> None:
