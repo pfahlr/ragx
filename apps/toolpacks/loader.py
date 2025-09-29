@@ -135,12 +135,7 @@ class Toolpack:
             schema_cache,
         )
 
-        execution = _require_mapping(data["execution"], "execution", tool_id)
-        kind = execution.get("kind")
-        if kind not in _VALID_EXECUTION_KINDS:
-            raise ToolpackValidationError(
-                f"Toolpack {tool_id} execution.kind must be one of {_VALID_EXECUTION_KINDS}"
-            )
+        execution = _validate_execution(tool_id, data["execution"])
 
         return cls(
             id=tool_id,
@@ -579,3 +574,106 @@ def _validate_templating(value: Any, tool_id: str) -> dict[str, Any]:
         validated["context"] = dict(context_mapping)
 
     return validated
+
+
+def _validate_execution(tool_id: str, execution_raw: Any) -> dict[str, Any]:
+    execution = _require_mapping(execution_raw, "execution", tool_id)
+    kind = execution.get("kind")
+    if kind not in _VALID_EXECUTION_KINDS:
+        raise ToolpackValidationError(
+            f"Toolpack {tool_id} execution.kind must be one of {_VALID_EXECUTION_KINDS}"
+        )
+
+    if kind == "python":
+        module = execution.get("module")
+        script = execution.get("script")
+        if module is None and script is None:
+            raise ToolpackValidationError(
+                f"Toolpack {tool_id} python execution requires 'module' or 'script'"
+            )
+        if module is not None:
+            if not isinstance(module, str) or not module:
+                raise ToolpackValidationError(
+                    f"Toolpack {tool_id} execution.module must be a non-empty string"
+                )
+            if ":" not in module or module.startswith(":") or module.endswith(":"):
+                raise ToolpackValidationError(
+                    f"Toolpack {tool_id} execution.module must use 'module:callable' format"
+                )
+        if script is not None and (not isinstance(script, str) or not script):
+            raise ToolpackValidationError(
+                f"Toolpack {tool_id} execution.script must be a non-empty string"
+            )
+
+    elif kind == "cli":
+        cmd = execution.get("cmd")
+        if not isinstance(cmd, list) or not cmd:
+            raise ToolpackValidationError(
+                f"Toolpack {tool_id} cli execution requires 'cmd' list"
+            )
+        for idx, part in enumerate(cmd):
+            if not isinstance(part, str) or not part:
+                raise ToolpackValidationError(
+                    f"Toolpack {tool_id} execution.cmd[{idx}] must be a non-empty string"
+                )
+
+    elif kind == "http":
+        url = execution.get("url")
+        if not isinstance(url, str) or not url:
+            raise ToolpackValidationError(
+                f"Toolpack {tool_id} http execution requires 'url' string"
+            )
+        method = execution.get("method")
+        if method is not None and (not isinstance(method, str) or not method):
+            raise ToolpackValidationError(
+                f"Toolpack {tool_id} http execution.method must be a non-empty string"
+            )
+        headers = execution.get("headers")
+        if headers is not None:
+            headers_map = _require_mapping(headers, "execution.headers", tool_id)
+            for header, value in headers_map.items():
+                if not isinstance(header, str) or not header:
+                    raise ToolpackValidationError(
+                        f"Toolpack {tool_id} http headers must use non-empty string keys"
+                    )
+                if not isinstance(value, str):
+                    raise ToolpackValidationError(
+                        f"Toolpack {tool_id} http header '{header}' must be a string value"
+                    )
+        timeout = execution.get("timeoutMs")
+        if timeout is not None and (not isinstance(timeout, int) or timeout <= 0):
+            raise ToolpackValidationError(
+                f"Toolpack {tool_id} http timeoutMs must be a positive integer"
+            )
+
+    elif kind == "node":
+        entry = execution.get("script") or execution.get("node") or execution.get("module")
+        if not isinstance(entry, str) or not entry:
+            raise ToolpackValidationError(
+                f"Toolpack {tool_id} node execution requires 'script', 'node', or 'module' entry"
+            )
+        args = execution.get("args")
+        if args is not None:
+            if not isinstance(args, list):
+                raise ToolpackValidationError(
+                    f"Toolpack {tool_id} node execution args must be a list"
+                )
+            for idx, arg in enumerate(args):
+                if not isinstance(arg, str) or not arg:
+                    raise ToolpackValidationError(
+                        f"Toolpack {tool_id} node execution args[{idx}] must be a non-empty string"
+                    )
+
+    elif kind == "php":
+        entry = execution.get("php") or execution.get("script")
+        if not isinstance(entry, str) or not entry:
+            raise ToolpackValidationError(
+                f"Toolpack {tool_id} php execution requires 'php' or 'script' entry"
+            )
+        binary = execution.get("phpBinary")
+        if binary is not None and (not isinstance(binary, str) or not binary):
+            raise ToolpackValidationError(
+                f"Toolpack {tool_id} php execution phpBinary must be a non-empty string"
+            )
+
+    return dict(execution)

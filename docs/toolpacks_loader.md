@@ -44,6 +44,10 @@ The loader enforces the spec-defined invariants:
 - `limits.maxInputBytes` and `limits.maxOutputBytes` must exist and be positive
   integers.
 - `execution.kind` must be one of `python`, `node`, `php`, `cli`, `http`.
+- Execution payloads must satisfy per-kind contracts: python requires
+  `module:callable` (or a non-empty `script`), CLI `cmd` must be a list of
+  strings, HTTP requires a `url` plus optional string headers/method, Node needs
+  a `script`/`node`/`module` entry, and PHP requires either `php` or `script`.
 - Duplicate tool identifiers are rejected (the loader guarantees a single
   toolpack per id).
 - Optional blocks (`caps`, `env`, `templating`) must follow spec contracts:

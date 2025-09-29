@@ -293,6 +293,116 @@ def test_toolpack_loader_rejects_invalid_execution_kind(tmp_path: Path) -> None:
         loader.load_dir(toolpacks_dir)
 
 
+def test_toolpack_loader_python_requires_module_format(tmp_path: Path) -> None:
+    schemas_dir = tmp_path / "schemas"
+    schema_path = schemas_dir / "schema.json"
+    _write_json(
+        schema_path,
+        {"$schema": "https://json-schema.org/draft/2020-12/schema", "type": "object"},
+    )
+
+    toolpacks_dir = tmp_path / "toolpacks"
+    toolpacks_dir.mkdir()
+    invalid = _spec_compliant_toolpack(
+        input_ref=os.path.relpath(schema_path, toolpacks_dir),
+        output_ref=os.path.relpath(schema_path, toolpacks_dir),
+        overrides={"execution": {"kind": "python", "module": "pkg.module"}},
+    )
+    _write_yaml(toolpacks_dir / "invalid.tool.yaml", yaml.safe_dump(invalid, sort_keys=False))
+
+    loader = ToolpackLoader()
+    with pytest.raises(ToolpackValidationError, match="module must use"):
+        loader.load_dir(toolpacks_dir)
+
+
+def test_toolpack_loader_cli_requires_cmd_list(tmp_path: Path) -> None:
+    schemas_dir = tmp_path / "schemas"
+    schema_path = schemas_dir / "schema.json"
+    _write_json(
+        schema_path,
+        {"$schema": "https://json-schema.org/draft/2020-12/schema", "type": "object"},
+    )
+
+    toolpacks_dir = tmp_path / "toolpacks"
+    toolpacks_dir.mkdir()
+    invalid = _spec_compliant_toolpack(
+        input_ref=os.path.relpath(schema_path, toolpacks_dir),
+        output_ref=os.path.relpath(schema_path, toolpacks_dir),
+        overrides={"execution": {"kind": "cli", "cmd": "echo"}},
+    )
+    _write_yaml(toolpacks_dir / "invalid.tool.yaml", yaml.safe_dump(invalid, sort_keys=False))
+
+    loader = ToolpackLoader()
+    with pytest.raises(ToolpackValidationError, match="cli execution requires 'cmd' list"):
+        loader.load_dir(toolpacks_dir)
+
+
+def test_toolpack_loader_http_requires_url(tmp_path: Path) -> None:
+    schemas_dir = tmp_path / "schemas"
+    schema_path = schemas_dir / "schema.json"
+    _write_json(
+        schema_path,
+        {"$schema": "https://json-schema.org/draft/2020-12/schema", "type": "object"},
+    )
+
+    toolpacks_dir = tmp_path / "toolpacks"
+    toolpacks_dir.mkdir()
+    invalid = _spec_compliant_toolpack(
+        input_ref=os.path.relpath(schema_path, toolpacks_dir),
+        output_ref=os.path.relpath(schema_path, toolpacks_dir),
+        overrides={"execution": {"kind": "http"}},
+    )
+    _write_yaml(toolpacks_dir / "invalid.tool.yaml", yaml.safe_dump(invalid, sort_keys=False))
+
+    loader = ToolpackLoader()
+    with pytest.raises(ToolpackValidationError, match="http execution requires 'url'"):
+        loader.load_dir(toolpacks_dir)
+
+
+def test_toolpack_loader_node_requires_entry(tmp_path: Path) -> None:
+    schemas_dir = tmp_path / "schemas"
+    schema_path = schemas_dir / "schema.json"
+    _write_json(
+        schema_path,
+        {"$schema": "https://json-schema.org/draft/2020-12/schema", "type": "object"},
+    )
+
+    toolpacks_dir = tmp_path / "toolpacks"
+    toolpacks_dir.mkdir()
+    invalid = _spec_compliant_toolpack(
+        input_ref=os.path.relpath(schema_path, toolpacks_dir),
+        output_ref=os.path.relpath(schema_path, toolpacks_dir),
+        overrides={"execution": {"kind": "node"}},
+    )
+    _write_yaml(toolpacks_dir / "invalid.tool.yaml", yaml.safe_dump(invalid, sort_keys=False))
+
+    loader = ToolpackLoader()
+    with pytest.raises(ToolpackValidationError, match="node execution requires"):
+        loader.load_dir(toolpacks_dir)
+
+
+def test_toolpack_loader_php_requires_entry(tmp_path: Path) -> None:
+    schemas_dir = tmp_path / "schemas"
+    schema_path = schemas_dir / "schema.json"
+    _write_json(
+        schema_path,
+        {"$schema": "https://json-schema.org/draft/2020-12/schema", "type": "object"},
+    )
+
+    toolpacks_dir = tmp_path / "toolpacks"
+    toolpacks_dir.mkdir()
+    invalid = _spec_compliant_toolpack(
+        input_ref=os.path.relpath(schema_path, toolpacks_dir),
+        output_ref=os.path.relpath(schema_path, toolpacks_dir),
+        overrides={"execution": {"kind": "php"}},
+    )
+    _write_yaml(toolpacks_dir / "invalid.tool.yaml", yaml.safe_dump(invalid, sort_keys=False))
+
+    loader = ToolpackLoader()
+    with pytest.raises(ToolpackValidationError, match="php execution requires"):
+        loader.load_dir(toolpacks_dir)
+
+
 def test_toolpack_loader_rejects_invalid_tool_id(tmp_path: Path) -> None:
     schemas_dir = tmp_path / "schemas"
     schema_path = schemas_dir / "schema.json"
