@@ -1,0 +1,60 @@
+meta:
+  theme: Psycholofy (gold corpus)
+  source: Derived from a collection of wikipedia articles of popular concepts in Psycology
+  version: v1.0
+questions:
+
+- id: Q01
+  type: direct
+  question: What sort of sensation is the Nociceptor associated with?
+  gold_doc: PSY0064_Nociceptor.md
+  answer: "The nociceptor is resoponsible for generating pain stimuli"
+
+- id: Q02
+  type: direct
+  question: What Locus of Control is associated with emotional maturity and psycological well-adjustedness?
+  gold_doc: PSY0050_Locus_of_control.md
+  answer: "Well adjusted, or emotionally mature individuals are most likely to have an Internal Locus of Control meaning they understand that it's much easier to control their own behavior than it is to control others' "
+
+- id: Q03
+  type: ambiguous
+  question: Explain how magnetoreception works in humans.
+  gold_doc: PSY0052_Magnetoreception.md
+  clarify: Is there evidence that humans have magnetoreceptors?
+  answer: "It is not generally known if humans have any sensory neurons that are sensitve to magnetic fields, but some research suggests they may, it's too early to make any definitive statements regarding the specific biological mechanisms, if any, humans have for this sort of sensation."
+
+#- id: Q04
+#  type: synthesis
+#  question: Contrast Agnosia and Aphasia, give an example of each.
+#  gold_docs:
+#  - PSY0000_Agnosia.md
+#  - PSY0003_Aphasia.md
+#  answer: ""
+
+#- id: Q05
+#  type: conflict
+#  question: 
+#  gold_docs:
+#  - 
+#  - 
+#  note: "."
+#  answer: "."
+
+#- id: Q06
+#  type: freshness
+#  question: o-date perspective on adult neurogenesis in humans from this corpus?
+#  gold_doc: NP05_structural_vs_functional.md
+#  note: "Answer should reflect 'not convincingly demonstrated in humans' in this corpus."
+#  answer: "Adult neurogenesis has not been convincingly demonstrated in humans (per this corpus)."
+
+
+#- id: Q07
+#  type: multiturn
+#  question: Discuss how plasticity explains recovery after brain injury.
+#  gold_doc: NP06_applications_rehab.md
+#  followups:
+#  - Name one therapy and the likely mechanism.
+#  - What evidence or limitations are noted?
+#  answer: "Recovery reflects functional reorganization and recruitment of alternate pathways; targeted training (e.g., CIMT, FES) drives use-dependent cortical remapping and netwo>
+
+

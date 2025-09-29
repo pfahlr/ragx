@@ -3,6 +3,7 @@ jsonschema
 numpy
 pyyaml
 pytest
+pytest-cov
 numpy
 ruff
 mypy

@@ -1,0 +1,13 @@
+id: 05j_toolpacks_loader_execution_validation
+title: Toolpacks Loader — Execution Config Validation
+description: >
+  Validate `execution` blocks per kind (python/node/php/cli/http) so
+  malformed entrypoints are rejected before runtime.
+goals:
+  - Require python module strings to follow `module:callable` or provide `script`, not neither.
+  - Ensure CLI/HTTP/Node/PHP configs use the correct types (cmd list of strings, url string, etc.).
+  - Expand unit tests covering invalid execution configs across kinds.
+deliverables:
+  - apps/toolpacks/loader.py updated
+  - tests/unit/test_toolpacks_loader.py expanded
+  - docs/toolpacks_loader.md updated

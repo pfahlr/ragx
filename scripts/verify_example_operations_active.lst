@@ -1,0 +1,3 @@
+example_operations/ragcore_build_index/01_partition_documents.sh
+example_operations/ragcore_build_index/02_build_shards.sh
+example_operations/ragcore_build_index/03_merge_shards.sh

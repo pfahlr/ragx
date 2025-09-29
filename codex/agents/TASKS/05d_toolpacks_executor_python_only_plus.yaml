@@ -1,0 +1,16 @@
+id: 05d_toolpacks_executor_python_only_plus
+title: Toolpacks Executor — Python-Only Plus
+description: >
+  Extend executor to enforce execution.kind checks, introduce async support,
+  deterministic caching with hash+deepcopy, and strict validation of
+  execution.module (module:callable).
+goals:
+  - Fail fast on non-python toolpacks.
+  - Deterministic cache with deepcopies.
+  - Support asyncio.run for coroutine callables.
+  - Validate execution.module string format.
+  - Use jsonschema.validator_for for input/output payloads.
+deliverables:
+  - apps/toolpacks/executor.py updated
+  - tests/unit/test_toolpacks_exec_python.py expanded
+  - docs/toolpacks_executor.md updated
