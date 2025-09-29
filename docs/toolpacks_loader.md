@@ -44,6 +44,13 @@ The loader enforces the following invariants:
 * `timeoutMs` – positive integer.
 * `limits.maxInputBytes` / `limits.maxOutputBytes` – positive integers.
 * `execution.kind` – one of `{python, node, php, cli, http}`.
+* `execution` fields are validated per kind (e.g. python requires `module` or
+  `script`, CLI requires a `cmd` list, HTTP requires a `url`).
+* `caps.network` (when present) must be a list of non-empty strings.
+* `env.passthrough` (when present) must list non-empty environment variable
+  names.
+* `templating.engine` / `templating.cacheKey` must be non-empty strings if
+  provided.
 * `$ref` schema paths must exist and contain valid JSON Schema documents.
 
 These checks keep downstream components deterministic and guard against loading

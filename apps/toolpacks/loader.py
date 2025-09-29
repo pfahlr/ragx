@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -84,24 +84,16 @@ class Toolpack:
                     f"Toolpack {tool_id} limits['{key}'] must be a positive integer"
                 )
 
-        caps = data.get("caps", {})
-        caps = _require_mapping(caps, "caps", tool_id)
+        caps = _validate_caps(data.get("caps", {}), tool_id)
 
-        env = data.get("env", {})
-        env = _require_mapping(env, "env", tool_id)
+        env = _validate_env(data.get("env", {}), tool_id)
 
-        templating = data.get("templating", {})
-        templating = _require_mapping(templating, "templating", tool_id)
+        templating = _validate_templating(data.get("templating", {}), tool_id)
 
         input_schema = _resolve_schema(data["inputSchema"], source_path.parent, tool_id)
         output_schema = _resolve_schema(data["outputSchema"], source_path.parent, tool_id)
 
-        execution = _require_mapping(data["execution"], "execution", tool_id)
-        kind = execution.get("kind")
-        if kind not in _VALID_EXECUTION_KINDS:
-            raise ToolpackValidationError(
-                f"Toolpack {tool_id} execution.kind must be one of {_VALID_EXECUTION_KINDS}"
-            )
+        execution = _validate_execution(data.get("execution"), tool_id)
 
         return cls(
             id=tool_id,
@@ -172,6 +164,203 @@ def _require_mapping(value: Any, field: str, tool_id: str) -> Mapping[str, Any]:
             f"Toolpack {tool_id} field '{field}' must be a mapping"
         )
     return value
+
+
+def _validate_caps(value: Any, tool_id: str) -> Mapping[str, Any]:
+    caps = _require_mapping(value, "caps", tool_id)
+
+    network = caps.get("network")
+    if network is not None:
+        if not isinstance(network, Sequence) or isinstance(network, str | bytes):
+            raise ToolpackValidationError(
+                f"Toolpack {tool_id} caps.network must be a list of strings"
+            )
+        for entry in network:
+            if not isinstance(entry, str) or not entry:
+                raise ToolpackValidationError(
+                    f"Toolpack {tool_id} caps.network must contain non-empty strings"
+                )
+
+    return caps
+
+
+def _validate_env(value: Any, tool_id: str) -> Mapping[str, Any]:
+    env = _require_mapping(value, "env", tool_id)
+
+    passthrough = env.get("passthrough")
+    if passthrough is not None:
+        if not isinstance(passthrough, Sequence) or isinstance(passthrough, str | bytes):
+            raise ToolpackValidationError(
+                f"Toolpack {tool_id} env.passthrough must be a list of strings"
+            )
+        for entry in passthrough:
+            if not isinstance(entry, str) or not entry:
+                raise ToolpackValidationError(
+                    f"Toolpack {tool_id} env.passthrough must contain non-empty strings"
+                )
+
+    return env
+
+
+def _validate_templating(value: Any, tool_id: str) -> Mapping[str, Any]:
+    templating = _require_mapping(value, "templating", tool_id)
+
+    engine = templating.get("engine")
+    if engine is not None:
+        if not isinstance(engine, str) or not engine:
+            raise ToolpackValidationError(
+                f"Toolpack {tool_id} templating.engine must be a non-empty string"
+            )
+
+    cache_key = templating.get("cacheKey")
+    if cache_key is not None:
+        if not isinstance(cache_key, str) or not cache_key:
+            raise ToolpackValidationError(
+                f"Toolpack {tool_id} templating.cacheKey must be a non-empty string"
+            )
+
+    return templating
+
+
+def _validate_execution(value: Any, tool_id: str) -> Mapping[str, Any]:
+    if value is None:
+        raise ToolpackValidationError(
+            f"Toolpack {tool_id} execution must be defined"
+        )
+
+    execution = _require_mapping(value, "execution", tool_id)
+
+    kind = execution.get("kind")
+    if kind not in _VALID_EXECUTION_KINDS:
+        raise ToolpackValidationError(
+            f"Toolpack {tool_id} execution.kind must be one of {_VALID_EXECUTION_KINDS}"
+        )
+
+    _EXECUTION_VALIDATORS[kind](execution, tool_id)
+    return execution
+
+
+def _validate_python_execution(execution: Mapping[str, Any], tool_id: str) -> None:
+    module = execution.get("module")
+    script = execution.get("script")
+
+    if module is None and script is None:
+        raise ToolpackValidationError(
+            f"Toolpack {tool_id} python execution requires 'module' or 'script'"
+        )
+
+    if module is not None:
+        if not isinstance(module, str) or not module:
+            raise ToolpackValidationError(
+                f"Toolpack {tool_id} python execution module must be a non-empty string"
+            )
+        if ":" not in module:
+            raise ToolpackValidationError(
+                f"Toolpack {tool_id} python module entrypoint must use 'module:callable'"
+            )
+
+    if script is not None:
+        if not isinstance(script, str) or not script:
+            raise ToolpackValidationError(
+                f"Toolpack {tool_id} python execution script must be a non-empty string"
+            )
+
+
+def _validate_cli_execution(execution: Mapping[str, Any], tool_id: str) -> None:
+    cmd = execution.get("cmd")
+    if not isinstance(cmd, Sequence) or isinstance(cmd, str | bytes) or not cmd:
+        raise ToolpackValidationError(
+            f"Toolpack {tool_id} cli execution requires a non-empty 'cmd' list of strings"
+        )
+
+    for idx, part in enumerate(cmd):
+        if not isinstance(part, str) or not part:
+            raise ToolpackValidationError(
+                f"Toolpack {tool_id} cli execution cmd[{idx}] must be a non-empty string"
+            )
+
+
+def _validate_node_execution(execution: Mapping[str, Any], tool_id: str) -> None:
+    entry = execution.get("script") or execution.get("node")
+    if entry is None:
+        raise ToolpackValidationError(
+            f"Toolpack {tool_id} node execution requires 'script' or 'node' entrypoint"
+        )
+
+    if not isinstance(entry, str) or not entry:
+        raise ToolpackValidationError(
+            f"Toolpack {tool_id} node execution entrypoint must be a non-empty string"
+        )
+
+    args = execution.get("args")
+    if args is not None:
+        if not isinstance(args, Sequence) or isinstance(args, str | bytes):
+            raise ToolpackValidationError(
+                f"Toolpack {tool_id} node execution args must be a list of strings"
+            )
+        for idx, arg in enumerate(args):
+            if not isinstance(arg, str) or not arg:
+                raise ToolpackValidationError(
+                    f"Toolpack {tool_id} node execution args[{idx}] must be a non-empty string"
+                )
+
+
+def _validate_php_execution(execution: Mapping[str, Any], tool_id: str) -> None:
+    script = execution.get("php") or execution.get("script")
+    if script is None:
+        raise ToolpackValidationError(
+            f"Toolpack {tool_id} php execution requires 'php' or 'script' entrypoint"
+        )
+
+    if not isinstance(script, str) or not script:
+        raise ToolpackValidationError(
+            f"Toolpack {tool_id} php execution entrypoint must be a non-empty string"
+        )
+
+    php_binary = execution.get("phpBinary")
+    if php_binary is not None and (not isinstance(php_binary, str) or not php_binary):
+        raise ToolpackValidationError(
+            f"Toolpack {tool_id} php execution phpBinary must be a non-empty string"
+        )
+
+
+def _validate_http_execution(execution: Mapping[str, Any], tool_id: str) -> None:
+    url = execution.get("url")
+    if not isinstance(url, str) or not url:
+        raise ToolpackValidationError(
+            f"Toolpack {tool_id} http execution requires a non-empty 'url'"
+        )
+
+    method = execution.get("method")
+    if method is not None and (not isinstance(method, str) or not method):
+        raise ToolpackValidationError(
+            f"Toolpack {tool_id} http execution method must be a non-empty string"
+        )
+
+    headers = execution.get("headers")
+    if headers is not None:
+        if not isinstance(headers, Mapping):
+            raise ToolpackValidationError(
+                f"Toolpack {tool_id} http execution headers must be a mapping"
+            )
+        for key, value in headers.items():
+            if not isinstance(key, str) or not key:
+                raise ToolpackValidationError(
+                    f"Toolpack {tool_id} http execution headers must use non-empty string keys"
+                )
+            if not isinstance(value, str):
+                raise ToolpackValidationError(
+                    f"Toolpack {tool_id} http execution header '{key}' must be a string value"
+                )
+
+
+_EXECUTION_VALIDATORS: dict[str, Callable[[Mapping[str, Any], str], None]] = {
+    "python": _validate_python_execution,
+    "cli": _validate_cli_execution,
+    "node": _validate_node_execution,
+    "php": _validate_php_execution,
+    "http": _validate_http_execution,
+}
 
 
 def _resolve_schema(
