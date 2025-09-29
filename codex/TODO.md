@@ -99,7 +99,10 @@ And whatever else I've forgotten to mention
   
 ```
 
-
+- [x] codex/agents/TASKS/000_scaffold_directories.yaml 
+- [x] codex/agents/TASKS/001_ci_and_tooling.yaml 
+- [x] codex/agents/TASKS/002_glue_makefile_and_scripts.yaml 
+- [x] codex/agents/TASKS/003_vectordb_md_ingest.yaml 
 
 - [x] codex/agents/TASKS/04a_vectordb_protocol_and_registry.yaml
 - [x] codex/agents/TASKS/04b_cpp_stub_backend_scaffold.yaml
@@ -107,7 +110,6 @@ And whatever else I've forgotten to mention
 - [x] codex/agents/TASKS/04d_cpp_stub_flat_index_feature_parity.yaml
 - [x] codex/agents/TASKS/04e_shards_merge_contract_and_tests.yaml
 - [x] codex/agents/TASKS/04f_cli_scanner_and_formats_md_pdf.yaml
-
 
 - [x] codex/agents/TASKS/05a_toolpacks_loader_minimal.yaml
 - [x] codex/agents/TASKS/05b_toolpacks_executor_python_only.yaml
