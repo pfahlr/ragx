@@ -38,6 +38,8 @@ The loader enforces the spec-defined invariants:
 
 - Required fields: `id`, `version`, `deterministic`, `timeoutMs`, `limits`,
   `inputSchema`, `outputSchema`, `execution`.
+- `id` must be dotted lowercase segments (e.g. `pkg.tool`).
+- `version` must follow semantic version rules (validated via `packaging.Version`).
 - `timeoutMs` must be a positive integer.
 - `limits.maxInputBytes` and `limits.maxOutputBytes` must exist and be positive
   integers.
@@ -65,6 +67,7 @@ Regression coverage lives in `tests/unit/test_toolpacks_loader.py`, exercising:
 - Happy-path loading of spec-compliant toolpacks with `$ref` schemas.
 - Rejection of snake_case metadata (missing camelCase spec fields).
 - Detection of duplicate tool ids and missing required fields.
+- Enforcement of id patterns and semantic version strings.
 - Execution kind whitelisting.
 - JSON Schema structural validation failures (including property-based checks
   for invalid `type` values when Hypothesis is available).

@@ -3,6 +3,7 @@ from __future__ import annotations
 import copy
 import json
 import logging
+import re
 from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
@@ -11,6 +12,7 @@ from typing import Any
 import yaml
 from jsonschema import validators
 from jsonschema.exceptions import SchemaError
+from packaging.version import InvalidVersion, Version
 
 
 class ToolpackValidationError(Exception):
@@ -67,7 +69,10 @@ class Toolpack:
             )
 
         tool_id = _require_str(data["id"], "id", source_path)
+        _validate_tool_id(tool_id, source_path)
+
         version = _require_str(data["version"], "version", source_path)
+        _validate_version(version, tool_id)
         deterministic = data["deterministic"]
         if not isinstance(deterministic, bool):
             raise ToolpackValidationError(
@@ -360,6 +365,29 @@ def _apply_legacy_shim(data: Any, source_path: Path) -> Any:
         )
 
     return updated
+
+
+def _validate_tool_id(tool_id: str, source_path: Path) -> None:
+    if not _TOOL_ID_PATTERN.fullmatch(tool_id):
+        message = (
+            f"Toolpack {source_path} id '{tool_id}' must use dotted lowercase segments "
+            "(e.g. 'pkg.tool')"
+        )
+        raise ToolpackValidationError(message)
+
+
+def _validate_version(version: str, tool_id: str) -> None:
+    try:
+        parsed = Version(version)
+    except InvalidVersion as exc:
+        raise ToolpackValidationError(
+            f"Toolpack {tool_id} version must follow semantic versioning: {exc}"
+        ) from exc
+
+    if len(parsed.release) != 3:
+        raise ToolpackValidationError(
+            f"Toolpack {tool_id} version '{version}' must include major.minor.patch"
+        )
 LOGGER = logging.getLogger(__name__)
 
 
@@ -373,3 +401,5 @@ _LEGACY_LIMIT_KEYS = {
     "max_input_bytes": "maxInputBytes",
     "max_output_bytes": "maxOutputBytes",
 }
+
+_TOOL_ID_PATTERN = re.compile(r"^[a-z0-9]+(?:\.[a-z0-9]+)+$")

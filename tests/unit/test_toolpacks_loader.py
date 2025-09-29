@@ -269,6 +269,50 @@ def test_toolpack_loader_rejects_invalid_execution_kind(tmp_path: Path) -> None:
         loader.load_dir(toolpacks_dir)
 
 
+def test_toolpack_loader_rejects_invalid_tool_id(tmp_path: Path) -> None:
+    schemas_dir = tmp_path / "schemas"
+    schema_path = schemas_dir / "schema.json"
+    _write_json(
+        schema_path,
+        {"$schema": "https://json-schema.org/draft/2020-12/schema", "type": "object"},
+    )
+
+    toolpacks_dir = tmp_path / "toolpacks"
+    toolpacks_dir.mkdir()
+    invalid = _spec_compliant_toolpack(
+        input_ref=os.path.relpath(schema_path, toolpacks_dir),
+        output_ref=os.path.relpath(schema_path, toolpacks_dir),
+        overrides={"id": "InvalidTool"},
+    )
+    _write_yaml(toolpacks_dir / "invalid.tool.yaml", yaml.safe_dump(invalid, sort_keys=False))
+
+    loader = ToolpackLoader()
+    with pytest.raises(ToolpackValidationError, match="dotted lowercase"):
+        loader.load_dir(toolpacks_dir)
+
+
+def test_toolpack_loader_rejects_invalid_version(tmp_path: Path) -> None:
+    schemas_dir = tmp_path / "schemas"
+    schema_path = schemas_dir / "schema.json"
+    _write_json(
+        schema_path,
+        {"$schema": "https://json-schema.org/draft/2020-12/schema", "type": "object"},
+    )
+
+    toolpacks_dir = tmp_path / "toolpacks"
+    toolpacks_dir.mkdir()
+    invalid = _spec_compliant_toolpack(
+        input_ref=os.path.relpath(schema_path, toolpacks_dir),
+        output_ref=os.path.relpath(schema_path, toolpacks_dir),
+        overrides={"version": "2024.1"},
+    )
+    _write_yaml(toolpacks_dir / "invalid.tool.yaml", yaml.safe_dump(invalid, sort_keys=False))
+
+    loader = ToolpackLoader()
+    with pytest.raises(ToolpackValidationError, match=r"major\.minor\.patch"):
+        loader.load_dir(toolpacks_dir)
+
+
 def test_toolpack_loader_validates_schema_structure(tmp_path: Path) -> None:
     bad_schema = {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
