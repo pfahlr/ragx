@@ -1,41 +1,42 @@
 # Toolpack Executor
 
-The toolpack executor runs declarative toolpacks produced by the loader. The
-current implementation focuses on the `python` kind and provides:
-
-* JSON Schema validation for both input and output payloads.
-* Environment assembly combining executor-level defaults and per-toolpack
-  overrides.
-* A simple idempotency cache for deterministic toolpacks.
+The Toolpack executor runs declarative toolpacks produced by the loader. The
+initial implementation focuses on the `python` execution kind and enforces
+contract validation before and after calling the handler.
 
 ## Usage
 
 ```python
-from pathlib import Path
+from apps.toolpacks.executor import Executor
 from apps.toolpacks.loader import ToolpackLoader
-from apps.toolpacks.executor import ToolpackExecutor
 
-loader = ToolpackLoader.load_dir(Path("apps/mcp_server/toolpacks"))
-executor = ToolpackExecutor(loader=loader)
+loader = ToolpackLoader()
+loader.load_dir("apps/mcp_server/toolpacks")
+executor = Executor()
 
-result = executor.run("tool.echo", {"text": "hello"})
-print(result)
+pack = loader.get("tool.echo")
+result = executor.run_toolpack(pack, {"text": "hello"})
+print(result["text"])
 ```
 
-## Caching Behaviour
+## Behaviour
 
-Toolpacks that declare `deterministic: true` are cached in-memory based on the
-combination of tool id, input payload, and resolved environment variables. Each
-cache hit returns a deep copy, so callers can safely mutate the returned
-structures without affecting future executions.
+- Only `execution.kind: python` toolpacks are supported. Other kinds raise
+  `ToolpackExecutionError`.
+- Input and output payloads are validated with the schemas bundled in the
+  `Toolpack` definition (`jsonschema.validator_for` ensures both the schema and
+  the payload are valid).
+- Deterministic toolpacks (`deterministic: true`) are cached by a hash of
+  `id`, `version`, and the input payload. Cache hits return deep copies so
+  callers can mutate outputs safely.
+- Handlers are resolved via the `execution.module` field using the
+  `module:callable` convention. Async handlers are supported transparently.
 
-## Handler Signature
+## Testing
 
-Python handlers may expose one of the following signatures:
+Unit coverage in `tests/unit/test_toolpacks_exec_python.py` verifies handler
+execution, schema validation failures, and deterministic caching. An end-to-end
+example using on-disk YAML lives in
+`tests/e2e/test_mcp_core_tools_python_only.py`.
 
-* `handler(payload)`
-* `handler(payload, context)`
-* `handler(payload, *, context)`
-
-The executor injects an `ExecutionContext` that currently exposes a single
-field, `env`, containing the merged environment mapping.
+Both suites run via `./scripts/ensure_green.sh`.

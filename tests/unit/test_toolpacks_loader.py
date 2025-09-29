@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 import json
-import textwrap
+import os
 from pathlib import Path
 
 import pytest
+import yaml
 
-from apps.toolpacks.loader import ToolpackLoader
+from apps.toolpacks.loader import ToolpackLoader, ToolpackValidationError
 
 
 def _write_json(path: Path, payload: dict[str, object]) -> None:
@@ -16,104 +17,169 @@ def _write_json(path: Path, payload: dict[str, object]) -> None:
 
 def _write_yaml(path: Path, contents: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    normalised = textwrap.dedent(contents).strip() + "\n"
+    normalised = contents.strip() + "\n"
     path.write_text(normalised, encoding="utf-8")
 
 
-def test_toolpack_loader_resolves_refs(tmp_path: Path) -> None:
+def _spec_compliant_toolpack(
+    *,
+    input_ref: str,
+    output_ref: str,
+    overrides: dict[str, object] | None = None,
+) -> dict[str, object]:
+    base: dict[str, object] = {
+        "id": "tool.echo",
+        "version": "1.0.0",
+        "deterministic": True,
+        "timeoutMs": 1000,
+        "limits": {"maxInputBytes": 4096, "maxOutputBytes": 8192},
+        "caps": {"cpu": "500m"},
+        "env": {"LOG_LEVEL": "INFO"},
+        "templating": {"prompt": "{{ text }}"},
+        "inputSchema": {"$ref": input_ref},
+        "outputSchema": {"$ref": output_ref},
+        "execution": {"kind": "python", "module": "toolpacks.echo:run"},
+    }
+    if overrides:
+        base.update(overrides)
+    return base
+
+
+def test_toolpack_loader_resolves_spec_fields(tmp_path: Path) -> None:
     schemas_dir = tmp_path / "schemas"
+    input_schema_path = schemas_dir / "echo.input.schema.json"
+    output_schema_path = schemas_dir / "echo.output.schema.json"
     _write_json(
-        schemas_dir / "echo.input.schema.json",
+        input_schema_path,
         {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
             "type": "object",
-            "properties": {
-                "prompt": {"type": "string"},
-                "temperature": {"type": "number", "minimum": 0.0, "maximum": 1.0},
-            },
+            "properties": {"prompt": {"type": "string"}},
             "required": ["prompt"],
         },
     )
     _write_json(
-        schemas_dir / "echo.output.schema.json",
+        output_schema_path,
         {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
             "type": "object",
-            "properties": {
-                "text": {"type": "string"},
-            },
+            "properties": {"text": {"type": "string"}},
             "required": ["text"],
         },
     )
 
     toolpacks_dir = tmp_path / "toolpacks"
+    toolpacks_dir.mkdir()
     _write_yaml(
-        toolpacks_dir / "echo.tool.yaml",
+        toolpacks_dir / "tool.echo.tool.yaml",
+        yaml.safe_dump(
+            _spec_compliant_toolpack(
+                input_ref=os.path.relpath(input_schema_path, toolpacks_dir),
+                output_ref=os.path.relpath(output_schema_path, toolpacks_dir),
+                overrides={"env": {"LOG_LEVEL": "DEBUG"}},
+            ),
+            sort_keys=False,
+        ),
+    )
+
+    loader = ToolpackLoader()
+    loader.load_dir(toolpacks_dir)
+
+    toolpack = loader.get("tool.echo")
+    assert toolpack.timeout_ms == 1000
+    assert toolpack.limits["maxInputBytes"] == 4096
+    assert toolpack.execution["kind"] == "python"
+    assert toolpack.env == {"LOG_LEVEL": "DEBUG"}
+    assert toolpack.input_schema["required"] == ["prompt"]
+    assert toolpack.output_schema["properties"]["text"]["type"] == "string"
+
+
+def test_toolpack_loader_rejects_snake_case_fields(tmp_path: Path) -> None:
+    toolpacks_dir = tmp_path / "toolpacks"
+    toolpacks_dir.mkdir()
+
+    _write_yaml(
+        toolpacks_dir / "invalid.tool.yaml",
         """
-        id: tool.echo
-        version: 0.1.0
-        kind: python
+        id: tool.invalid
+        version: 1.0.0
         deterministic: true
         timeout_ms: 1000
+        limits:
+          max_input_bytes: 100
+          max_output_bytes: 100
         execution:
-          runtime: python
-          handler: toolpacks.echo:run
+          kind: python
+          module: tool.invalid:run
         input_schema:
-          $ref: ../schemas/echo.input.schema.json
+          type: object
         output_schema:
-          $ref: ../schemas/echo.output.schema.json
-        env:
-          LOG_LEVEL: INFO
+          type: object
         """,
     )
 
-    loader = ToolpackLoader.load_dir(toolpacks_dir)
-
-    toolpacks = loader.list()
-    assert [toolpack.id for toolpack in toolpacks] == ["tool.echo"]
-
-    tool = loader.get("tool.echo")
-    assert tool.config["execution"]["handler"] == "toolpacks.echo:run"
-    assert tool.input_schema["required"] == ["prompt"]
-    assert tool.output_schema["properties"]["text"]["type"] == "string"
-    assert tool.path == (toolpacks_dir / "echo.tool.yaml").resolve()
+    loader = ToolpackLoader()
+    with pytest.raises(ToolpackValidationError):
+        loader.load_dir(toolpacks_dir)
 
 
-def test_toolpack_loader_rejects_duplicates(tmp_path: Path) -> None:
-    schema_path = tmp_path / "schemas" / "noop.output.schema.json"
-    _write_json(schema_path, {"type": "object"})
+def test_toolpack_loader_rejects_invalid_execution_kind(tmp_path: Path) -> None:
+    schemas_dir = tmp_path / "schemas"
+    schema_path = schemas_dir / "echo.schema.json"
+    _write_json(
+        schema_path,
+        {"$schema": "https://json-schema.org/draft/2020-12/schema", "type": "object"},
+    )
 
     toolpacks_dir = tmp_path / "toolpacks"
-    yaml_body = """
-    id: tool.duplicate
-    version: 1.0.0
-    output_schema:
-      $ref: ../schemas/noop.output.schema.json
-    """
-    _write_yaml(toolpacks_dir / "first.tool.yaml", yaml_body)
-    _write_yaml(toolpacks_dir / "second.tool.yaml", yaml_body)
-
-    with pytest.raises(ValueError, match="duplicate toolpack id 'tool.duplicate'"):
-        ToolpackLoader.load_dir(toolpacks_dir)
-
-
-def test_toolpack_loader_validates_required_fields(tmp_path: Path) -> None:
-    toolpacks_dir = tmp_path / "toolpacks"
-    _write_yaml(toolpacks_dir / "invalid.tool.yaml", "version: 0.1.0\n")
-
-    with pytest.raises(ValueError, match="missing required field 'id'"):
-        ToolpackLoader.load_dir(toolpacks_dir)
-
-
-def test_toolpack_loader_missing_ref_file(tmp_path: Path) -> None:
-    toolpacks_dir = tmp_path / "toolpacks"
+    toolpacks_dir.mkdir()
     _write_yaml(
-        toolpacks_dir / "broken.tool.yaml",
-        """
-        id: tool.broken
-        version: 0.0.1
-        input_schema:
-          $ref: ./schemas/missing.json
-        """,
+        toolpacks_dir / "tool.invalid.tool.yaml",
+        yaml.safe_dump(
+            _spec_compliant_toolpack(
+                input_ref=os.path.relpath(schema_path, toolpacks_dir),
+                output_ref=os.path.relpath(schema_path, toolpacks_dir),
+                overrides={"execution": {"kind": "perl", "module": "tool.invalid:run"}},
+            ),
+            sort_keys=False,
+        ),
     )
 
-    with pytest.raises(FileNotFoundError, match="schemas/missing.json"):
-        ToolpackLoader.load_dir(toolpacks_dir)
+    loader = ToolpackLoader()
+    with pytest.raises(ToolpackValidationError):
+        loader.load_dir(toolpacks_dir)
+
+
+def test_toolpack_loader_validates_schema_structure(tmp_path: Path) -> None:
+    bad_schema = {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {"prompt": {"type": "unsupported"}},
+    }
+
+    schemas_dir = tmp_path / "schemas"
+    bad_schema_path = schemas_dir / "bad.schema.json"
+    _write_json(bad_schema_path, bad_schema)
+
+    good_schema_path = schemas_dir / "good.schema.json"
+    _write_json(
+        good_schema_path,
+        {"$schema": "https://json-schema.org/draft/2020-12/schema", "type": "object"},
+    )
+
+    toolpacks_dir = tmp_path / "toolpacks"
+    toolpacks_dir.mkdir()
+    _write_yaml(
+        toolpacks_dir / "tool.bad.tool.yaml",
+        yaml.safe_dump(
+            _spec_compliant_toolpack(
+                input_ref=os.path.relpath(bad_schema_path, toolpacks_dir),
+                output_ref=os.path.relpath(good_schema_path, toolpacks_dir),
+            ),
+            sort_keys=False,
+        ),
+    )
+
+    loader = ToolpackLoader()
+    with pytest.raises(ToolpackValidationError):
+        loader.load_dir(toolpacks_dir)

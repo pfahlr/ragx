@@ -1,34 +1,61 @@
 # Toolpack Loader
 
-The toolpack loader provides read-only access to declarative tool definitions
-stored as YAML files. Each `*.tool.yaml` document describes a single toolpack
-and may reference JSON/YAML schemas via `$ref`. The loader resolves those
-references, validates required fields, and exposes an in-memory catalogue of
-ready-to-execute tool metadata.
+The Toolpack loader discovers declarative tool definitions (`*.tool.yaml`),
+materialises them into strongly-typed `Toolpack` objects, and validates their
+schemas up front. Implementations follow the contracts in
+[`codex/specs/ragx_master_spec.yaml`](../codex/specs/ragx_master_spec.yaml):
+camelCase field names, validated execution kinds, and deterministic configuration
+snapshots.
 
 ## Usage
 
 ```python
 from pathlib import Path
-from apps.toolpacks.loader import ToolpackLoader
 
-loader = ToolpackLoader.load_dir(Path("apps/mcp_server/toolpacks"))
-for toolpack in loader.list():
-    print(toolpack.id, toolpack.version)
+from apps.toolpacks.loader import ToolpackLoader, ToolpackValidationError
 
-markdown = loader.get("tool.echo")
-print(markdown.input_schema)
+loader = ToolpackLoader()
+try:
+    loader.load_dir(Path("apps/mcp_server/toolpacks"))
+except ToolpackValidationError as exc:
+    raise SystemExit(f"invalid toolpack: {exc}")
+
+for pack in loader.list():
+    print(pack.id, pack.execution["kind"], pack.timeout_ms)
 ```
 
-## Responsibilities
+* `load_dir(path)` walks the directory recursively, resolving `$ref` entries in
+  `inputSchema` / `outputSchema`, and validating each schema via
+  `jsonschema.validator_for(...).check_schema`.
+* `list()` returns the loaded toolpacks sorted by `id` to keep downstream cache
+  keys deterministic.
+* `get(tool_id)` returns the matching toolpack or raises `KeyError` if not
+  present.
 
-* Discover every `*.tool.yaml` within the supplied directory (recursively).
-* Resolve `$ref` nodes to local JSON/YAML schemas, supporting optional JSON
-  Pointer fragments.
-* Enforce required metadata (`id`, `version`) while leaving execution-specific
-  fields intact for later stages (executors, transports).
-* Provide deterministic ordering from `list()` so downstream systems may cache
-  results.
+## Validation Rules
 
-The loader intentionally avoids importing runtimes or executing code; it only
-normalises declarative metadata.
+The loader enforces the spec-defined invariants:
+
+- Required fields: `id`, `version`, `deterministic`, `timeoutMs`, `limits`,
+  `inputSchema`, `outputSchema`, `execution`.
+- `timeoutMs` must be a positive integer.
+- `limits.maxInputBytes` and `limits.maxOutputBytes` must exist and be positive
+  integers.
+- `execution.kind` must be one of `python`, `node`, `php`, `cli`, `http`.
+- Optional blocks (`caps`, `env`, `templating`) must be mappings when present.
+- `$ref` schema targets must exist and contain valid JSON Schema documents.
+
+Violations raise `ToolpackValidationError`, keeping problems discoverable before
+any runtime execution.
+
+## Testing
+
+Regression coverage lives in `tests/unit/test_toolpacks_loader.py`, exercising:
+
+- Happy-path loading of spec-compliant toolpacks with `$ref` schemas.
+- Rejection of snake_case metadata (missing camelCase spec fields).
+- Execution kind whitelisting.
+- JSON Schema structural validation failures.
+
+The suite runs as part of `./scripts/ensure_green.sh` and must stay green before
+shipping changes to the loader.

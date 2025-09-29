@@ -7,7 +7,7 @@ description: >
   check_schema are applied on load.
 goals:
   - Align all field names with ragx_master_spec.yaml (camelCase).
-  - Whitelist execution kinds: [python, node, php, cli, http].
+  - "Whitelist execution kinds: [python, node, php, cli, http]."
   - Add ToolpackValidationError class.
   - Resolve $ref and validate schema structure at load time.
 deliverables:
