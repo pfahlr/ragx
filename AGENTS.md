@@ -14,9 +14,7 @@ This repository is set up so autonomous agents (e.g., Codex) can implement large
 6. **Tests First (absolute gate)**: Do nothing until the test harness runs cleanly. All tasks stop if `./scripts/ensure_green.sh` is failing. Check it often.
 7. **Test Driven Development: your environment**:  Consider your development environment broken if tests are not running, stop everything and focus on getting them working before doing anything else.
 8. **Test Driven Development: your code**: Consider your code not working if tests are failing, use their output to determine what is wrong with your code
-
-
-
+9. **UNTIL THIS RULE IS REMOVED THERE IS NO NEED TO CREATE BACKWARDS COMPATIBILITY FOR CONSECUTIVE DEVELOPMENT TASKS. THIS SOFTWARE HAS NOT HAD A RELEASE YET**
 
 ---
 
