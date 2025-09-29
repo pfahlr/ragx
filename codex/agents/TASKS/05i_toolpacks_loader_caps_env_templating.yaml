@@ -1,0 +1,14 @@
+id: 05i_toolpacks_loader_caps_env_templating
+title: Toolpacks Loader — Caps/Env/Templating Guards
+description: >
+  Harden optional sections (`caps`, `env`, `templating`) so loader enforces
+  allowed keys, value types, and normalisation (e.g., network protocols,
+  env var casing, templating engines).
+goals:
+  - Accept only spec-approved `caps` keys and validate network/filesystem/subprocess payloads.
+  - Enforce env var naming (`passthrough` uppercase, `set` values strings) and JSON-serialisable templating context.
+  - Document normalisation behaviour and add tests for rejection cases.
+deliverables:
+  - apps/toolpacks/loader.py updated
+  - tests/unit/test_toolpacks_loader.py expanded
+  - docs/toolpacks_loader.md updated

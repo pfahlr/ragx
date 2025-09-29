@@ -1,0 +1,13 @@
+id: 05h_toolpacks_loader_metadata_validation
+title: Toolpacks Loader — Metadata Validation
+description: >
+  Enforce canonical tool identifiers and semantic versions so loader output
+  matches the spec and prevents drift across branches.
+goals:
+  - Validate `id` pattern (`segment.segment` lowercase + digits) per spec.
+  - Parse `version` with SemVer rules (e.g., `packaging.Version`) and reject invalid strings.
+  - Add regression tests covering good/bad ids and versions.
+deliverables:
+  - apps/toolpacks/loader.py updated
+  - tests/unit/test_toolpacks_loader.py expanded
+  - docs/toolpacks_loader.md updated
