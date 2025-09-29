@@ -63,6 +63,13 @@ def test_load_toolpacks(tmp_path: Path, schema_dir: Path) -> None:
         "timeoutMs": 5000,
         "limits": {"maxInputBytes": 4096, "maxOutputBytes": 8192},
         "execution": {"kind": "python", "module": "pkg.tool:run"},
+        "caps": {"network": ["https"], "subprocess": False},
+        "env": {"passthrough": ["API_TOKEN"], "set": {"REGION": "us-east"}},
+        "templating": {
+            "engine": "jinja2",
+            "cacheKey": "{{ id }}:{{ version }}",
+            "context": {"stable": True},
+        },
     }
     toolpack_data["inputSchema"] = {"$ref": os.path.relpath(input_schema_path, packs_dir)}
     toolpack_data["outputSchema"] = {"$ref": os.path.relpath(output_schema_path, packs_dir)}
@@ -181,3 +188,135 @@ def test_get_missing_tool_raises_key_error(tmp_path: Path, schema_dir: Path) -> 
 
     with pytest.raises(KeyError):
         loader.get("missing.tool")
+
+
+def _build_valid_toolpack(
+    *,
+    schema_path: Path,
+    toolpack_dir: Path,
+    tool_id: str = "example.tool",
+    overrides: dict | None = None,
+) -> dict:
+    base = {
+        "id": tool_id,
+        "version": "1.2.3",
+        "deterministic": True,
+        "timeoutMs": 2000,
+        "limits": {"maxInputBytes": 1024, "maxOutputBytes": 2048},
+        "execution": {"kind": "python", "module": "pkg.mod:run"},
+        "inputSchema": {"$ref": os.path.relpath(schema_path, toolpack_dir)},
+        "outputSchema": {"$ref": os.path.relpath(schema_path, toolpack_dir)},
+    }
+    if overrides:
+        base.update(overrides)
+    return base
+
+
+def test_version_must_follow_semver(tmp_path: Path, schema_dir: Path) -> None:
+    schema_path = _write_schema(
+        schema_dir,
+        "io.schema.json",
+        {"$schema": "https://json-schema.org/draft/2020-12/schema", "type": "object"},
+    )
+    invalid = _build_valid_toolpack(
+        schema_path=schema_path,
+        toolpack_dir=tmp_path,
+        overrides={"version": "2024.1"},
+    )
+    _write_toolpack(tmp_path, "invalid.tool.yaml", invalid)
+
+    loader = ToolpackLoader()
+    with pytest.raises(ToolpackValidationError):
+        loader.load_dir(tmp_path)
+
+
+def test_python_execution_requires_entrypoint(tmp_path: Path, schema_dir: Path) -> None:
+    schema_path = _write_schema(
+        schema_dir,
+        "schema.json",
+        {"$schema": "https://json-schema.org/draft/2020-12/schema", "type": "object"},
+    )
+    invalid = _build_valid_toolpack(
+        schema_path=schema_path,
+        toolpack_dir=tmp_path,
+        overrides={"execution": {"kind": "python"}},
+    )
+    _write_toolpack(tmp_path, "invalid.tool.yaml", invalid)
+
+    loader = ToolpackLoader()
+    with pytest.raises(ToolpackValidationError):
+        loader.load_dir(tmp_path)
+
+
+def test_cli_execution_requires_string_list(tmp_path: Path, schema_dir: Path) -> None:
+    schema_path = _write_schema(
+        schema_dir,
+        "cli.schema.json",
+        {"$schema": "https://json-schema.org/draft/2020-12/schema", "type": "object"},
+    )
+    invalid = _build_valid_toolpack(
+        schema_path=schema_path,
+        toolpack_dir=tmp_path,
+        overrides={"execution": {"kind": "cli", "cmd": "echo"}},
+    )
+    _write_toolpack(tmp_path, "invalid.tool.yaml", invalid)
+
+    loader = ToolpackLoader()
+    with pytest.raises(ToolpackValidationError):
+        loader.load_dir(tmp_path)
+
+
+def test_env_passthrough_requires_uppercase_names(tmp_path: Path, schema_dir: Path) -> None:
+    schema_path = _write_schema(
+        schema_dir,
+        "env.schema.json",
+        {"$schema": "https://json-schema.org/draft/2020-12/schema", "type": "object"},
+    )
+    invalid = _build_valid_toolpack(
+        schema_path=schema_path,
+        toolpack_dir=tmp_path,
+        overrides={
+            "env": {"passthrough": ["GOOD", "bad"], "set": {"ANOTHER": "value"}},
+        },
+    )
+    _write_toolpack(tmp_path, "invalid.tool.yaml", invalid)
+
+    loader = ToolpackLoader()
+    with pytest.raises(ToolpackValidationError):
+        loader.load_dir(tmp_path)
+
+
+def test_caps_network_requires_known_protocol(tmp_path: Path, schema_dir: Path) -> None:
+    schema_path = _write_schema(
+        schema_dir,
+        "caps.schema.json",
+        {"$schema": "https://json-schema.org/draft/2020-12/schema", "type": "object"},
+    )
+    invalid = _build_valid_toolpack(
+        schema_path=schema_path,
+        toolpack_dir=tmp_path,
+        overrides={"caps": {"network": ["ftp"]}},
+    )
+    _write_toolpack(tmp_path, "invalid.tool.yaml", invalid)
+
+    loader = ToolpackLoader()
+    with pytest.raises(ToolpackValidationError):
+        loader.load_dir(tmp_path)
+
+
+def test_templating_engine_must_be_supported(tmp_path: Path, schema_dir: Path) -> None:
+    schema_path = _write_schema(
+        schema_dir,
+        "templating.schema.json",
+        {"$schema": "https://json-schema.org/draft/2020-12/schema", "type": "object"},
+    )
+    invalid = _build_valid_toolpack(
+        schema_path=schema_path,
+        toolpack_dir=tmp_path,
+        overrides={"templating": {"engine": "liquid"}},
+    )
+    _write_toolpack(tmp_path, "invalid.tool.yaml", invalid)
+
+    loader = ToolpackLoader()
+    with pytest.raises(ToolpackValidationError):
+        loader.load_dir(tmp_path)
