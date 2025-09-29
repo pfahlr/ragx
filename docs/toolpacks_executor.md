@@ -30,7 +30,8 @@ print(result["text"])
   `id`, `version`, and the input payload. Cache hits return deep copies so
   callers can mutate outputs safely.
 - Handlers are resolved via the `execution.module` field using the
-  `module:callable` convention. Async handlers are supported transparently.
+  `module:callable` convention; invalid formats raise `ToolpackExecutionError`.
+  Async handlers are supported transparently.
 
 ## Testing
 

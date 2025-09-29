@@ -141,3 +141,61 @@ def test_exec_python_toolpack_skips_cache_for_non_deterministic(
     executor.run_toolpack(toolpack, {"value": 5})
 
     assert calls == [1, 1]
+
+
+def test_exec_toolpack_rejects_non_python_kind(monkeypatch: pytest.MonkeyPatch) -> None:
+    def run(payload: dict[str, object]) -> dict[str, object]:
+        return {"result": payload["value"]}
+
+    module_name = "toolpacks_tests.not_python"
+    _register_module(monkeypatch, module_name, run)
+    toolpack = Toolpack(
+        id="calc.cli",
+        version="1.0.0",
+        deterministic=True,
+        timeout_ms=1000,
+        limits={"maxInputBytes": 128, "maxOutputBytes": 128},
+        input_schema=_make_schema("value"),
+        output_schema=_make_schema("result"),
+        execution={"kind": "cli", "module": f"{module_name}:run"},
+        caps={},
+        env={},
+        templating={},
+        source_path=Path("calc.cli.tool.yaml"),
+    )
+
+    executor = Executor()
+
+    with pytest.raises(ToolpackExecutionError, match="Unsupported execution kind"):
+        executor.run_toolpack(toolpack, {"value": 1})
+
+
+def test_exec_toolpack_requires_module_entrypoint(monkeypatch: pytest.MonkeyPatch) -> None:
+    def run(payload: dict[str, object]) -> dict[str, object]:  # pragma: no cover - not executed
+        return {"result": payload["value"]}
+
+    module_name = "toolpacks_tests.bad_entry"
+    _register_module(monkeypatch, module_name, run)
+    toolpack = _make_toolpack(module=f"{module_name}")
+
+    executor = Executor()
+
+    with pytest.raises(ToolpackExecutionError, match="module entrypoint must use"):
+        executor.run_toolpack(toolpack, {"value": 1})
+
+
+def test_exec_toolpack_supports_async_callable(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def run(payload: dict[str, object]) -> dict[str, object]:
+        return {"result": payload["value"] * 2}
+
+    module_name = "toolpacks_tests.async_mod"
+    module = types.ModuleType(module_name)
+    module.run = run  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, module_name, module)
+
+    toolpack = _make_toolpack(module=f"{module_name}:run")
+    executor = Executor()
+
+    result = executor.run_toolpack(toolpack, {"value": 2})
+
+    assert result == {"result": 4}
