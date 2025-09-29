@@ -337,6 +337,34 @@ def test_toolpack_loader_cli_requires_cmd_list(tmp_path: Path) -> None:
         loader.load_dir(toolpacks_dir)
 
 
+def test_toolpack_loader_http_requires_string_headers(tmp_path: Path) -> None:
+    schemas_dir = tmp_path / "schemas"
+    schema_path = schemas_dir / "schema.json"
+    _write_json(
+        schema_path,
+        {"$schema": "https://json-schema.org/draft/2020-12/schema", "type": "object"},
+    )
+
+    toolpacks_dir = tmp_path / "toolpacks"
+    toolpacks_dir.mkdir()
+    invalid = _spec_compliant_toolpack(
+        input_ref=os.path.relpath(schema_path, toolpacks_dir),
+        output_ref=os.path.relpath(schema_path, toolpacks_dir),
+        overrides={
+            "execution": {
+                "kind": "http",
+                "url": "https://example.com",
+                "headers": {"Auth": 123},
+            }
+        },
+    )
+    _write_yaml(toolpacks_dir / "invalid.tool.yaml", yaml.safe_dump(invalid, sort_keys=False))
+
+    loader = ToolpackLoader()
+    with pytest.raises(ToolpackValidationError, match="header 'Auth' must be a string"):
+        loader.load_dir(toolpacks_dir)
+
+
 def test_toolpack_loader_http_requires_url(tmp_path: Path) -> None:
     schemas_dir = tmp_path / "schemas"
     schema_path = schemas_dir / "schema.json"
@@ -356,6 +384,30 @@ def test_toolpack_loader_http_requires_url(tmp_path: Path) -> None:
 
     loader = ToolpackLoader()
     with pytest.raises(ToolpackValidationError, match="http execution requires 'url'"):
+        loader.load_dir(toolpacks_dir)
+
+
+def test_toolpack_loader_http_timeout_positive(tmp_path: Path) -> None:
+    schemas_dir = tmp_path / "schemas"
+    schema_path = schemas_dir / "schema.json"
+    _write_json(
+        schema_path,
+        {"$schema": "https://json-schema.org/draft/2020-12/schema", "type": "object"},
+    )
+
+    toolpacks_dir = tmp_path / "toolpacks"
+    toolpacks_dir.mkdir()
+    invalid = _spec_compliant_toolpack(
+        input_ref=os.path.relpath(schema_path, toolpacks_dir),
+        output_ref=os.path.relpath(schema_path, toolpacks_dir),
+        overrides={
+            "execution": {"kind": "http", "url": "https://example.com", "timeoutMs": 0}
+        },
+    )
+    _write_yaml(toolpacks_dir / "invalid.tool.yaml", yaml.safe_dump(invalid, sort_keys=False))
+
+    loader = ToolpackLoader()
+    with pytest.raises(ToolpackValidationError, match="timeoutMs must be a positive integer"):
         loader.load_dir(toolpacks_dir)
 
 
@@ -381,6 +433,34 @@ def test_toolpack_loader_node_requires_entry(tmp_path: Path) -> None:
         loader.load_dir(toolpacks_dir)
 
 
+def test_toolpack_loader_node_args_must_be_strings(tmp_path: Path) -> None:
+    schemas_dir = tmp_path / "schemas"
+    schema_path = schemas_dir / "schema.json"
+    _write_json(
+        schema_path,
+        {"$schema": "https://json-schema.org/draft/2020-12/schema", "type": "object"},
+    )
+
+    toolpacks_dir = tmp_path / "toolpacks"
+    toolpacks_dir.mkdir()
+    invalid = _spec_compliant_toolpack(
+        input_ref=os.path.relpath(schema_path, toolpacks_dir),
+        output_ref=os.path.relpath(schema_path, toolpacks_dir),
+        overrides={
+            "execution": {
+                "kind": "node",
+                "script": "loader.mjs",
+                "args": ["--flag", 123],
+            }
+        },
+    )
+    _write_yaml(toolpacks_dir / "invalid.tool.yaml", yaml.safe_dump(invalid, sort_keys=False))
+
+    loader = ToolpackLoader()
+    with pytest.raises(ToolpackValidationError, match=r"args\[1\] must be a non-empty string"):
+        loader.load_dir(toolpacks_dir)
+
+
 def test_toolpack_loader_php_requires_entry(tmp_path: Path) -> None:
     schemas_dir = tmp_path / "schemas"
     schema_path = schemas_dir / "schema.json"
@@ -400,6 +480,34 @@ def test_toolpack_loader_php_requires_entry(tmp_path: Path) -> None:
 
     loader = ToolpackLoader()
     with pytest.raises(ToolpackValidationError, match="php execution requires"):
+        loader.load_dir(toolpacks_dir)
+
+
+def test_toolpack_loader_php_binary_must_be_string(tmp_path: Path) -> None:
+    schemas_dir = tmp_path / "schemas"
+    schema_path = schemas_dir / "schema.json"
+    _write_json(
+        schema_path,
+        {"$schema": "https://json-schema.org/draft/2020-12/schema", "type": "object"},
+    )
+
+    toolpacks_dir = tmp_path / "toolpacks"
+    toolpacks_dir.mkdir()
+    invalid = _spec_compliant_toolpack(
+        input_ref=os.path.relpath(schema_path, toolpacks_dir),
+        output_ref=os.path.relpath(schema_path, toolpacks_dir),
+        overrides={
+            "execution": {
+                "kind": "php",
+                "php": "tool.php",
+                "phpBinary": False,
+            }
+        },
+    )
+    _write_yaml(toolpacks_dir / "invalid.tool.yaml", yaml.safe_dump(invalid, sort_keys=False))
+
+    loader = ToolpackLoader()
+    with pytest.raises(ToolpackValidationError, match="phpBinary must be a non-empty string"):
         loader.load_dir(toolpacks_dir)
 
 
@@ -469,6 +577,52 @@ def test_toolpack_loader_rejects_unknown_caps_key(tmp_path: Path) -> None:
         loader.load_dir(toolpacks_dir)
 
 
+def test_toolpack_loader_caps_network_normalises_protocols(tmp_path: Path) -> None:
+    schemas_dir = tmp_path / "schemas"
+    schema_path = schemas_dir / "schema.json"
+    _write_json(
+        schema_path,
+        {"$schema": "https://json-schema.org/draft/2020-12/schema", "type": "object"},
+    )
+
+    toolpacks_dir = tmp_path / "toolpacks"
+    toolpacks_dir.mkdir()
+    legacy = _spec_compliant_toolpack(
+        input_ref=os.path.relpath(schema_path, toolpacks_dir),
+        output_ref=os.path.relpath(schema_path, toolpacks_dir),
+        overrides={"caps": {"network": "HTTPS"}},
+    )
+    _write_yaml(toolpacks_dir / "valid.tool.yaml", yaml.safe_dump(legacy, sort_keys=False))
+
+    loader = ToolpackLoader()
+    loader.load_dir(toolpacks_dir)
+
+    caps = loader.get("tool.echo").caps
+    assert caps["network"] == ["https"]
+
+
+def test_toolpack_loader_caps_filesystem_requires_list(tmp_path: Path) -> None:
+    schemas_dir = tmp_path / "schemas"
+    schema_path = schemas_dir / "schema.json"
+    _write_json(
+        schema_path,
+        {"$schema": "https://json-schema.org/draft/2020-12/schema", "type": "object"},
+    )
+
+    toolpacks_dir = tmp_path / "toolpacks"
+    toolpacks_dir.mkdir()
+    invalid = _spec_compliant_toolpack(
+        input_ref=os.path.relpath(schema_path, toolpacks_dir),
+        output_ref=os.path.relpath(schema_path, toolpacks_dir),
+        overrides={"caps": {"filesystem": {"read": "./data"}}},
+    )
+    _write_yaml(toolpacks_dir / "invalid.tool.yaml", yaml.safe_dump(invalid, sort_keys=False))
+
+    loader = ToolpackLoader()
+    with pytest.raises(ToolpackValidationError, match=r"caps.filesystem\[read\] must be a list"):
+        loader.load_dir(toolpacks_dir)
+
+
 def test_toolpack_loader_rejects_env_passthrough_case(tmp_path: Path) -> None:
     schemas_dir = tmp_path / "schemas"
     schema_path = schemas_dir / "schema.json"
@@ -491,6 +645,28 @@ def test_toolpack_loader_rejects_env_passthrough_case(tmp_path: Path) -> None:
         loader.load_dir(toolpacks_dir)
 
 
+def test_toolpack_loader_env_set_values_must_be_strings(tmp_path: Path) -> None:
+    schemas_dir = tmp_path / "schemas"
+    schema_path = schemas_dir / "schema.json"
+    _write_json(
+        schema_path,
+        {"$schema": "https://json-schema.org/draft/2020-12/schema", "type": "object"},
+    )
+
+    toolpacks_dir = tmp_path / "toolpacks"
+    toolpacks_dir.mkdir()
+    invalid = _spec_compliant_toolpack(
+        input_ref=os.path.relpath(schema_path, toolpacks_dir),
+        output_ref=os.path.relpath(schema_path, toolpacks_dir),
+        overrides={"env": {"passthrough": ["TOKEN"], "set": {"VALUE": 1}}},
+    )
+    _write_yaml(toolpacks_dir / "invalid.tool.yaml", yaml.safe_dump(invalid, sort_keys=False))
+
+    loader = ToolpackLoader()
+    with pytest.raises(ToolpackValidationError, match=r"env.set\['VALUE'\] must be a string"):
+        loader.load_dir(toolpacks_dir)
+
+
 def test_toolpack_loader_rejects_templating_engine(tmp_path: Path) -> None:
     schemas_dir = tmp_path / "schemas"
     schema_path = schemas_dir / "schema.json"
@@ -510,6 +686,64 @@ def test_toolpack_loader_rejects_templating_engine(tmp_path: Path) -> None:
 
     loader = ToolpackLoader()
     with pytest.raises(ToolpackValidationError, match="templating.engine"):
+        loader.load_dir(toolpacks_dir)
+
+
+def test_toolpack_loader_templating_requires_cache_key(tmp_path: Path) -> None:
+    schemas_dir = tmp_path / "schemas"
+    schema_path = schemas_dir / "schema.json"
+    _write_json(
+        schema_path,
+        {"$schema": "https://json-schema.org/draft/2020-12/schema", "type": "object"},
+    )
+
+    toolpacks_dir = tmp_path / "toolpacks"
+    toolpacks_dir.mkdir()
+    invalid = _spec_compliant_toolpack(
+        input_ref=os.path.relpath(schema_path, toolpacks_dir),
+        output_ref=os.path.relpath(schema_path, toolpacks_dir),
+        overrides={"templating": {"engine": "jinja2", "cacheKey": ""}},
+    )
+    _write_yaml(toolpacks_dir / "invalid.tool.yaml", yaml.safe_dump(invalid, sort_keys=False))
+
+    loader = ToolpackLoader()
+    with pytest.raises(ToolpackValidationError, match="cacheKey must be a non-empty string"):
+        loader.load_dir(toolpacks_dir)
+
+
+def test_toolpack_loader_templating_context_must_be_json(tmp_path: Path) -> None:
+    schemas_dir = tmp_path / "schemas"
+    schema_path = schemas_dir / "schema.json"
+    _write_json(
+        schema_path,
+        {"$schema": "https://json-schema.org/draft/2020-12/schema", "type": "object"},
+    )
+
+    toolpacks_dir = tmp_path / "toolpacks"
+    toolpacks_dir.mkdir()
+    templating_yaml = (
+        "id: tool.context\n"
+        "version: 1.0.0\n"
+        "deterministic: true\n"
+        "timeoutMs: 1000\n"
+        "limits:\n"
+        "  maxInputBytes: 10\n"
+        "  maxOutputBytes: 10\n"
+        "execution:\n"
+        "  kind: python\n"
+        "  module: tool.context:run\n"
+        f"inputSchema:\n  $ref: {os.path.relpath(schema_path, toolpacks_dir)}\n"
+        f"outputSchema:\n  $ref: {os.path.relpath(schema_path, toolpacks_dir)}\n"
+        "templating:\n"
+        "  context:\n"
+        "    invalid: !!set\n"
+        "      ? foo\n"
+        "      ? bar\n"
+    )
+    _write_yaml(toolpacks_dir / "invalid.tool.yaml", templating_yaml)
+
+    loader = ToolpackLoader()
+    with pytest.raises(ToolpackValidationError, match="context must be JSON serialisable"):
         loader.load_dir(toolpacks_dir)
 
 

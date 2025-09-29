@@ -1,12 +1,17 @@
 ## Job Runner
 ```
 Setup:
--Review AGENTS.md,  `Review  codex/agents/*`
--Find the tasks in  `codex/agents/TASKS/*`
--Note machine readable  specifications are outlined in `codex/specs/ragx_master_spec.yaml`
--Spend as much time as you need, quality of code is the most important thing here. 
--Ensure the code functions according to specs in real-life examples and tests.
--Ensure the creation of relevant tests.
+- Review AGENTS.md,  `Review  codex/agents/*`
+- Find the tasks in  `codex/agents/TASKS/*`
+- Note machine readable  specifications are outlined in `codex/specs/ragx_master_spec.yaml`
+- Spend as much time as you need, quality of code is the most important thing here. 
+- Ensure the code functions according to specs in real-life examples and tests.
+- Ensure the creation of relevant tests.
+- The best tests will be written before the code they verify and will provide extensive feedback as to the operation 
+    of the code they cover to rival the best debuggers or manual debugging breakpoints and debug code. The best part
+    is that once they're written, you've automated your debugging system and created a permanent verification of the
+    code you created. any, changes to the codebase in the future causing a regression will be immediately apparent,
+    preventing the worst kind of bugs.
 
 Request:
 
