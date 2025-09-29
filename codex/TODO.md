@@ -10,7 +10,7 @@ Setup:
 
 Request:
 
--Complete `codex/agents/TASKS/05g_toolpacks_legacy_shim.yaml`
+-Complete `codex/agents/TASKS/05f_toolpacks_docs_sync.yaml`
 
 Requirements: 
 - verify operation using a combination of the feedback from tests and by running the components in the environment and analyzing their outputs
@@ -20,12 +20,25 @@ Requirements:
 ```
 
 
-## Synthesis
-```
+## Synthesis (use for original set to add additional tasks) 
 review the implementations of < list of tasks> in https://github.com/pfahlr/ragx/tree/<competing feature branch> to see if there is anything that might be used to improve our own.
 ```
 ```
-review the implementations of  codex/agents/TASKS/05a_toolpacks_loader_minimal.yaml and codex/agents/TASKS/05b_toolpacks_executor_python_only.yaml  in https://github.com/pfahlr/ragx/tree/feature/05-toolpacks to see if there is anything that might be used to improve our own.
+review the implementations of:
+
+codex/agents/TASKS/05c_toolpacks_loader_spec_alignment.yaml  
+
+in branches: 
+ codex/complete-toolpacks-loader-spec-alignment-hk1ntv  
+ codex/complete-toolpacks-loader-spec-alignment-ymx51n
+ codex/complete-toolpacks-loader-spec-alignment-9r5g15 and  
+ codex/complete-toolpacks-loader-spec-alignment-z5pzt0 
+ 
+to see if there is anything that might be used to improve our own.
+
+add improvement tasks to codex/agents/TASKS/05h.. 05z... start numbering at the next available 05x (currently 05h, I think it is) following the format of the others. 
+be considerate of the scope of each task when creating them, don't make them too broad, nor too small. Build each job to match where the currently used codex model 
+performs best. 
 ```
 
 
@@ -36,14 +49,19 @@ review the implementations of  codex/agents/TASKS/05a_toolpacks_loader_minimal.y
 - [x] codex/agents/TASKS/04d_cpp_stub_flat_index_feature_parity.yaml
 - [x] codex/agents/TASKS/04e_shards_merge_contract_and_tests.yaml
 - [x] codex/agents/TASKS/04f_cli_scanner_and_formats_md_pdf.yaml
+
+
 - [x] codex/agents/TASKS/05a_toolpacks_loader_minimal.yaml
 - [x] codex/agents/TASKS/05b_toolpacks_executor_python_only.yaml
 
-- [ ] codex/agents/TASKS/05c_toolpacks_loader_spec_alignment.yaml
-- [ ] codex/agents/TASKS/05d_toolpacks_executor_python_only_plus.yaml
-- [ ] codex/agents/TASKS/05e_toolpacks_tests_completeness.yaml
-- [ ] codex/agents/TASKS/05f_toolpacks_docs_sync.yaml
+- [x] codex/agents/TASKS/05c_toolpacks_loader_spec_alignment.yaml
+- [x] codex/agents/TASKS/05d_toolpacks_executor_python_only_plus.yaml
+- [x] codex/agents/TASKS/05e_toolpacks_tests_completeness.yaml
+- [+] codex/agents/TASKS/05f_toolpacks_docs_sync.yaml
 - [ ] codex/agents/TASKS/05g_toolpacks_legacy_shim.yaml
+- [ ] codex/agents/TASKS/05h_toolpacks_loader_metadata_validation.yaml
+- [ ] codex/agents/TASKS/05i_toolpacks_loader_caps_env_templating.yaml
+- [ ] codex/agents/TASKS/05j_toolpacks_loader_execution_validation.yaml
 
 - [ ] codex/agents/TASKS/06a_core_tools_minimal_subset.yaml
 - [ ] codex/agents/TASKS/06b_mcp_server_bootstrap.yaml

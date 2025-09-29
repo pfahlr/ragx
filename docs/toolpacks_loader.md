@@ -4,8 +4,8 @@ The Toolpack loader discovers declarative tool definitions (`*.tool.yaml`),
 materialises them into strongly-typed `Toolpack` objects, and validates their
 schemas up front. Implementations follow the contracts in
 [`codex/specs/ragx_master_spec.yaml`](../codex/specs/ragx_master_spec.yaml):
-camelCase field names, validated execution kinds, and deterministic configuration
-snapshots.
+camelCase field names, spec-listed execution kinds, and deterministic
+configuration snapshots.
 
 ## Usage
 
@@ -24,8 +24,8 @@ for pack in loader.list():
     print(pack.id, pack.execution["kind"], pack.timeout_ms)
 ```
 
-* `load_dir(path)` walks the directory recursively, resolving `$ref` entries in
-  `inputSchema` / `outputSchema`, and validating each schema via
+* `load_dir(path)` walks the directory recursively, resolves `$ref` entries in
+  `inputSchema` / `outputSchema`, and validates each schema via
   `jsonschema.validator_for(...).check_schema`.
 * `list()` returns the loaded toolpacks sorted by `id` to keep downstream cache
   keys deterministic.
@@ -42,11 +42,21 @@ The loader enforces the spec-defined invariants:
 - `limits.maxInputBytes` and `limits.maxOutputBytes` must exist and be positive
   integers.
 - `execution.kind` must be one of `python`, `node`, `php`, `cli`, `http`.
+- Duplicate tool identifiers are rejected (the loader guarantees a single
+  toolpack per id).
 - Optional blocks (`caps`, `env`, `templating`) must be mappings when present.
 - `$ref` schema targets must exist and contain valid JSON Schema documents.
+- Nested `$ref` chains are resolved relative to the referencing file before
+  validation.
 
-Violations raise `ToolpackValidationError`, keeping problems discoverable before
-any runtime execution.
+## Failure semantics
+
+Any violation of the above contracts raises `ToolpackValidationError` with a
+contextual message (malformed YAML, missing fields, schema issues, duplicate
+ids, unsupported execution kinds, etc.). Consumers should treat the loader as a
+strict gatekeeper: if `load_dir` succeeds the resulting `Toolpack` instances are
+guaranteed to match the spec, and downstream systems can rely on their
+structure without revalidating.
 
 ## Testing
 
@@ -54,8 +64,10 @@ Regression coverage lives in `tests/unit/test_toolpacks_loader.py`, exercising:
 
 - Happy-path loading of spec-compliant toolpacks with `$ref` schemas.
 - Rejection of snake_case metadata (missing camelCase spec fields).
+- Detection of duplicate tool ids and missing required fields.
 - Execution kind whitelisting.
-- JSON Schema structural validation failures.
+- JSON Schema structural validation failures (including property-based checks
+  for invalid `type` values when Hypothesis is available).
 
 The suite runs as part of `./scripts/ensure_green.sh` and must stay green before
 shipping changes to the loader.
