@@ -39,11 +39,17 @@ for pack in loader.list():
 
 The loader enforces the following invariants:
 
-* `id`, `version` – non-empty strings.
+* `id` – lowercase dotted identifier (e.g. `domain.tool.action`).
+* `version` – [SemVer](https://semver.org) with explicit `major.minor.patch`.
 * `deterministic` – boolean flag.
 * `timeoutMs` – positive integer.
 * `limits.maxInputBytes` / `limits.maxOutputBytes` – positive integers.
 * `execution.kind` – one of `{python, node, php, cli, http}`.
+* `execution` – requires a concrete entry point per kind (`module`/`script` for
+  python, `cmd` list for CLI, `url` for HTTP, etc.).
+* `caps` – merged with declared timeout/size limits and validated network list
+  (defaults to network-off).
+* `env` / `templating` – mappings with string keys and validated value types.
 * `$ref` schema paths must exist and contain valid JSON Schema documents.
 
 These checks keep downstream components deterministic and guard against loading

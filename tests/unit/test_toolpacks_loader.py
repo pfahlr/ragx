@@ -29,7 +29,7 @@ def _write_toolpack(path: Path, name: str, data: dict) -> Path:
     return file_path
 
 
-def test_load_toolpacks(tmp_path: Path, schema_dir: Path) -> None:
+def _make_toolpack_data(schema_dir: Path, base_dir: Path) -> tuple[dict, Path, Path]:
     input_schema = {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
@@ -50,23 +50,34 @@ def test_load_toolpacks(tmp_path: Path, schema_dir: Path) -> None:
         "required": ["results"],
     }
 
-    input_schema_path = _write_schema(schema_dir, "search.input.schema.json", input_schema)
-    output_schema_path = _write_schema(schema_dir, "search.output.schema.json", output_schema)
+    input_schema_path = _write_schema(schema_dir, "tool.input.schema.json", input_schema)
+    output_schema_path = _write_schema(schema_dir, "tool.output.schema.json", output_schema)
 
-    packs_dir = tmp_path / "toolpacks"
-    packs_dir.mkdir()
-
-    toolpack_data = {
+    data = {
         "id": "search.query",
         "version": "1.0.0",
         "deterministic": True,
         "timeoutMs": 5000,
         "limits": {"maxInputBytes": 4096, "maxOutputBytes": 8192},
         "execution": {"kind": "python", "module": "pkg.tool:run"},
+        "inputSchema": {"$ref": os.path.relpath(input_schema_path, base_dir)},
+        "outputSchema": {"$ref": os.path.relpath(output_schema_path, base_dir)},
     }
-    toolpack_data["inputSchema"] = {"$ref": os.path.relpath(input_schema_path, packs_dir)}
-    toolpack_data["outputSchema"] = {"$ref": os.path.relpath(output_schema_path, packs_dir)}
+    return data, input_schema_path, output_schema_path
 
+
+def test_load_toolpacks(tmp_path: Path, schema_dir: Path) -> None:
+    packs_dir = tmp_path / "toolpacks"
+    packs_dir.mkdir()
+
+    (
+        toolpack_data,
+        input_schema_path,
+        output_schema_path,
+    ) = _make_toolpack_data(schema_dir, packs_dir)
+    input_schema = json.loads(input_schema_path.read_text())
+    output_schema = json.loads(output_schema_path.read_text())
+    toolpack_data["caps"] = {"network": ["https", "https"]}
     _write_toolpack(packs_dir, "search.query.tool.yaml", toolpack_data)
     nested_dir = packs_dir / "beta"
     nested_toolpack_data = {
@@ -89,6 +100,10 @@ def test_load_toolpacks(tmp_path: Path, schema_dir: Path) -> None:
     assert query_pack.output_schema == output_schema
     assert query_pack.execution["kind"] == "python"
     assert query_pack.source_path.name == "search.query.tool.yaml"
+    assert query_pack.caps["timeoutMs"] == 5000
+    assert query_pack.caps["maxInputBytes"] == 4096
+    assert query_pack.caps["maxOutputBytes"] == 8192
+    assert query_pack.caps["network"] == ["https"]
 
     summary_pack = loader.get("search.summary")
     assert summary_pack.execution["kind"] == "cli"
@@ -116,6 +131,61 @@ def test_missing_required_field(tmp_path: Path, schema_dir: Path) -> None:
     }
 
     _write_toolpack(tmp_path, "broken.tool.yaml", toolpack_data)
+
+    loader = ToolpackLoader()
+
+    with pytest.raises(ToolpackValidationError):
+        loader.load_dir(tmp_path)
+
+
+def test_invalid_toolpack_identifier(tmp_path: Path, schema_dir: Path) -> None:
+    data, _, _ = _make_toolpack_data(schema_dir, tmp_path)
+    data["id"] = "SearchQuery"
+    _write_toolpack(tmp_path, "invalid.tool.yaml", data)
+
+    loader = ToolpackLoader()
+
+    with pytest.raises(ToolpackValidationError):
+        loader.load_dir(tmp_path)
+
+
+def test_invalid_toolpack_version(tmp_path: Path, schema_dir: Path) -> None:
+    data, _, _ = _make_toolpack_data(schema_dir, tmp_path)
+    data["version"] = "1.0"
+    _write_toolpack(tmp_path, "invalid.tool.yaml", data)
+
+    loader = ToolpackLoader()
+
+    with pytest.raises(ToolpackValidationError):
+        loader.load_dir(tmp_path)
+
+
+def test_caps_network_validation(tmp_path: Path, schema_dir: Path) -> None:
+    data, _, _ = _make_toolpack_data(schema_dir, tmp_path)
+    data["caps"] = {"network": ["", 123]}
+    _write_toolpack(tmp_path, "badcaps.tool.yaml", data)
+
+    loader = ToolpackLoader()
+
+    with pytest.raises(ToolpackValidationError):
+        loader.load_dir(tmp_path)
+
+
+def test_env_requires_string_values(tmp_path: Path, schema_dir: Path) -> None:
+    data, _, _ = _make_toolpack_data(schema_dir, tmp_path)
+    data["env"] = {"passthrough": ["TOKEN", 123]}
+    _write_toolpack(tmp_path, "badenv.tool.yaml", data)
+
+    loader = ToolpackLoader()
+
+    with pytest.raises(ToolpackValidationError):
+        loader.load_dir(tmp_path)
+
+
+def test_python_execution_requires_entrypoint(tmp_path: Path, schema_dir: Path) -> None:
+    data, _, _ = _make_toolpack_data(schema_dir, tmp_path)
+    data["execution"] = {"kind": "python"}
+    _write_toolpack(tmp_path, "badexec.tool.yaml", data)
 
     loader = ToolpackLoader()
 
