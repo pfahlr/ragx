@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import copy
 import json
+import logging
 from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
@@ -157,6 +158,8 @@ class ToolpackLoader:
                     raise ToolpackValidationError(
                         f"Failed to parse YAML for toolpack {path}: {exc}"
                     ) from exc
+
+            data = _apply_legacy_shim(data, path)
 
             toolpack = Toolpack.from_dict(
                 data,
@@ -323,3 +326,50 @@ def _validate_json_schema(schema: Mapping[str, Any], tool_id: str) -> None:
         raise ToolpackValidationError(
             f"Toolpack {tool_id} schema failed validation: {exc}"
         ) from exc
+
+
+def _apply_legacy_shim(data: Any, source_path: Path) -> Any:
+    if not isinstance(data, Mapping):
+        return data
+
+    updated = dict(data)
+    rewritten: list[str] = []
+
+    for legacy_key, modern_key in _LEGACY_TOP_LEVEL_KEYS.items():
+        if legacy_key in updated and modern_key not in updated:
+            updated[modern_key] = updated.pop(legacy_key)
+            rewritten.append(legacy_key)
+
+    limits = updated.get("limits")
+    if isinstance(limits, Mapping):
+        limits_copy = dict(limits)
+        changed = False
+        for legacy_key, modern_key in _LEGACY_LIMIT_KEYS.items():
+            if legacy_key in limits_copy and modern_key not in limits_copy:
+                limits_copy[modern_key] = limits_copy.pop(legacy_key)
+                rewritten.append(f"limits.{legacy_key}")
+                changed = True
+        if changed:
+            updated["limits"] = limits_copy
+
+    if rewritten:
+        LOGGER.warning(
+            "Toolpack %s used legacy snake_case keys; converted to camelCase (%s).",
+            source_path,
+            ", ".join(sorted(rewritten)),
+        )
+
+    return updated
+LOGGER = logging.getLogger(__name__)
+
+
+_LEGACY_TOP_LEVEL_KEYS = {
+    "timeout_ms": "timeoutMs",
+    "input_schema": "inputSchema",
+    "output_schema": "outputSchema",
+}
+
+_LEGACY_LIMIT_KEYS = {
+    "max_input_bytes": "maxInputBytes",
+    "max_output_bytes": "maxOutputBytes",
+}

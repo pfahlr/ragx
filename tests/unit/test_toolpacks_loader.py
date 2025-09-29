@@ -141,33 +141,52 @@ def test_toolpack_loader_resolves_nested_refs(tmp_path: Path) -> None:
     assert pack.input_schema["properties"]["inner"]["properties"]["value"]["type"] == "integer"
 
 
-def test_toolpack_loader_rejects_snake_case_fields(tmp_path: Path) -> None:
+def test_toolpack_loader_shims_snake_case_fields(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    schemas_dir = tmp_path / "schemas"
+    schema_path = schemas_dir / "simple.schema.json"
+    _write_json(
+        schema_path,
+        {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "type": "object",
+        },
+    )
+
     toolpacks_dir = tmp_path / "toolpacks"
     toolpacks_dir.mkdir()
 
+    legacy_config = {
+        "id": "tool.legacy",
+        "version": "1.0.0",
+        "deterministic": True,
+        "timeout_ms": 1000,
+        "limits": {"max_input_bytes": 100, "max_output_bytes": 200},
+        "execution": {"kind": "python", "module": "tool.legacy:run"},
+        "input_schema": {
+            "$ref": os.path.relpath(schema_path, toolpacks_dir),
+        },
+        "output_schema": {
+            "$ref": os.path.relpath(schema_path, toolpacks_dir),
+        },
+    }
     _write_yaml(
-        toolpacks_dir / "invalid.tool.yaml",
-        """
-        id: tool.invalid
-        version: 1.0.0
-        deterministic: true
-        timeout_ms: 1000
-        limits:
-          max_input_bytes: 100
-          max_output_bytes: 100
-        execution:
-          kind: python
-          module: tool.invalid:run
-        input_schema:
-          type: object
-        output_schema:
-          type: object
-        """,
+        toolpacks_dir / "legacy.tool.yaml",
+        yaml.safe_dump(legacy_config, sort_keys=False),
     )
 
+    caplog.set_level("WARNING")
     loader = ToolpackLoader()
-    with pytest.raises(ToolpackValidationError):
-        loader.load_dir(toolpacks_dir)
+    loader.load_dir(toolpacks_dir)
+
+    legacy = loader.get("tool.legacy")
+    assert legacy.timeout_ms == 1000
+    assert legacy.limits["maxInputBytes"] == 100
+    assert legacy.input_schema == legacy.output_schema
+
+    warning_messages = " ".join(record.message for record in caplog.records)
+    assert "legacy snake_case" in warning_messages
 
 
 def test_toolpack_loader_rejects_missing_required_fields(tmp_path: Path) -> None:
