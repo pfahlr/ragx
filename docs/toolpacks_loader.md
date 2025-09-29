@@ -46,7 +46,11 @@ The loader enforces the spec-defined invariants:
 - `execution.kind` must be one of `python`, `node`, `php`, `cli`, `http`.
 - Duplicate tool identifiers are rejected (the loader guarantees a single
   toolpack per id).
-- Optional blocks (`caps`, `env`, `templating`) must be mappings when present.
+- Optional blocks (`caps`, `env`, `templating`) must follow spec contracts:
+  `caps.network` accepts `http`/`https`, `caps.filesystem` allows `read`/`write`
+  path lists, `caps.subprocess` is boolean; `env.passthrough`/`env.set` entries
+  must use uppercase variable names; `templating.engine` currently supports
+  `jinja2`, and `templating.context` must be JSON-serialisable.
 - `$ref` schema targets must exist and contain valid JSON Schema documents.
 - Nested `$ref` chains are resolved relative to the referencing file before
   validation.
@@ -68,6 +72,8 @@ Regression coverage lives in `tests/unit/test_toolpacks_loader.py`, exercising:
 - Rejection of snake_case metadata (missing camelCase spec fields).
 - Detection of duplicate tool ids and missing required fields.
 - Enforcement of id patterns and semantic version strings.
+- Validation of `caps`/`env`/`templating` semantics, including rejection of
+  unsupported protocols, env names, or templating engines.
 - Execution kind whitelisting.
 - JSON Schema structural validation failures (including property-based checks
   for invalid `type` values when Hypothesis is available).

@@ -21,6 +21,25 @@ class ToolpackValidationError(Exception):
 
 _VALID_EXECUTION_KINDS = {"python", "node", "php", "cli", "http"}
 
+LOGGER = logging.getLogger(__name__)
+
+_LEGACY_TOP_LEVEL_KEYS = {
+    "timeout_ms": "timeoutMs",
+    "input_schema": "inputSchema",
+    "output_schema": "outputSchema",
+}
+
+_LEGACY_LIMIT_KEYS = {
+    "max_input_bytes": "maxInputBytes",
+    "max_output_bytes": "maxOutputBytes",
+}
+
+_TOOL_ID_PATTERN = re.compile(r"^[a-z0-9]+(?:\.[a-z0-9]+)+$")
+_ALLOWED_CAP_KEYS = {"network", "filesystem", "subprocess"}
+_ALLOWED_NETWORK_PROTOCOLS = {"http", "https"}
+_ENV_VAR_PATTERN = re.compile(r"^[A-Z][A-Z0-9_]*$")
+_ALLOWED_TEMPLATING_ENGINES = {"jinja2"}
+
 
 @dataclass(frozen=True)
 class Toolpack:
@@ -97,14 +116,11 @@ class Toolpack:
                     f"Toolpack {tool_id} limits['{key}'] must be a positive integer"
                 )
 
-        caps = data.get("caps", {})
-        caps = _require_mapping(caps, "caps", tool_id)
+        caps = _validate_caps(data.get("caps"), tool_id)
 
-        env = data.get("env", {})
-        env = _require_mapping(env, "env", tool_id)
+        env = _validate_env(data.get("env"), tool_id)
 
-        templating = data.get("templating", {})
-        templating = _require_mapping(templating, "templating", tool_id)
+        templating = _validate_templating(data.get("templating"), tool_id)
 
         input_schema = _resolve_schema(
             data["inputSchema"],
@@ -135,9 +151,9 @@ class Toolpack:
             input_schema=input_schema,
             output_schema=output_schema,
             execution=dict(execution),
-            caps=dict(caps),
-            env=dict(env),
-            templating=dict(templating),
+            caps=caps,
+            env=env,
+            templating=templating,
             source_path=source_path,
         )
 
@@ -388,18 +404,178 @@ def _validate_version(version: str, tool_id: str) -> None:
         raise ToolpackValidationError(
             f"Toolpack {tool_id} version '{version}' must include major.minor.patch"
         )
-LOGGER = logging.getLogger(__name__)
 
 
-_LEGACY_TOP_LEVEL_KEYS = {
-    "timeout_ms": "timeoutMs",
-    "input_schema": "inputSchema",
-    "output_schema": "outputSchema",
-}
+def _validate_caps(value: Any, tool_id: str) -> dict[str, Any]:
+    if value is None:
+        return {}
 
-_LEGACY_LIMIT_KEYS = {
-    "max_input_bytes": "maxInputBytes",
-    "max_output_bytes": "maxOutputBytes",
-}
+    caps_mapping = _require_mapping(value, "caps", tool_id)
+    validated: dict[str, Any] = {}
 
-_TOOL_ID_PATTERN = re.compile(r"^[a-z0-9]+(?:\.[a-z0-9]+)+$")
+    for key in caps_mapping:
+        if key not in _ALLOWED_CAP_KEYS:
+            raise ToolpackValidationError(
+                f"Toolpack {tool_id} caps contains unknown key '{key}'"
+            )
+
+    if "network" in caps_mapping:
+        network_value = caps_mapping["network"]
+        entries: list[str]
+        if isinstance(network_value, list):
+            entries = network_value
+        elif isinstance(network_value, str):
+            entries = [network_value]
+        else:
+            raise ToolpackValidationError(
+                f"Toolpack {tool_id} caps.network must be a string or list of strings"
+            )
+        normalised: list[str] = []
+        for idx, entry in enumerate(entries):
+            if not isinstance(entry, str) or not entry.strip():
+                raise ToolpackValidationError(
+                    f"Toolpack {tool_id} caps.network[{idx}] must be a non-empty string"
+                )
+            protocol = entry.strip().lower()
+            if protocol not in _ALLOWED_NETWORK_PROTOCOLS:
+                raise ToolpackValidationError(
+                    f"Toolpack {tool_id} caps.network[{idx}] unsupported protocol '{entry}'"
+                )
+            normalised.append(protocol)
+        validated["network"] = normalised
+
+    if "filesystem" in caps_mapping:
+        fs_mapping = _require_mapping(caps_mapping["filesystem"], "caps.filesystem", tool_id)
+        allowed_modes = {"read", "write"}
+        fs_validated: dict[str, list[str]] = {}
+        for mode, paths in fs_mapping.items():
+            if mode not in allowed_modes:
+                raise ToolpackValidationError(
+                    f"Toolpack {tool_id} caps.filesystem[{mode}] is not supported"
+                )
+            if not isinstance(paths, list):
+                raise ToolpackValidationError(
+                    f"Toolpack {tool_id} caps.filesystem[{mode}] must be a list"
+                )
+            cleaned: list[str] = []
+            for idx, path in enumerate(paths):
+                if not isinstance(path, str) or not path:
+                    message = (
+                        f"Toolpack {tool_id} caps.filesystem[{mode}][{idx}] must "
+                        "be a non-empty string"
+                    )
+                    raise ToolpackValidationError(message)
+                cleaned.append(path)
+            fs_validated[mode] = cleaned
+        if fs_validated:
+            validated["filesystem"] = fs_validated
+
+    if "subprocess" in caps_mapping:
+        subprocess_value = caps_mapping["subprocess"]
+        if not isinstance(subprocess_value, bool):
+            raise ToolpackValidationError(
+                f"Toolpack {tool_id} caps.subprocess must be a boolean"
+            )
+        validated["subprocess"] = subprocess_value
+
+    return validated
+
+
+def _validate_env(value: Any, tool_id: str) -> dict[str, Any]:
+    if value is None:
+        return {}
+
+    env_mapping = _require_mapping(value, "env", tool_id)
+    validated: dict[str, Any] = {}
+
+    for key in env_mapping:
+        if key not in {"passthrough", "set"}:
+            raise ToolpackValidationError(
+                f"Toolpack {tool_id} env contains unknown key '{key}'"
+            )
+
+    if "passthrough" in env_mapping:
+        passthrough = env_mapping["passthrough"]
+        if not isinstance(passthrough, list):
+            raise ToolpackValidationError(
+                f"Toolpack {tool_id} env.passthrough must be a list"
+            )
+        names: list[str] = []
+        for idx, name in enumerate(passthrough):
+            if not isinstance(name, str) or not name:
+                raise ToolpackValidationError(
+                    f"Toolpack {tool_id} env.passthrough[{idx}] must be a non-empty string"
+                )
+            if not _ENV_VAR_PATTERN.fullmatch(name):
+                raise ToolpackValidationError(
+                    f"Toolpack {tool_id} env.passthrough[{idx}] must be uppercase A-Z, 0-9, or '_'"
+                )
+            names.append(name)
+        validated["passthrough"] = names
+
+    if "set" in env_mapping:
+        set_mapping = _require_mapping(env_mapping["set"], "env.set", tool_id)
+        assignments: dict[str, str] = {}
+        for name, value in set_mapping.items():
+            if not isinstance(name, str) or not name:
+                raise ToolpackValidationError(
+                    f"Toolpack {tool_id} env.set keys must be non-empty strings"
+                )
+            if not _ENV_VAR_PATTERN.fullmatch(name):
+                raise ToolpackValidationError(
+                    f"Toolpack {tool_id} env.set key '{name}' must be uppercase A-Z, 0-9, or '_'"
+                )
+            if not isinstance(value, str):
+                raise ToolpackValidationError(
+                    f"Toolpack {tool_id} env.set['{name}'] must be a string"
+                )
+            assignments[name] = value
+        validated["set"] = assignments
+
+    return validated
+
+
+def _validate_templating(value: Any, tool_id: str) -> dict[str, Any]:
+    if value is None:
+        return {}
+
+    templating_mapping = _require_mapping(value, "templating", tool_id)
+    validated: dict[str, Any] = {}
+
+    for key in templating_mapping:
+        if key not in {"engine", "cacheKey", "context"}:
+            raise ToolpackValidationError(
+                f"Toolpack {tool_id} templating contains unknown key '{key}'"
+            )
+
+    if "engine" in templating_mapping:
+        engine = templating_mapping["engine"]
+        if not isinstance(engine, str) or engine not in _ALLOWED_TEMPLATING_ENGINES:
+            raise ToolpackValidationError(
+                f"Toolpack {tool_id} templating.engine must be one of {_ALLOWED_TEMPLATING_ENGINES}"
+            )
+        validated["engine"] = engine
+
+    if "cacheKey" in templating_mapping:
+        cache_key = templating_mapping["cacheKey"]
+        if not isinstance(cache_key, str) or not cache_key:
+            raise ToolpackValidationError(
+                f"Toolpack {tool_id} templating.cacheKey must be a non-empty string"
+            )
+        validated["cacheKey"] = cache_key
+
+    if "context" in templating_mapping:
+        context_mapping = _require_mapping(
+            templating_mapping["context"],
+            "templating.context",
+            tool_id,
+        )
+        try:
+            json.dumps(context_mapping)
+        except (TypeError, ValueError) as exc:
+            raise ToolpackValidationError(
+                f"Toolpack {tool_id} templating.context must be JSON serialisable: {exc}"
+            ) from exc
+        validated["context"] = dict(context_mapping)
+
+    return validated

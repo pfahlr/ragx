@@ -10,7 +10,7 @@ Setup:
 
 Request:
 
--Complete `codex/agents/TASKS/05h_toolpacks_loader_metadata_validation.yaml`
+-Complete `codex/agents/TASKS/05i_toolpacks_loader_caps_env_templating.yaml`
 
 Requirements: 
 - verify operation using a combination of the feedback from tests and by running the components in the environment and analyzing their outputs
@@ -59,8 +59,8 @@ performs best.
 - [x] codex/agents/TASKS/05e_toolpacks_tests_completeness.yaml
 - [x] codex/agents/TASKS/05f_toolpacks_docs_sync.yaml
 - [x] codex/agents/TASKS/05g_toolpacks_legacy_shim.yaml
-- [+] codex/agents/TASKS/05h_toolpacks_loader_metadata_validation.yaml
-- [ ] codex/agents/TASKS/05i_toolpacks_loader_caps_env_templating.yaml
+- [x] codex/agents/TASKS/05h_toolpacks_loader_metadata_validation.yaml
+- [+] codex/agents/TASKS/05i_toolpacks_loader_caps_env_templating.yaml
 - [ ] codex/agents/TASKS/05j_toolpacks_loader_execution_validation.yaml
 
 - [ ] codex/agents/TASKS/06a_core_tools_minimal_subset.yaml

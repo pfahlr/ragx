@@ -40,9 +40,13 @@ def _spec_compliant_toolpack(
         "deterministic": True,
         "timeoutMs": 1000,
         "limits": {"maxInputBytes": 4096, "maxOutputBytes": 8192},
-        "caps": {"cpu": "500m"},
-        "env": {"LOG_LEVEL": "INFO"},
-        "templating": {"prompt": "{{ text }}"},
+        "caps": {"network": ["https"], "subprocess": False},
+        "env": {"passthrough": ["LOG_LEVEL"], "set": {"REGION": "us-east-1"}},
+        "templating": {
+            "engine": "jinja2",
+            "cacheKey": "{{ id }}",
+            "context": {"stable": True},
+        },
         "inputSchema": {"$ref": input_ref},
         "outputSchema": {"$ref": output_ref},
         "execution": {"kind": "python", "module": "toolpacks.echo:run"},
@@ -83,7 +87,18 @@ def test_toolpack_loader_resolves_spec_fields(tmp_path: Path) -> None:
             _spec_compliant_toolpack(
                 input_ref=os.path.relpath(input_schema_path, toolpacks_dir),
                 output_ref=os.path.relpath(output_schema_path, toolpacks_dir),
-                overrides={"env": {"LOG_LEVEL": "DEBUG"}},
+                overrides={
+                    "caps": {"network": ["https"], "subprocess": True},
+                    "env": {
+                        "passthrough": ["REQUEST_ID"],
+                        "set": {"LOG_LEVEL": "DEBUG"},
+                    },
+                    "templating": {
+                        "engine": "jinja2",
+                        "cacheKey": "{{ id }}",
+                        "context": {"stable": False},
+                    },
+                },
             ),
             sort_keys=False,
         ),
@@ -96,7 +111,16 @@ def test_toolpack_loader_resolves_spec_fields(tmp_path: Path) -> None:
     assert toolpack.timeout_ms == 1000
     assert toolpack.limits["maxInputBytes"] == 4096
     assert toolpack.execution["kind"] == "python"
-    assert toolpack.env == {"LOG_LEVEL": "DEBUG"}
+    assert toolpack.caps == {"network": ["https"], "subprocess": True}
+    assert toolpack.env == {
+        "passthrough": ["REQUEST_ID"],
+        "set": {"LOG_LEVEL": "DEBUG"},
+    }
+    assert toolpack.templating == {
+        "engine": "jinja2",
+        "cacheKey": "{{ id }}",
+        "context": {"stable": False},
+    }
     assert toolpack.input_schema["required"] == ["prompt"]
     assert toolpack.output_schema["properties"]["text"]["type"] == "string"
 
@@ -310,6 +334,72 @@ def test_toolpack_loader_rejects_invalid_version(tmp_path: Path) -> None:
 
     loader = ToolpackLoader()
     with pytest.raises(ToolpackValidationError, match=r"major\.minor\.patch"):
+        loader.load_dir(toolpacks_dir)
+
+
+def test_toolpack_loader_rejects_unknown_caps_key(tmp_path: Path) -> None:
+    schemas_dir = tmp_path / "schemas"
+    schema_path = schemas_dir / "schema.json"
+    _write_json(
+        schema_path,
+        {"$schema": "https://json-schema.org/draft/2020-12/schema", "type": "object"},
+    )
+
+    toolpacks_dir = tmp_path / "toolpacks"
+    toolpacks_dir.mkdir()
+    invalid = _spec_compliant_toolpack(
+        input_ref=os.path.relpath(schema_path, toolpacks_dir),
+        output_ref=os.path.relpath(schema_path, toolpacks_dir),
+        overrides={"caps": {"network": ["https"], "invalid": True}},
+    )
+    _write_yaml(toolpacks_dir / "invalid.tool.yaml", yaml.safe_dump(invalid, sort_keys=False))
+
+    loader = ToolpackLoader()
+    with pytest.raises(ToolpackValidationError, match="caps contains unknown key"):
+        loader.load_dir(toolpacks_dir)
+
+
+def test_toolpack_loader_rejects_env_passthrough_case(tmp_path: Path) -> None:
+    schemas_dir = tmp_path / "schemas"
+    schema_path = schemas_dir / "schema.json"
+    _write_json(
+        schema_path,
+        {"$schema": "https://json-schema.org/draft/2020-12/schema", "type": "object"},
+    )
+
+    toolpacks_dir = tmp_path / "toolpacks"
+    toolpacks_dir.mkdir()
+    invalid = _spec_compliant_toolpack(
+        input_ref=os.path.relpath(schema_path, toolpacks_dir),
+        output_ref=os.path.relpath(schema_path, toolpacks_dir),
+        overrides={"env": {"passthrough": ["lower"], "set": {}}},
+    )
+    _write_yaml(toolpacks_dir / "invalid.tool.yaml", yaml.safe_dump(invalid, sort_keys=False))
+
+    loader = ToolpackLoader()
+    with pytest.raises(ToolpackValidationError, match="env.passthrough"):
+        loader.load_dir(toolpacks_dir)
+
+
+def test_toolpack_loader_rejects_templating_engine(tmp_path: Path) -> None:
+    schemas_dir = tmp_path / "schemas"
+    schema_path = schemas_dir / "schema.json"
+    _write_json(
+        schema_path,
+        {"$schema": "https://json-schema.org/draft/2020-12/schema", "type": "object"},
+    )
+
+    toolpacks_dir = tmp_path / "toolpacks"
+    toolpacks_dir.mkdir()
+    invalid = _spec_compliant_toolpack(
+        input_ref=os.path.relpath(schema_path, toolpacks_dir),
+        output_ref=os.path.relpath(schema_path, toolpacks_dir),
+        overrides={"templating": {"engine": "liquid"}},
+    )
+    _write_yaml(toolpacks_dir / "invalid.tool.yaml", yaml.safe_dump(invalid, sort_keys=False))
+
+    loader = ToolpackLoader()
+    with pytest.raises(ToolpackValidationError, match="templating.engine"):
         loader.load_dir(toolpacks_dir)
 
 
