@@ -1,14 +1,189 @@
 id: 06a_core_tools_minimal_subset
 title: Core tools minimal subset over Python toolpacks
-description: >
-  Implement minimal Python toolpacks for exports.render.markdown,
-  vector.query.search (dummy), docs.load.fetch (local).
+summary: >-
+  Bring up a runnable slice of the MCP core-tools stack using deterministic Python
+  toolpacks and JSON-schema validation so downstream agents can exercise the
+  mcp.tool:* surface before full provider integration.
+description: |-
+  Implement the minimal, deterministic subset of the core MCP tools specified in
+  `components.core_tools` of `codex/specs/ragx_master_spec.yaml` using Python
+  toolpacks executed through the existing Toolpacks runtime.  The target tools are:
 
+  * `mcp.tool:exports.render.markdown` — render Markdown from Jinja2 template+
+    metadata, with deterministic front-matter handling.
+  * `mcp.tool:vector.query.search` — query a stub/dummy vector index that returns
+    scripted results and enforces schema/limit invariants.
+  * `mcp.tool:docs.load.fetch` — load local Markdown/JSON files from a sandboxed
+    directory with deterministic fixtures and byte/extension guards.
+
+  The implementation MUST surface structured JSON logs (JSON-per-line) covering
+  agent decisions, tool invocation attempts, retries, failures, and completion
+  metadata.  Logs must persist to disk for regression diffing and include
+  timestamps, agent id, task id, step id, trace id, tool id, status, duration,
+  attempt count, and error payloads when relevant.  Tests must be written first
+  (TDD) and must capture golden log fixtures for deterministic diffing with
+  DeepDiff-based comparisons that whitelist volatile fields (timestamps,
+  duration, run_id).  Provide an execution diagram documenting the request flow
+  from MCP server transports through Toolpacks runtime and back.
+references:
+  spec:
+    - components.core_tools
+    - components.mcp_server
+    - components.toolpacks_runtime
+    - components.observability (TraceWriter + logs requirements)
+  tasks_prereq:
+    - 05a_toolpacks_loader_minimal
+    - 05b_toolpacks_executor_python_only
+    - 05d_toolpacks_executor_python_only_plus
+    - 10a_observability_trace_metrics (log field conventions)
+  docs:
+    - codex/specs/ragx_master_spec.yaml#L220-L320
+    - codex/specs/ragx_master_spec.yaml#tools
+scope:
+  code:
+    - apps/mcp_server/**
+    - apps/toolpacks/**
+    - tests/unit/mcp/**
+    - tests/e2e/mcp/**
+    - tests/fixtures/mcp/**
+    - docs/mcp/**
+  exclusions:
+    - No network providers
+    - No vector database integrations beyond deterministic stub fixtures
 acceptance:
-  - tests/unit/test_core_tools_schemas.py pass
-  - tests/e2e/test_mcp_minimal_core_tools.py pass
-
-steps:
-  - Provide schema files under apps/mcp_server/schemas/tools/.
-  - Implement dummy Python toolpacks.
-  - Wire MCP server to load/serve these.
+  - pytest -k "core_tools_minimal" passes (unit + e2e modules listed below).
+  - JSON schemas for the three tools validate against jsonschema Draft 2020-12.
+  - Structured JSON logs land at `runs/mcp/core_tools_minimal.jsonl` with all
+    required fields and parse via `json.loads`.
+  - Golden log diff test passes using DeepDiff with whitelist for ["ts",
+    "duration_ms", "run_id", "attempt_id"].
+  - Agent execution diagram committed under `docs/mcp/core_tools_minimal_flow.md`
+    and referenced from README if present.
+  - MCP server CLI (`mcp-server --stdio --toolpacks apps/mcp_server/toolpacks/core`)
+    loads toolpacks and responds to invocation requests with deterministic
+    payloads conforming to schemas.
+  - Toolpacks loader/executor emit retries + failure logs when provided malformed
+    inputs in tests (simulated error paths).
+deliverables:
+  schemas:
+    - apps/mcp_server/schemas/tools/exports_render_markdown.input.schema.json
+    - apps/mcp_server/schemas/tools/exports_render_markdown.output.schema.json
+    - apps/mcp_server/schemas/tools/vector_query_search.input.schema.json
+    - apps/mcp_server/schemas/tools/vector_query_search.output.schema.json
+    - apps/mcp_server/schemas/tools/docs_load_fetch.input.schema.json
+    - apps/mcp_server/schemas/tools/docs_load_fetch.output.schema.json
+  toolpacks:
+    - apps/mcp_server/toolpacks/core/exports.render.markdown.tool.yaml
+    - apps/mcp_server/toolpacks/core/vector.query.search.tool.yaml
+    - apps/mcp_server/toolpacks/core/docs.load.fetch.tool.yaml
+  python_modules:
+    - apps/toolpacks/python/core/exports_render_markdown.py
+    - apps/toolpacks/python/core/vector_query_search.py
+    - apps/toolpacks/python/core/docs_load_fetch.py
+    - apps/mcp_server/runtime/core_tools.py (registry glue + logging hooks)
+  logging:
+    - Structured JSON logger utility under apps/mcp_server/logging.py producing
+      `McpLogEvent` dataclass -> json serialization.
+    - Persistent log writer storing JSON lines to `runs/mcp/core_tools_minimal.jsonl`.
+  tests:
+    - Unit, integration, and regression tests described in the `tests` section.
+  docs:
+    - docs/mcp/core_tools_minimal_flow.md (diagram + narrative)
+    - README updates (apps/mcp_server/README.md) summarizing available tools.
+tests:
+  unit:
+    - path: tests/unit/mcp/test_core_tool_schemas_minimal.py
+      description: Validate JSON schemas + toolpack metadata, ensure deterministic
+        ToolpackLoader integration and schema discovery.
+    - path: tests/unit/mcp/test_core_tool_logging.py
+      description: Assert structured log events for success, retry, and failure
+        flows include required fields and values.
+    - path: tests/unit/mcp/test_vector_query_stub.py
+      description: Exercise stub vector index behaviours (top_k bounds, filters,
+        deterministic payloads, retryable errors).
+  integration:
+    - path: tests/integration/mcp/test_core_tool_invocations.py
+      description: Spin up in-process MCP service, invoke each tool via Toolpack
+        executor, verify schemas, logging side-effects, and file outputs.
+  regression:
+    - path: tests/regression/mcp/test_core_tool_log_diff.py
+      description: Compare freshly captured logs against
+        `tests/fixtures/mcp/logs/core_tools_minimal_golden.jsonl` using DeepDiff
+        with whitelist for volatile fields and descriptive diff failure messages.
+fixtures:
+  - tests/fixtures/mcp/logs/core_tools_minimal_golden.jsonl
+  - tests/fixtures/mcp/vector_query_stub_index.json
+  - tests/fixtures/mcp/docs/sample_article.md
+  - tests/fixtures/mcp/docs/sample_metadata.json
+observability_requirements:
+  logging_fields:
+    - ts (ISO-8601 with timezone)
+    - agent_id (default "mcp_server")
+    - task_id ("06a_core_tools_minimal_subset")
+    - step_id (incremental counter per invocation)
+    - trace_id (uuid4)
+    - span_id (uuid4 per attempt)
+    - tool_id
+    - event (invocation_attempt|invocation_success|invocation_retry|invocation_failure)
+    - status (success|error)
+    - duration_ms
+    - attempt
+    - input_bytes
+    - output_bytes
+    - error (object with code/message, optional)
+    - metadata (object; include schema_version, deterministic flag)
+  storage:
+    path: runs/mcp/core_tools_minimal.jsonl
+    rotation: disabled (single file per test run)
+    retention: keep last 5 runs (tests clean up fixtures)
+  diff_whitelist:
+    - ts
+    - trace_id
+    - span_id
+    - duration_ms
+    - attempt_id
+implementation_steps:
+  - name: Author failing tests and fixtures
+    actions:
+      - Scaffold unit/integration/regression tests listed above with pytest marks
+        (`@pytest.mark.usefixtures("tmp_path")` etc.) ensuring they fail against
+        current code.
+      - Generate golden logs by capturing expected JSON events into the fixture
+        file; include comment header describing whitelist policy.
+  - name: Define schemas + toolpacks
+    actions:
+      - Write Draft 2020-12 JSON schemas following spec canonical structures and
+        referencing shared definitions when available.
+      - Author Python toolpack YAMLs pointing to modules in
+        `apps/toolpacks/python/core/` with deterministic metadata (version "0.1.0").
+  - name: Implement Python tool modules
+    actions:
+      - exports_render_markdown: Use Jinja2 templates + metadata, deterministic
+        newline conventions, enforce maxInputBytes/OutputBytes.
+      - vector_query_search: Load stub index fixture, enforce top_k, return
+        deterministic scoring/ranking, support retry simulation when
+        `simulate_error` flag present.
+      - docs_load_fetch: Restrict reads to allowed fixture dir, support markdown
+        + front-matter extraction, emit sha256 + byte counts.
+  - name: Wire MCP runtime + logging
+    actions:
+      - Extend MCP server runtime to load new toolpacks, execute via executor,
+        and emit structured log events (success + retry + failure).
+      - Persist logs and expose helper to fetch last run for tests.
+  - name: Finalize documentation + diagram
+    actions:
+      - Document flow + logging fields in `docs/mcp/core_tools_minimal_flow.md`.
+      - Include mermaid sequence diagram covering HTTP/STDIO -> MCP -> Toolpack ->
+        Logger -> Response.
+artifacts:
+  - name: mcp_core_tools_minimal_logs
+    type: jsonl
+    path: runs/mcp/core_tools_minimal.jsonl
+  - name: execution_diagram
+    type: markdown
+    path: docs/mcp/core_tools_minimal_flow.md
+notes:
+  - Prefer existing libraries (jinja2, deepdiff, jsonschema) already declared in
+    project requirements; do not reinvent logging/serialization utilities.
+  - Ensure deterministic ordering in responses and logs (sort keys, stable lists).
+  - Avoid network and filesystem side effects outside `tests/fixtures/mcp`.
