@@ -258,7 +258,7 @@ components:
       exports_render_markdown_output: "apps/mcp_server/schemas/tools/exports_render_markdown.output.schema.json"
     toolpacks_dir: "apps/mcp_server/toolpacks/"
     prompts_dir: "apps/mcp_server/prompts/"
-  dependencies: [fastapi, uvicorn, pydantic, jsonschema, jinja2, httpx]
+  dependencies: [fastapi, uvicorn, pydantic, jsonschema, jinja2, httpx, packaging]
   observability:
     logs: [trace_id, transport, tool, version, duration_ms, io_bytes, status, error_code]
     metrics: [mcp_requests_total, mcp_request_duration_seconds_bucket, mcp_errors_total, mcp_io_bytes_total]
@@ -290,7 +290,7 @@ components:
   data_contracts:
     execution_stdin_example: { json: { input: { any: "object" } } }
     execution_stdout_example: { json: { any: "tool_data" } }
-  dependencies: [jinja2, httpx]
+  dependencies: [jinja2, httpx, packaging]
   observability:
     logs: [exec_kind, argv_or_module, exit_code, duration_ms, out_bytes]
   metrics: [toolpack_exec_total, toolpack_timeout_total, toolpack_bytes_out_total]
