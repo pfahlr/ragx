@@ -41,16 +41,21 @@ jobs:
 
       # Export pybind11_DIR so CMake can find it (portable)
       - name: Export pybind11_DIR
+        id: pybind11
         run: |
-          echo "pybind11_DIR=$(python -m pybind11 --cmakedir)" >> $GITHUB_ENV
-          echo "Using pybind11_DIR=$pybind11_DIR"
+          set -e
+          cmakedir="$(python -m pybind11 --cmakedir)"
+          echo "pybind11_DIR=$cmakedir" >> "$GITHUB_ENV"
+          echo "cmakedir=$cmakedir" >> "$GITHUB_OUTPUT"
+          echo "Using pybind11_DIR=$cmakedir"
 
       # Install ccache (small, fast) so compiler launcher works
       - name: Install ccache
         if: ${{ steps.changes.outputs.native == 'true' && hashFiles('cpp/CMakeLists.txt') != '' }}
         run: |
-          echo "set man-db/auto-update false" | sudo debconf-communicate
-          sudo dpkg-reconfigure man-db
+          export DEBIAN_FRONTEND=noninteractive
+          echo "set man-db/auto-update false" | sudo debconf-communicate -f noninteractive
+          sudo dpkg-reconfigure -f noninteractive man-db
           sudo apt-get update
           sudo apt-get install -y ccache
           ccache --version
@@ -97,7 +102,7 @@ jobs:
       - name: Configure CMake
         if: ${{ steps.changes.outputs.native == 'true' && hashFiles('cpp/CMakeLists.txt') != '' }}
         env:
-          pybind11_DIR: ${{ env.pybind11_DIR }}
+          pybind11_DIR: ${{ steps.pybind11.outputs.cmakedir }}
         run: |
           mkdir -p ~/.cache/ccache
           ccache --max-size=200M || true
