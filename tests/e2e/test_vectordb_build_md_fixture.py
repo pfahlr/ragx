@@ -78,9 +78,9 @@ Doc two body paragraph.
     doc_ids = {entry["id"] for entry in docs}
     assert doc_ids == {"doc-one", "doc_two"}
 
-    doc_entries = {entry["id"]: entry for entry in docs}
     assert "doc-one" in documents
-    assert doc_entries["doc-one"]["metadata"]["slug"] == "doc-one"
+    assert doc_ids"doc-one"]["metadata"]["slug"] == "doc-one"
+
 
 
 
