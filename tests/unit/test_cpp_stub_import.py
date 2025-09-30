@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import builtins
 import importlib
 import sys
 import types
@@ -76,3 +77,23 @@ def test_cpp_backend_uses_extension_when_available(monkeypatch: pytest.MonkeyPat
     info = backend.capabilities()
     assert info["available"] is True
     assert info["kinds"] == ["flat"]
+
+
+def test_cpp_backend_import_error_is_recorded(monkeypatch: pytest.MonkeyPatch) -> None:
+    original_import = builtins.__import__
+
+    def failing_import(name, globals=None, locals=None, fromlist=(), level=0):
+        if name == "_ragcore_cpp":
+            raise ImportError("dynamic loader failure")
+        return original_import(name, globals, locals, fromlist, level)
+
+    monkeypatch.setattr(builtins, "__import__", failing_import)
+
+    module = _import_cpp_module(monkeypatch)
+
+    assert module.HAS_CPP_EXTENSION is False
+
+    backend = module.CppBackend()
+    info = backend.capabilities()
+    assert info["available"] is False
+    assert "dynamic loader failure" in info["reason"]

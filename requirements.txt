@@ -1,6 +1,7 @@
 jinja2
 jsonschema
 numpy
+packaging
 pyyaml
 pytest
 pytest-cov
