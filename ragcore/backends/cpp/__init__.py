@@ -65,7 +65,11 @@ else:
         CppFaissBackend = _ExtensionFaissBackend
         CppHandle = _CppHandle
         _HAS_EXTENSION = True
-    except ModuleNotFoundError as exc:  # pragma: no cover - optional extension
+    except Exception as exc:  # pragma: no cover - optional extension
+        # Catch any import-time failure so the Python shim remains importable even
+        # if the compiled extension exists but cannot be loaded (e.g., ABI
+        # mismatch or missing shared libraries). The recorded error is exposed
+        # via the fallback backend's capabilities() for observability.
         _IMPORT_ERROR = exc
 
 

@@ -43,6 +43,25 @@ def test_cpp_backend_import_falls_back_when_extension_missing(
         backend.build({})
 
 
+def test_cpp_backend_import_falls_back_when_extension_errors(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fake_extension = types.ModuleType("_ragcore_cpp")
+    fake_extension.CppHandle = object
+
+    module = _import_cpp_module(monkeypatch, fake_extension=fake_extension)
+
+    assert module.HAS_CPP_EXTENSION is False
+
+    backend = module.CppBackend()
+    info = backend.capabilities()
+    assert info["available"] is False
+    assert "CppBackend" in info["reason"]
+
+    with pytest.raises(RuntimeError):
+        backend.build({})
+
+
 def test_cpp_backend_uses_extension_when_available(monkeypatch: pytest.MonkeyPatch) -> None:
     fake_extension = types.ModuleType("_ragcore_cpp")
 

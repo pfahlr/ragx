@@ -18,3 +18,24 @@ ignore_missing_imports = true
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"
+
+[project]
+name = "ragx"
+dynamic = ["version"]
+dependencies = [
+    "jinja2",
+    "jsonschema",
+    "numpy",
+    "packaging",
+    "pyyaml",
+]
+
+[project.optional-dependencies]
+dev = [
+    "mypy",
+    "pybind11",
+    "pytest",
+    "pytest-cov",
+    "ruff",
+    "yamllint",
+]
