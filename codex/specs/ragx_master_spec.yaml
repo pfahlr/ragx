@@ -1,4 +1,3 @@
-
 # RAGX Master Spec
 version: 0.3
 metadata:
@@ -318,7 +317,6 @@ components:
       metrics: [tool_success_total, tool_error_total, tool_duration_seconds_bucket]
     risks:
       - provider_normalization_gaps
-
   - id: rest_facade
     phase: P1
     title: REST Parity Facade
@@ -667,7 +665,6 @@ components:
     risks:
       - flakiness_if_external_network
 
-# Tool registry (for pricing + tags → used by adapters & linter)
 tool_registry:
   gpt:
     type: llm
