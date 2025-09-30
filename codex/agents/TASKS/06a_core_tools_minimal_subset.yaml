@@ -1,14 +1,148 @@
+version: 1
 id: 06a_core_tools_minimal_subset
-title: Core tools minimal subset over Python toolpacks
+title: Core MCP tools minimal subset (Python toolpacks + observability)
+component_ids: [core_tools, toolpacks_runtime, mcp_server, observability_ci]
+depends_on: [05b_toolpacks_executor_python_only, 05c_toolpacks_loader_spec_alignment, 05h_toolpacks_loader_metadata_validation]
 description: >
-  Implement minimal Python toolpacks for exports.render.markdown,
-  vector.query.search (dummy), docs.load.fetch (local).
-
+  Implement the minimal canonical MCP tool set backed by Python toolpacks while
+  adhering to ragx_master_spec component contracts. This task covers
+  JSON Schema authoring, deterministic stub implementations, MCP server wiring,
+  structured observability, and regression-safe log diffing.
+preconditions:
+  - "codex/specs/ragx_master_spec.yaml defines components.core_tools and components.mcp_server.schemas.tools"
+  - "Toolpack loader + executor suite from tasks 05a-05h is green (pytest -k 'toolpacks')"
+  - "deepdiff dependency is available in the development environment"
+artifacts:
+  structured_logs:
+    path: runs/core_tools/minimal.jsonl
+    format: jsonl
+    schema:
+      description: Structured runtime log for minimal core tools execution.
+      required_fields:
+        - ts
+        - agentId
+        - taskId
+        - stepId
+        - event
+        - level
+        - tool
+        - status
+        - retries
+        - durationMs
+        - metadata
+      metadata_fields:
+        - requestId
+        - runId
+        - mcpTransport
+        - toolpackId
+  log_diff:
+    baseline_path: tests/fixtures/mcp/core_tools/minimal_golden.jsonl
+    tool: deepdiff.DeepDiff
+    whitelist_fields:
+      - ts
+      - durationMs
+      - requestId
+      - runId
+      - pid
+    description: >
+      Compare structured logs against the golden baseline while ignoring
+      nondeterministic identifiers.
+deliverables:
+  - path: apps/mcp_server/schemas/tools/exports_render_markdown.input.schema.json
+    description: JSON Schema for exports.render.markdown input aligned with spec.
+  - path: apps/mcp_server/schemas/tools/exports_render_markdown.output.schema.json
+    description: JSON Schema for exports.render.markdown output aligned with spec.
+  - path: apps/mcp_server/schemas/tools/vector_query_search.input.schema.json
+    description: JSON Schema for vector.query.search input (minimal stub fields).
+  - path: apps/mcp_server/schemas/tools/vector_query_search.output.schema.json
+    description: JSON Schema for vector.query.search output (deterministic stub response).
+  - path: apps/mcp_server/schemas/tools/docs_load_fetch.input.schema.json
+    description: JSON Schema for docs.load.fetch input enforcing safe path params.
+  - path: apps/mcp_server/schemas/tools/docs_load_fetch.output.schema.json
+    description: JSON Schema for docs.load.fetch output including content + metadata.
+  - path: apps/mcp_server/toolpacks/core/exports.render.markdown.tool.yaml
+    description: Python toolpack manifest referencing exports.render.markdown schema + module.
+  - path: apps/mcp_server/toolpacks/core/vector.query.search.tool.yaml
+    description: Python toolpack manifest referencing vector.query.search schema + module.
+  - path: apps/mcp_server/toolpacks/core/docs.load.fetch.tool.yaml
+    description: Python toolpack manifest referencing docs.load.fetch schema + module.
+  - path: apps/toolpacks/python/core/exports/render_markdown.py
+    description: Deterministic Markdown renderer (front-matter aware) used by toolpack.
+  - path: apps/toolpacks/python/core/vector/query_search.py
+    description: Deterministic stub returning predictable vector hits for testing.
+  - path: apps/toolpacks/python/core/docs/load_fetch.py
+    description: Local filesystem loader with sandboxed root + retries on missing files.
+  - path: docs/core_tools/minimal.md
+    description: Developer documentation for minimal core tools + logging workflow.
+  - path: scripts/diff_core_tool_logs.py
+    description: CLI helper to run minimal suite and diff logs vs golden baseline.
+actions:
+  - stage: tests
+    summary: Write failing tests for schemas, execution, logging, and diffing before implementation.
+    tests:
+      unit:
+        - path: tests/unit/test_core_tools_schemas.py
+          description: >
+            Expand coverage to load the new schema files, call jsonschema.Draft202012Validator.check_schema,
+            and ensure schema $id values mirror ragx_master_spec paths.
+          assertions:
+            - Schema file exists for each components.mcp_server.schemas.tools reference in the master spec.
+            - Required properties enforce provider, query/path, and metadata fields per spec.
+        - path: tests/unit/test_core_tools_logging_minimal.py
+          description: >
+            Validate structured logging hooks emit JSON objects with required metadata, retries, and
+            status transitions. Use a fake sink/fixture to assert deterministic ordering.
+          assertions:
+            - Every log entry validates against artifacts.structured_logs.schema.
+            - Retry/failure branches emit dedicated events with incrementing stepId and retry counts.
+            - Missing logs raise descriptive AssertionError (fail loud).
+        - path: tests/unit/test_core_tools_log_diff.py
+          description: >
+            Deep-diff runtime logs against the golden fixture using deepdiff with whitelist filtering.
+            Provide helper to update the golden via --update-golden flag.
+          assertions:
+            - Non-whitelisted differences fail with diff context and pointer path.
+            - Whitelisted fields (timestamps, runId, pid) are ignored via whitelist list.
+      e2e:
+        - path: tests/e2e/test_mcp_minimal_core_tools.py
+          description: >
+            Boot the MCP server (inproc or stdio) with minimal toolpacks, invoke each tool, and ensure
+            fallbacks/retries/logs occur as specified. Capture emitted logs for diffing fixture.
+          assertions:
+            - docs.load.fetch reads tests/fixtures/mcp/core_tools/docs/example.md and retries once on missing file.
+            - vector.query.search returns deterministic hits referencing tests fixtures with stable scoring.
+            - exports.render.markdown renders Markdown with title/front-matter + code fence normalization.
+      fixtures:
+        - path: tests/fixtures/mcp/core_tools/minimal_golden.jsonl
+          description: Golden structured log sanitized for deterministic diffing.
+        - path: tests/fixtures/mcp/core_tools/docs/example.md
+          description: Local Markdown fixture with YAML front-matter for docs.load.fetch.
+  - stage: implementation
+    summary: Implement schemas, toolpacks, and Python modules per spec.
+    steps:
+      - Generate JSON Schemas exactly matching ragx_master_spec components.mcp_server.schemas.tools definitions.
+      - Implement Python modules under apps/toolpacks/python/core/* with deterministic behavior and structured logging hooks.
+      - Author toolpack YAML manifests referencing schemas + modules with deterministic flag true and timeout metadata.
+  - stage: integration
+    summary: Wire toolpacks into MCP server registry and executor.
+    steps:
+      - Extend MCP bootstrap to load apps/mcp_server/toolpacks/core directory and register schema URIs.
+      - Ensure McpService.invoke_tool routes through Toolpacks Executor with retries + fallback handling.
+      - Persist structured logs (artifacts.structured_logs.path) during invocation including success/failure events.
+  - stage: observability
+    summary: Provide logging sinks and automated diff tooling.
+    steps:
+      - Implement JSON logger utility writing newline-delimited objects with timestamp + metadata.
+      - Capture logs during e2e run and compare against golden via deepdiff.DeepDiff with whitelist.
+      - Add scripts/diff_core_tool_logs.py to run e2e test, update golden when --update-golden flag set, and print diff summary.
+  - stage: docs
+    summary: Document minimal core tools, schemas, and log diff workflow.
+    steps:
+      - Write docs/core_tools/minimal.md describing tool responsibilities, schema paths, logging fields, and diff whitelist.
+      - Cross-link to ragx_master_spec components.core_tools and observability sections.
 acceptance:
-  - tests/unit/test_core_tools_schemas.py pass
-  - tests/e2e/test_mcp_minimal_core_tools.py pass
-
-steps:
-  - Provide schema files under apps/mcp_server/schemas/tools/.
-  - Implement dummy Python toolpacks.
-  - Wire MCP server to load/serve these.
+  - "pytest tests/unit/test_core_tools_schemas.py tests/unit/test_core_tools_logging_minimal.py tests/unit/test_core_tools_log_diff.py tests/e2e/test_mcp_minimal_core_tools.py"
+  - "Structured log file runs/core_tools/minimal.jsonl exists with >= 3 tool invocation events and passes schema validation."
+  - "scripts/diff_core_tool_logs.py --check (deepdiff) reports no unexpected differences (only whitelist fields allowed)."
+  - "docs/core_tools/minimal.md documents schemas, logging requirements, diff workflow, and fallback semantics."
+  - "Toolpacks loader/executor + MCP server suites remain green (scripts/ensure_green.sh)."
