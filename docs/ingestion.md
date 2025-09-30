@@ -108,5 +108,6 @@ entry contains:
   "text": "# Document One\nBody text..."
 }
 ```
-Document identifiers default to the Markdown front-matter `id`. When not
-present the filename stem is used and deduplicated automatically.
+Document identifiers default to the Markdown front-matter `id`. When that
+field is absent the builder falls back to the front-matter `slug`, and if
+neither is provided the filename stem is used and deduplicated automatically.

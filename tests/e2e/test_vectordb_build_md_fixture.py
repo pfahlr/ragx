@@ -78,6 +78,11 @@ Doc two body paragraph.
     doc_ids = {entry["id"] for entry in docs}
     assert doc_ids == {"doc-one", "doc_two"}
 
+    assert "doc-one" in documents
+    assert doc_ids"doc-one"]["metadata"]["slug"] == "doc-one"
+
+
+
 
 def test_vectordb_build_md_fixture(tmp_path: Path) -> None:
     corpus = tmp_path / "corpus"
