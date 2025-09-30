@@ -43,6 +43,7 @@ class PyFlatHandle(VectorIndexHandle):
         *,
         requires_training: bool | None = None,
         supports_gpu: bool | None = None,
+        **_: Any,
     ) -> None:
         super().__init__(
             spec,

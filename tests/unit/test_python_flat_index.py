@@ -88,3 +88,56 @@ def test_pyflat_to_gpu_survives_base_flags() -> None:
     assert clone is not handle
     assert clone.is_gpu is False
     assert clone.device is None
+
+
+def test_pyflat_to_gpu_clones_successfully() -> None:
+    backend = PyFlatBackend()
+    handle = backend.build(
+        {
+            "backend": "py_flat",
+            "kind": "flat",
+            "metric": "l2",
+            "dim": 2,
+        }
+    )
+
+    clone = handle.to_gpu()
+
+    assert clone.spec() == handle.spec()
+    assert clone is not handle
+    assert clone.is_gpu is False
+
+
+def test_pyflat_merge_with_produces_combined_index() -> None:
+    backend = PyFlatBackend()
+    handle_one = backend.build(
+        {
+            "backend": "py_flat",
+            "kind": "flat",
+            "metric": "l2",
+            "dim": 2,
+        }
+    )
+    handle_two = backend.build(
+        {
+            "backend": "py_flat",
+            "kind": "flat",
+            "metric": "l2",
+            "dim": 2,
+        }
+    )
+
+    base_vectors = np.array([[0.0, 0.0], [1.0, 1.0]], dtype=np.float32)
+    extra_vectors = np.array([[2.0, 2.0]], dtype=np.float32)
+
+    handle_one.add(base_vectors)
+    handle_two.add(extra_vectors)
+
+    merged = handle_one.merge_with(handle_two)
+
+    assert merged is not handle_one
+    assert merged.ntotal() == 3
+    np.testing.assert_allclose(
+        merged._vectors,  # type: ignore[attr-defined]
+        np.vstack([base_vectors, extra_vectors]),
+    )

@@ -1640,6 +1640,42 @@ def test_toolpack_loader_schema_pointer_root(tmp_path: Path) -> None:
     assert loader.get("tool.echo").input_schema["title"] == "Root"
 
 
+def test_toolpack_loader_fragment_only_ref_resolves_current_file(tmp_path: Path) -> None:
+    schema_path = tmp_path / "schema.json"
+    _write_json(
+        schema_path,
+        {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "$defs": {
+                "Payload": {
+                    "type": "object",
+                    "properties": {"value": {"type": "string"}},
+                    "required": ["value"],
+                }
+            },
+            "type": "object",
+            "properties": {
+                "payload": {"$ref": "#/$defs/Payload"},
+            },
+        },
+    )
+
+    toolpacks_dir = tmp_path / "toolpacks"
+    toolpacks_dir.mkdir()
+    config = _spec_compliant_toolpack(
+        input_ref=os.path.relpath(schema_path, toolpacks_dir),
+        output_ref=os.path.relpath(schema_path, toolpacks_dir),
+    )
+    _write_yaml(toolpacks_dir / "fragment.tool.yaml", yaml.safe_dump(config, sort_keys=False))
+
+    loader = ToolpackLoader()
+    loader.load_dir(toolpacks_dir)
+
+    schema = loader.get("tool.echo").input_schema
+    assert schema["properties"]["payload"]["type"] == "object"
+    assert schema["properties"]["payload"]["properties"]["value"]["type"] == "string"
+
+
 def test_apply_json_pointer_root_returns_document() -> None:
     document = {"key": "value"}
     assert _apply_json_pointer(document, None) == document

@@ -64,7 +64,7 @@ class Toolpack:
         data: Mapping[str, Any],
         source_path: Path,
         *,
-        schema_cache: dict[tuple[Path, str], Any],
+        schema_cache: dict[tuple[Path | None, str], Any],
     ) -> Toolpack:
         if not isinstance(data, Mapping):
             raise ToolpackValidationError(
@@ -165,7 +165,7 @@ class ToolpackLoader:
             raise ToolpackValidationError(f"Toolpacks directory not found: {base_dir}")
 
         toolpacks: dict[str, Toolpack] = {}
-        schema_cache: dict[tuple[Path, str], Any] = {}
+        schema_cache: dict[tuple[Path | None, str], Any] = {}
         for path in sorted(base_dir.rglob("*.tool.yaml")):
             with path.open("r", encoding="utf-8") as handle:
                 try:
@@ -219,14 +219,21 @@ def _resolve_schema(
     schema_spec: Any,
     base_dir: Path,
     tool_id: str,
-    cache: dict[tuple[Path, str], Any],
+    cache: dict[tuple[Path | None, str], Any],
 ) -> Mapping[str, Any]:
     if not isinstance(schema_spec, Mapping):
         raise ToolpackValidationError(
             f"Toolpack {tool_id} schema definition must be a mapping"
         )
 
-    resolved = _resolve_refs(schema_spec, base_dir, cache, tool_id)
+    resolved = _resolve_refs(
+        schema_spec,
+        base_dir,
+        cache,
+        tool_id,
+        current_file=None,
+        current_document=schema_spec,
+    )
     _validate_json_schema(resolved, tool_id)
     return resolved
 
@@ -234,8 +241,11 @@ def _resolve_schema(
 def _resolve_refs(
     node: Any,
     base_dir: Path,
-    cache: dict[tuple[Path, str], Any],
+    cache: dict[tuple[Path | None, str], Any],
     tool_id: str,
+    *,
+    current_file: Path | None,
+    current_document: Any,
 ) -> Any:
     if isinstance(node, Mapping):
         if set(node.keys()) == {"$ref"}:
@@ -244,59 +254,108 @@ def _resolve_refs(
                 raise ToolpackValidationError(
                     f"Toolpack {tool_id} schema $ref must be a non-empty string"
                 )
-            return _load_ref(ref, base_dir, cache, tool_id)
+            return _load_ref(
+                ref,
+                base_dir,
+                cache,
+                tool_id,
+                current_file=current_file,
+                current_document=current_document,
+            )
         return {
-            key: _resolve_refs(value, base_dir, cache, tool_id)
+            key: _resolve_refs(
+                value,
+                base_dir,
+                cache,
+                tool_id,
+                current_file=current_file,
+                current_document=current_document,
+            )
             for key, value in node.items()
         }
     if isinstance(node, list):
-        return [_resolve_refs(item, base_dir, cache, tool_id) for item in node]
+        return [
+            _resolve_refs(
+                item,
+                base_dir,
+                cache,
+                tool_id,
+                current_file=current_file,
+                current_document=current_document,
+            )
+            for item in node
+        ]
     return node
 
 
 def _load_ref(
     reference: str,
     base_dir: Path,
-    cache: dict[tuple[Path, str], Any],
+    cache: dict[tuple[Path | None, str], Any],
     tool_id: str,
+    *,
+    current_file: Path | None,
+    current_document: Any,
 ) -> Any:
     path_part, fragment = _split_reference(reference)
-    target_path = Path(path_part) if path_part else Path()
-    if not target_path.is_absolute():
-        target_path = (base_dir / target_path).resolve()
+    target_document: Any | None = None
+    if path_part:
+        target_path = Path(path_part)
+        if not target_path.is_absolute():
+            target_path = (base_dir / target_path).resolve()
+    else:
+        target_path = current_file
+        target_document = current_document
 
     cache_key = (target_path, fragment or "")
     if cache_key in cache:
         return copy.deepcopy(cache[cache_key])
 
-    if not target_path.exists():
-        raise ToolpackValidationError(
-            f"Toolpack {tool_id} schema reference not found: {reference}"
-        )
+    if target_document is None:
+        if target_path is None:
+            raise ToolpackValidationError(
+                f"Toolpack {tool_id} schema reference not found: {reference}"
+            )
+        if not target_path.exists():
+            raise ToolpackValidationError(
+                f"Toolpack {tool_id} schema reference not found: {reference}"
+            )
 
-    try:
-        with target_path.open("r", encoding="utf-8") as handle:
-            if target_path.suffix in {".yaml", ".yml"}:
-                try:
-                    document = yaml.safe_load(handle) or {}
-                except yaml.YAMLError as exc:
-                    raise ToolpackValidationError(
-                        f"Toolpack {tool_id} failed to parse schema {reference}: {exc}"
-                    ) from exc
-            else:
-                try:
-                    document = json.load(handle)
-                except json.JSONDecodeError as exc:
-                    raise ToolpackValidationError(
-                        f"Toolpack {tool_id} failed to load schema {reference}: {exc}"
-                    ) from exc
-    except OSError as exc:
-        raise ToolpackValidationError(
-            f"Toolpack {tool_id} failed to open schema {reference}: {exc}"
-        ) from exc
+        try:
+            with target_path.open("r", encoding="utf-8") as handle:
+                if target_path.suffix in {".yaml", ".yml"}:
+                    try:
+                        target_document = yaml.safe_load(handle) or {}
+                    except yaml.YAMLError as exc:
+                        raise ToolpackValidationError(
+                            f"Toolpack {tool_id} failed to parse schema {reference}: {exc}"
+                        ) from exc
+                else:
+                    try:
+                        target_document = json.load(handle)
+                    except json.JSONDecodeError as exc:
+                        raise ToolpackValidationError(
+                            f"Toolpack {tool_id} failed to load schema {reference}: {exc}"
+                        ) from exc
+        except OSError as exc:
+            raise ToolpackValidationError(
+                f"Toolpack {tool_id} failed to open schema {reference}: {exc}"
+            ) from exc
 
-    fragment_data = _apply_json_pointer(document, fragment) if fragment else document
-    resolved = _resolve_refs(fragment_data, target_path.parent, cache, tool_id)
+    fragment_data = (
+        _apply_json_pointer(target_document, fragment)
+        if fragment
+        else target_document
+    )
+    next_base = target_path.parent if target_path is not None else base_dir
+    resolved = _resolve_refs(
+        fragment_data,
+        next_base,
+        cache,
+        tool_id,
+        current_file=target_path,
+        current_document=target_document,
+    )
     cache[cache_key] = copy.deepcopy(resolved)
     return copy.deepcopy(resolved)
 
