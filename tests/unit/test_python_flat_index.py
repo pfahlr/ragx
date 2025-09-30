@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-import numpy as np
 import pytest
+
+np = pytest.importorskip("numpy", reason="PyFlat backend requires numpy")
 
 from ragcore.backends.pyflat import PyFlatBackend
 
@@ -84,6 +85,10 @@ def test_pyflat_clone_handles_gpu_and_merge() -> None:
     assert gpu_clone.ntotal() == handle.ntotal()
     assert gpu_clone.requires_training() is False
     assert gpu_clone.is_gpu is False
+    assert gpu_clone.spec()["backend"] == "py_flat"
+
+    double_clone = gpu_clone.to_gpu()
+    assert double_clone.ntotal() == gpu_clone.ntotal()
 
     other = backend.build(spec)
     other.add(np.array([[1.0, 0.0]], dtype=np.float32))
@@ -93,3 +98,6 @@ def test_pyflat_clone_handles_gpu_and_merge() -> None:
     assert merged.ntotal() == handle.ntotal() + other.ntotal()
     serialized = merged.serialize_cpu()
     assert serialized.ids.shape[0] == merged.ntotal()
+
+    merged_gpu = merged.to_gpu()
+    assert merged_gpu.ntotal() == merged.ntotal()

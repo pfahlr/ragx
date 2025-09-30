@@ -3,6 +3,10 @@ from __future__ import annotations
 import json
 import subprocess
 import sys
+
+import pytest
+
+pytest.importorskip("numpy", reason="PyFlat CLI backend requires numpy")
 from pathlib import Path
 
 
@@ -134,13 +138,22 @@ def test_vectordb_build_md_fixture(tmp_path: Path) -> None:
     docmap = json.loads(docmap_path.read_text(encoding="utf-8"))
     documents = {entry["id"]: entry for entry in docmap["documents"]}
 
-    doc_one = documents["doc-one"]
+    def _get_doc(doc_id: str) -> dict[str, object]:
+        candidates = (doc_id, doc_id.replace("-", "_"))
+        for candidate in candidates:
+            entry = documents.get(candidate)
+            if entry is not None:
+                return entry
+        raise AssertionError(f"document with id '{doc_id}' not found; seen ids={sorted(documents)}")
+
+    doc_one = _get_doc("doc-one")
     assert doc_one["metadata"]["title"] == "Document One"
     assert doc_one["metadata"]["category"] == "reference"
     assert doc_one["metadata"]["source_format"] == "md"
     assert doc_one["metadata"]["source_relpath"].endswith("doc1.md")
+    assert doc_one["metadata"].get("id") == "doc-one"
 
-    doc_two = documents["doc2"]
+    doc_two = _get_doc("doc2")
     assert doc_two["metadata"]["title"] == "Document Two"
     assert doc_two["metadata"]["tags"] == "t1, t2"
     assert doc_two["metadata"]["source_format"] == "md"

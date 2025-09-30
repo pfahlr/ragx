@@ -812,6 +812,7 @@ tests:
   ci:
     coverage_minimum: 85
 
+flowscript_decisions:
   - id: flowscript_parser_engine
     question: Which runtime parses FlowScript in P1?
     options: [peggy_node_subprocess, lark_python_inproc, tree_sitter_subprocess]
