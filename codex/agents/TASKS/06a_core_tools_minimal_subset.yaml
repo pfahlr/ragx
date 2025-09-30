@@ -1,14 +1,137 @@
 id: 06a_core_tools_minimal_subset
 title: Core tools minimal subset over Python toolpacks
-description: >
-  Implement minimal Python toolpacks for exports.render.markdown,
-  vector.query.search (dummy), docs.load.fetch (local).
-
+owner: codex
+priority: P0
+phase: P0
+depends_on:
+  - 05a_toolpacks_loader_minimal
+  - 05b_toolpacks_executor_python_only
+  - 05c_toolpacks_loader_spec_alignment
+  - 05d_toolpacks_executor_python_only_plus
+  - 05h_toolpacks_loader_metadata_validation
+spec_refs:
+  components:
+    - core_tools
+    - toolpacks_runtime
+    - mcp_server
+  arg_spec:
+    - mcp_server
+    - task_runner
+summary: >
+  Bootstrap the MCP core tool surface with deterministic Python toolpacks for
+  docs.load.fetch, vector.query.search, and exports.render.markdown while
+  capturing structured JSON logs for every decision and tool invocation.
+motivation: >
+  The runner, planner, and downstream components depend on a minimal core tool
+  contract to unblock early flows and enable observability work (components:
+  core_tools, mcp_server). This task supplies contract-compliant schemas,
+  toolpacks, and logging so later tasks can extend coverage without reworking
+  foundations.
+scope:
+  must_include:
+    - JSON Schemas for docs.load.fetch, vector.query.search, exports.render.markdown
+      inputs/outputs under apps/mcp_server/schemas/tools/.
+    - Python toolpacks implementing deterministic stub behaviors using recorded
+      fixtures only (no external network calls).
+    - Wiring inside the MCP server loader so the minimal tool set is auto-loaded
+      and surfaced over STDIO/HTTP.
+    - Structured JSON logging emitted for every agent decision, tool invocation,
+      retry, and failure with timestamps, agent_id, task_id, and step_id fields.
+    - Golden log capture + diffing harness guarding regressions in the structured
+      log stream.
+  must_not:
+    - Ship non-deterministic integrations (live web search, remote APIs).
+    - Introduce new CLI flags beyond ragx_master_spec.yaml.
+    - Skip JSON schema validation or rely on unchecked dicts.
+non_goals:
+  - Implementing the citations.audit.check or web.search.query tools.
+  - Integrating vector backends beyond the dummy search stub.
+  - Shipping production-ready markdown rendering (basic deterministic renderer
+    only).
+deliverables:
+  code:
+    - apps/mcp_server/toolpacks/docs.load.fetch.tool.yaml
+    - apps/mcp_server/toolpacks/vector.query.search.tool.yaml
+    - apps/mcp_server/toolpacks/exports.render.markdown.tool.yaml
+    - apps/mcp_server/schemas/tools/*.schema.json
+    - apps/mcp_server/runtime/core_tools_minimal.py
+  tests:
+    - tests/unit/test_core_tools_minimal_subset_schemas.py
+    - tests/unit/test_core_tools_structured_logging.py
+    - tests/integration/test_core_tools_log_diff.py
+    - tests/e2e/test_mcp_minimal_core_tools.py
+  docs:
+    - docs/toolpacks/core_tools_minimal.md
+  logs:
+    - runs/golden/core_tools_minimal.jsonl
 acceptance:
-  - tests/unit/test_core_tools_schemas.py pass
-  - tests/e2e/test_mcp_minimal_core_tools.py pass
-
-steps:
-  - Provide schema files under apps/mcp_server/schemas/tools/.
-  - Implement dummy Python toolpacks.
-  - Wire MCP server to load/serve these.
+  - tests/unit/test_core_tools_minimal_subset_schemas.py
+  - tests/unit/test_core_tools_structured_logging.py
+  - tests/integration/test_core_tools_log_diff.py
+  - tests/e2e/test_mcp_minimal_core_tools.py
+  - ./scripts/ensure_green.sh
+observability_requirements:
+  - Structured JSON logs MUST include timestamp, agent_id, task_id, and step_id
+    for every event and persist to runs/{run_id}/core_tools_minimal.jsonl.
+  - Each log entry MUST capture tool_id, decision, retries, failure reasons, and
+    completion status for diffability.
+  - Logging pipeline MUST be resilient to tool errors (no dropped events) and
+    flush on shutdown for postmortem diffing.
+structured_logging_contract:
+  format: jsonl
+  event_fields:
+    - timestamp
+    - agent_id
+    - task_id
+    - step_id
+    - event
+    - tool_id
+    - status
+    - duration_ms
+    - retries
+    - error
+  storage_path: runs/{run_id}/core_tools_minimal.jsonl
+  retention: keep-last-20
+log_diff_strategy:
+  tool: python.deepdiff
+  baseline_artifact: runs/golden/core_tools_minimal.jsonl
+  whitelist_fields:
+    - timestamp
+    - run_id
+    - trace_id
+    - duration_ms
+  notes: >
+    Use DeepDiff to compare structured logs against the golden baseline while
+    ignoring whitelisted temporal/id fields. Surface any unexpected diffs with
+    human-readable explanations in pytest output.
+test_plan:
+  - Author pytest coverage for schema validation (input/output schema checks).
+  - Add logging-focused unit tests asserting JSON structure, required fields,
+    retry/fallback coverage, and golden log regeneration workflow.
+  - Provide integration tests exercising MCP server tool execution and golden
+    log diffing, including controlled retry scenarios.
+  - Ensure fallbacks trigger deterministic logs when dummy vector search raises
+    errors.
+  - Document golden log regeneration protocol inside docs/toolpacks/core_tools_minimal.md.
+ci:
+  run:
+    - make lint
+    - make typecheck
+    - make test
+    - ./scripts/ensure_green.sh
+risks:
+  - Missing logging fields causing observability regressions.
+  - Golden fixtures drifting due to timestamps or randomized IDs.
+mitigations:
+  - Enforce schema + log diff tests that fail loudly when keys disappear.
+  - Whitelist only volatile fields (timestamp, run_id, trace_id, duration_ms) in
+    DeepDiff comparisons.
+artifacts:
+  - docs/toolpacks/core_tools_minimal.md
+  - runs/golden/core_tools_minimal.jsonl
+  - docs/diagrams/06a_core_tools_minimal_flow.md
+validation_hooks:
+  - Ensure tests/unit/test_core_tools_structured_logging.py seeds deterministic
+    UUID/time providers.
+  - Provide CLI snippet in docs for regenerating golden logs with `task-runner
+    run --trace runs/tmp.jsonl` followed by DeepDiff comparison.
