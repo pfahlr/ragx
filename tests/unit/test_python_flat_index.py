@@ -67,24 +67,29 @@ def test_pyflat_rejects_unknown_metric() -> None:
         )
 
 
-def test_pyflat_to_gpu_survives_base_flags() -> None:
+def test_pyflat_clone_handles_gpu_and_merge() -> None:
     backend = PyFlatBackend()
-    handle = backend.build(
-        {
-            "backend": "py_flat",
-            "kind": "flat",
-            "metric": "l2",
-            "dim": 2,
-        }
-    )
-
-    handle._factory_kwargs = {  # mimic VectorIndexHandle passing capability flags
-        "requires_training": False,
-        "supports_gpu": False,
+    spec = {
+        "backend": "py_flat",
+        "kind": "flat",
+        "metric": "l2",
+        "dim": 2,
     }
+    handle = backend.build(spec)
+    handle.add(np.array([[0.0, 1.0]], dtype=np.float32))
 
-    clone = handle.to_gpu()
+    gpu_clone = handle.to_gpu()
 
-    assert clone is not handle
-    assert clone.is_gpu is False
-    assert clone.device is None
+    assert gpu_clone is not handle
+    assert gpu_clone.ntotal() == handle.ntotal()
+    assert gpu_clone.requires_training() is False
+    assert gpu_clone.is_gpu is False
+
+    other = backend.build(spec)
+    other.add(np.array([[1.0, 0.0]], dtype=np.float32))
+
+    merged = handle.merge_with(other)
+
+    assert merged.ntotal() == handle.ntotal() + other.ntotal()
+    serialized = merged.serialize_cpu()
+    assert serialized.ids.shape[0] == merged.ntotal()
