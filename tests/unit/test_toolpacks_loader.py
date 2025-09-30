@@ -177,6 +177,54 @@ def test_toolpack_loader_resolves_nested_refs(tmp_path: Path) -> None:
     assert pack.input_schema["properties"]["inner"]["properties"]["value"]["type"] == "integer"
 
 
+def test_toolpack_loader_resolves_fragment_only_refs(tmp_path: Path) -> None:
+    schemas_dir = tmp_path / "schemas"
+    schema_path = schemas_dir / "fragment.schema.json"
+    fragment_schema = {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "$defs": {
+            "Payload": {
+                "type": "object",
+                "properties": {"value": {"type": "integer"}},
+                "required": ["value"],
+            }
+        },
+        "type": "object",
+        "properties": {
+            "payload": {"$ref": "#/$defs/Payload"},
+        },
+        "required": ["payload"],
+    }
+    output_schema = {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+    }
+    _write_json(schema_path, fragment_schema)
+    _write_json(schemas_dir / "output.schema.json", output_schema)
+
+    toolpacks_dir = tmp_path / "toolpacks"
+    _write_yaml(
+        toolpacks_dir / "fragment.tool.yaml",
+        yaml.safe_dump(
+            _spec_compliant_toolpack(
+                input_ref=os.path.relpath(schema_path, toolpacks_dir),
+                output_ref=os.path.relpath(
+                    schemas_dir / "output.schema.json", toolpacks_dir
+                ),
+            ),
+            sort_keys=False,
+        ),
+    )
+
+    loader = ToolpackLoader()
+    loader.load_dir(toolpacks_dir)
+
+    pack = loader.get("tool.echo")
+    payload_schema = pack.input_schema["properties"]["payload"]
+    assert payload_schema["required"] == ["value"]
+    assert payload_schema["properties"]["value"]["type"] == "integer"
+
+
 def test_toolpack_loader_shims_snake_case_fields(
     tmp_path: Path, caplog: pytest.LogCaptureFixture
 ) -> None:

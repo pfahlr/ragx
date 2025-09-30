@@ -43,13 +43,20 @@ class PyFlatHandle(VectorIndexHandle):
         *,
         requires_training: bool | None = None,
         supports_gpu: bool | None = None,
+        **extra: Any,
     ) -> None:
+        resolved_requires = False if requires_training is None else requires_training
+        resolved_gpu = False if supports_gpu is None else supports_gpu
         super().__init__(
             spec,
-            requires_training=False if requires_training is None else requires_training,
-            supports_gpu=False if supports_gpu is None else supports_gpu,
+            requires_training=resolved_requires,
+            supports_gpu=resolved_gpu,
         )
+        extras = dict(extra)
+        extras.pop("requires_training", None)
+        extras.pop("supports_gpu", None)
         self._factory_kwargs = {
+            **extras,
             "requires_training": self._requires_training,
             "supports_gpu": self._supports_gpu,
         }

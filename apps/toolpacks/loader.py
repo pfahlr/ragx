@@ -226,7 +226,13 @@ def _resolve_schema(
             f"Toolpack {tool_id} schema definition must be a mapping"
         )
 
-    resolved = _resolve_refs(schema_spec, base_dir, cache, tool_id)
+    resolved = _resolve_refs(
+        schema_spec,
+        base_dir,
+        cache,
+        tool_id,
+        current_document=schema_spec,
+    )
     _validate_json_schema(resolved, tool_id)
     return resolved
 
@@ -236,6 +242,9 @@ def _resolve_refs(
     base_dir: Path,
     cache: dict[tuple[Path, str], Any],
     tool_id: str,
+    *,
+    current_path: Path | None = None,
+    current_document: Any | None = None,
 ) -> Any:
     if isinstance(node, Mapping):
         if set(node.keys()) == {"$ref"}:
@@ -244,13 +253,52 @@ def _resolve_refs(
                 raise ToolpackValidationError(
                     f"Toolpack {tool_id} schema $ref must be a non-empty string"
                 )
-            return _load_ref(ref, base_dir, cache, tool_id)
+            path_part, fragment = _split_reference(ref)
+            if not path_part and current_document is not None:
+                fragment_data = (
+                    _apply_json_pointer(current_document, fragment)
+                    if fragment
+                    else current_document
+                )
+                return _resolve_refs(
+                    fragment_data,
+                    base_dir,
+                    cache,
+                    tool_id,
+                    current_path=current_path,
+                    current_document=current_document,
+                )
+            return _load_ref(
+                ref,
+                base_dir,
+                cache,
+                tool_id,
+                current_path=current_path,
+                current_document=current_document,
+            )
         return {
-            key: _resolve_refs(value, base_dir, cache, tool_id)
+            key: _resolve_refs(
+                value,
+                base_dir,
+                cache,
+                tool_id,
+                current_path=current_path,
+                current_document=current_document,
+            )
             for key, value in node.items()
         }
     if isinstance(node, list):
-        return [_resolve_refs(item, base_dir, cache, tool_id) for item in node]
+        return [
+            _resolve_refs(
+                item,
+                base_dir,
+                cache,
+                tool_id,
+                current_path=current_path,
+                current_document=current_document,
+            )
+            for item in node
+        ]
     return node
 
 
@@ -259,11 +307,36 @@ def _load_ref(
     base_dir: Path,
     cache: dict[tuple[Path, str], Any],
     tool_id: str,
+    *,
+    current_path: Path | None = None,
+    current_document: Any | None = None,
 ) -> Any:
     path_part, fragment = _split_reference(reference)
-    target_path = Path(path_part) if path_part else Path()
-    if not target_path.is_absolute():
-        target_path = (base_dir / target_path).resolve()
+    if path_part:
+        target_path = Path(path_part)
+        if not target_path.is_absolute():
+            target_path = (base_dir / target_path).resolve()
+    else:
+        if current_path is None:
+            if current_document is None:
+                raise ToolpackValidationError(
+                    f"Toolpack {tool_id} schema reference lacks base path: {reference}"
+                )
+            fragment_data = (
+                _apply_json_pointer(current_document, fragment)
+                if fragment
+                else current_document
+            )
+            resolved_inline = _resolve_refs(
+                fragment_data,
+                base_dir,
+                cache,
+                tool_id,
+                current_path=current_path,
+                current_document=current_document,
+            )
+            return copy.deepcopy(resolved_inline)
+        target_path = current_path
 
     cache_key = (target_path, fragment or "")
     if cache_key in cache:
@@ -296,7 +369,14 @@ def _load_ref(
         ) from exc
 
     fragment_data = _apply_json_pointer(document, fragment) if fragment else document
-    resolved = _resolve_refs(fragment_data, target_path.parent, cache, tool_id)
+    resolved = _resolve_refs(
+        fragment_data,
+        target_path.parent,
+        cache,
+        tool_id,
+        current_path=target_path,
+        current_document=document,
+    )
     cache[cache_key] = copy.deepcopy(resolved)
     return copy.deepcopy(resolved)
 
