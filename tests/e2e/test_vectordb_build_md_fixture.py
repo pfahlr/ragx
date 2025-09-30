@@ -21,6 +21,7 @@ def test_vectordb_builder_ingests_markdown(tmp_path: Path) -> None:
         corpus_dir,
         "doc_one.md",
         """title: Doc One
+id: doc-one
 slug: doc-one
 summary: Preferred summary from front matter
 ---
@@ -76,7 +77,10 @@ Doc two body paragraph.
     assert len(docs) == 2
 
     doc_ids = {entry["id"] for entry in docs}
-    assert doc_ids == {"doc_one", "doc_two"}
+    assert doc_ids == {"doc-one", "doc_two"}
+
+    doc_one_entry = next(entry for entry in docs if entry["metadata"].get("slug") == "doc-one")
+    assert doc_one_entry["id"] == "doc-one"
 
 
 def test_vectordb_build_md_fixture(tmp_path: Path) -> None:

@@ -10,7 +10,7 @@ def test_spec_has_components_and_tool_registry() -> None:
         try:
             spec = yaml.safe_load(f)
         except yaml.YAMLError as exc:
-            pytest.xfail(f"Master spec not yet valid YAML: {exc}")
+            pytest.fail(f"Master spec must remain valid YAML: {exc}")
     assert "components" in spec and isinstance(spec["components"], list)
     assert "tool_registry" in spec and isinstance(spec["tool_registry"], dict)
     # ensure key components exist by id
@@ -25,7 +25,7 @@ def test_spec_defines_toolpack_class_location() -> None:
         try:
             spec = yaml.safe_load(f)
         except yaml.YAMLError as exc:
-            pytest.xfail(f"Master spec not yet valid YAML: {exc}")
+            pytest.fail(f"Master spec must remain valid YAML: {exc}")
 
     components = spec.get("components")
     assert isinstance(components, list), "spec.components must be a list"
@@ -65,3 +65,27 @@ def test_spec_defines_toolpack_class_location() -> None:
 
     assert toolpack_entry.get("name") == "Toolpack"
     assert toolpack_entry.get("fields"), f"Toolpack spec under {component_id} missing fields"
+
+
+def test_spec_tests_block_and_flowscript_decisions() -> None:
+    spec_path = Path("codex/specs/ragx_master_spec.yaml")
+    with spec_path.open() as f:
+        try:
+            spec = yaml.safe_load(f)
+        except yaml.YAMLError as exc:
+            pytest.fail(f"Master spec must remain valid YAML: {exc}")
+
+    tests_block = spec.get("tests")
+    assert isinstance(tests_block, dict), "spec.tests must be a mapping"
+    assert "unit" in tests_block and "e2e" in tests_block
+
+    decisions = spec.get("open_decisions")
+    assert isinstance(decisions, list), "spec.open_decisions must be a list"
+
+    decision_ids = {entry.get("id") for entry in decisions if isinstance(entry, dict)}
+    for required in [
+        "flowscript_parser_engine",
+        "flowscript_error_surface",
+        "flowscript_expr_interp",
+    ]:
+        assert required in decision_ids
