@@ -66,3 +66,25 @@ def test_pyflat_rejects_unknown_metric() -> None:
             }
         )
 
+
+def test_pyflat_to_gpu_survives_base_flags() -> None:
+    backend = PyFlatBackend()
+    handle = backend.build(
+        {
+            "backend": "py_flat",
+            "kind": "flat",
+            "metric": "l2",
+            "dim": 2,
+        }
+    )
+
+    handle._factory_kwargs = {  # mimic VectorIndexHandle passing capability flags
+        "requires_training": False,
+        "supports_gpu": False,
+    }
+
+    clone = handle.to_gpu()
+
+    assert clone is not handle
+    assert clone.is_gpu is False
+    assert clone.device is None

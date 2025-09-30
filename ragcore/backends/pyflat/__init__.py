@@ -33,15 +33,26 @@ class PyFlatBackend:
             raise ValueError(f"unsupported PyFlat metric '{config.metric}'")
         if config.backend != self.name:
             raise ValueError(f"PyFlat backend cannot build for '{config.backend}'")
-        handle = PyFlatHandle(config)
-        handle._factory_kwargs = {}
-        return handle
+        return PyFlatHandle(config)
 
 
 class PyFlatHandle(VectorIndexHandle):
-    def __init__(self, spec: IndexSpec) -> None:
-        super().__init__(spec, requires_training=False, supports_gpu=False)
+    def __init__(
+        self,
+        spec: IndexSpec,
+        *,
+        requires_training: bool | None = None,
+        supports_gpu: bool | None = None,
+    ) -> None:
+        super().__init__(
+            spec,
+            requires_training=False if requires_training is None else requires_training,
+            supports_gpu=False if supports_gpu is None else supports_gpu,
+        )
+        self._factory_kwargs = {
+            "requires_training": self._requires_training,
+            "supports_gpu": self._supports_gpu,
+        }
 
 
 __all__ = ["PyFlatBackend", "PyFlatHandle"]
-
