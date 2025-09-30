@@ -76,7 +76,7 @@ Doc two body paragraph.
     assert len(docs) == 2
 
     doc_ids = {entry["id"] for entry in docs}
-    assert doc_ids == {"doc_one", "doc_two"}
+    assert doc_ids == {"doc-one", "doc_two"}
 
 
 def test_vectordb_build_md_fixture(tmp_path: Path) -> None:

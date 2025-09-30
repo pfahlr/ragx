@@ -784,6 +784,18 @@ open_decisions:
     question: If both embedded metadata and front-matter exist, which wins?
     options: [front_matter_overrides, prefer_embedded_metadata, merge_with_priority_front_matter]
     default: front_matter_overrides
+  - id: flowscript_parser_engine
+    question: Which runtime parses FlowScript in P1?
+    options: [peggy_node_subprocess, lark_python_inproc, tree_sitter_subprocess]
+    default: peggy_node_subprocess
+  - id: flowscript_error_surface
+    question: How to surface parse/compile errors?
+    options: [stderr_plain, envelope_structured, yaml_problem_markers]
+    default: envelope_structured
+  - id: flowscript_expr_interp
+    question: Expression semantics inside Expr strings?
+    options: [pass_through, jinja_eval_at_runtime, limited_expr_eval_at_compile]
+    default: pass_through
 
 # Test matrix (high-level)
 tests:
@@ -811,16 +823,3 @@ tests:
     - vectordb_build_md_fixture
   ci:
     coverage_minimum: 85
-
-  - id: flowscript_parser_engine
-    question: Which runtime parses FlowScript in P1?
-    options: [peggy_node_subprocess, lark_python_inproc, tree_sitter_subprocess]
-    default: peggy_node_subprocess
-  - id: flowscript_error_surface
-    question: How to surface parse/compile errors?
-    options: [stderr_plain, envelope_structured, yaml_problem_markers]
-    default: envelope_structured
-  - id: flowscript_expr_interp
-    question: Expression semantics inside Expr strings?
-    options: [pass_through, jinja_eval_at_runtime, limited_expr_eval_at_compile]
-    default: pass_through
