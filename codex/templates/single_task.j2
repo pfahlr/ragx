@@ -1,0 +1,78 @@
+###Instruction###
+Your task is to **complete the YAML task definition** located at:
+
+`{{ task_file }}`
+
+You are acting as an elite autonomous systems engineer specializing in agent task validation, YAML spec compliance, runtime traceability, and test-driven development for complex AI systems.
+
+###Setup###
+- Review `AGENTS.md` and all files under `codex/agents/` to understand agent architecture and execution protocols.
+- Locate existing task definitions in `codex/agents/TASKS/` for reference.
+- Align your task spec with the machine-readable contract in `codex/specs/ragx_master_spec.yaml`.
+- You may take as long as needed — **code correctness, test reliability, and real-world operability are critical**.
+
+###Primary Directives###
+You MUST:
+1. Produce a complete, valid YAML task spec for `{{ task_file }}` according to `ragx_master_spec.yaml`.
+2. Implement **robust real-time logging and observability hooks**, including:
+   - Structured JSON logs capturing all key runtime events: agent decisions, tool usage, retries, failures.
+   - Logs must include contextual metadata (timestamps, agent ID, task ID, step ID).
+   - Logs should persist to disk or in-memory for validation and diffing.
+3. **Write all tests before implementing task logic.**
+   - Tests must verify input/output behavior, schema validity, runtime logs, fallbacks, retries.
+   - Tests must **fail loudly** and give detailed diagnostics if any expectation is unmet.
+4. Implement **automated structured log diffing**:
+   - Capture logs from a baseline (golden) execution.
+   - Compare new executions against golden logs using deep diffing tools (e.g., `deepdiff` or AST-based strategies).
+   - Flag and explain any unexpected diffs.
+   - Allow for controlled diff whitelisting (e.g., timestamps, UUIDs).
+5. Treat the dev environment as broken if:
+   - Any tests fail
+   - Test execution is flaky or unreliable
+   - Logs are missing, unparseable, or inconsistent
+   - Diff-based regressions occur unexpectedly
+
+6. Include an **agent execution diagram** (flowchart or sequence diagram) that illustrates:
+   - Agent responsibilities
+   - Task execution flow
+   - Toolpack usage and interactions
+   - Validation checkpoints
+
+###Format###
+Return your result in the following structure:
+
+1. `---BEGIN YAML TASK DEFINITION---`  
+   _(Fully valid YAML for `{{ task_file }}`)_
+
+2. `---BEGIN TEST SUITE---`  
+   _(Full test suite validating the behavior, logs, and schema compliance of the task. Includes diff tests.)_
+
+3. `---LOG DIFF STRATEGY---`  
+   _(Explain how structured logs are captured, stored, and diffed for regression detection. List whitelisted fields.)_
+
+4. `---TEST EXECUTION STRATEGY---`  
+   _(How to run the tests. Include CLI example or script path. Explain expected test artifacts.)_
+
+5. `---AGENT EXECUTION DIAGRAM---`  
+   _(ASCII/mermaid diagram or PlantUML sequence that illustrates agent & toolpack behavior.)_
+
+6. `---CODEX AGENT VERIFICATION CHECKLIST---`  
+   ✅ Schema compliance  
+   ✅ Agent runtime correctness  
+   ✅ Toolpack behavior  
+   ✅ Structured logging  
+   ✅ Diffable regression detection  
+   ✅ Agent communication flow clarity  
+   ✅ Test-first coverage completeness
+
+###Target Audience###
+This task will be executed and reviewed by a team of senior autonomous systems developers integrating real-time RAG agents into production AI infrastructure.
+
+###Rules###
+- Think step by step.
+- Assume your output will be tested in CI pipelines.
+- Ask for clarifications before guessing assumptions.
+- Do not leave any required fields undefined.
+- Use output headers for all major sections.
+
+BEGIN OUTPUT PRIMING:

@@ -1,0 +1,44 @@
+You are a senior managing developer. Review candidate branches, compare their fixes for the listed bugs, design the best consolidated solution, and implement it on a new branch derived from the branch under review (NOT main).
+
+PRE-FLIGHT (robust Git in sandbox)
+1) Ensure remote and token:
+  OWNER={{ OWNER }}
+  REPO={{ REPO }}
+  : "${GITHUB_TOKEN:=${{{ TOKEN_ENVVAR }}}:-}"
+  git remote get-url origin >/dev/null 2>&1 || git remote add origin "https://${GITHUB_TOKEN}@github.com/{{ OWNER }}/{{ REPO }}.git"
+  git config remote.origin.fetch "+refs/heads/*:refs/remotes/origin/*"
+  git config --add remote.origin.fetch "+refs/pull/*/head:refs/remotes/origin/pr/*"
+  git fetch --prune --tags origin || git fetch --prune --tags --depth=50 origin
+
+2) Fetch candidate branches by refspec (sandbox-safe):
+{% for b in BRANCHES %}
+  git fetch origin refs/heads/{{ b }}:refs/remotes/origin/{{ b }}
+{% endfor %}
+
+CREATE WORKING BRANCH
+  BASE=$(git rev-parse --abbrev-ref HEAD)
+  git checkout -b codex/consolidated-fix-"$(git rev-parse --short HEAD)"
+
+PROBLEMS TO SOLVE
+{% if BUGS %}
+{% for bug in BUGS -%}
+- [{{ bug.id }}] {{ bug.text }}
+{%- endfor %}
+{% else %}
+{% for id, text in BUG_IDS|zip(BUG_TEXTS) -%}
+- [{{ id }}] {{ text }}
+{%- endfor %}
+{% endif %}
+
+ANALYSIS
+- For each origin candidate, run: git diff ${BASE}...origin/<candidate> and note pros/cons.
+
+IMPLEMENTATION
+- Apply the unified fix, update tests/docs/CI, then run:
+  ruff check . || true
+  mypy . || true
+  pytest -q || pytest --maxfail=1 -q
+
+COMMIT
+  git add -A
+  git commit -m "Consolidate fixes for bugs: {% if BUGS %}{% for bug in BUGS %}{{ bug.id }}{% if not loop.last %}, {% endif %}{% endfor %}{% else %}{% for id in BUG_IDS %}{{ id }}{% if not loop.last %}, {% endif %}{% endfor %}{% endif %} (see description)."
