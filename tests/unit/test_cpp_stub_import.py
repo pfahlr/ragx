@@ -76,3 +76,20 @@ def test_cpp_backend_uses_extension_when_available(monkeypatch: pytest.MonkeyPat
     info = backend.capabilities()
     assert info["available"] is True
     assert info["kinds"] == ["flat"]
+
+
+def test_cpp_backend_falls_back_when_import_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    class BrokenModule(types.ModuleType):
+        def __getattr__(self, name: str):  # pragma: no cover - exercised via import
+            raise ImportError("symbol lookup error")
+
+    broken_extension = BrokenModule("_ragcore_cpp")
+
+    module = _import_cpp_module(monkeypatch, fake_extension=broken_extension)
+
+    assert module.HAS_CPP_EXTENSION is False
+    assert isinstance(module._IMPORT_ERROR, ImportError)
+
+    backend = module.CppBackend()
+    with pytest.raises(RuntimeError):
+        backend.build({})

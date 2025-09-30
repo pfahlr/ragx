@@ -65,7 +65,7 @@ else:
         CppFaissBackend = _ExtensionFaissBackend
         CppHandle = _CppHandle
         _HAS_EXTENSION = True
-    except ModuleNotFoundError as exc:  # pragma: no cover - optional extension
+    except Exception as exc:  # pragma: no cover - optional extension
         _IMPORT_ERROR = exc
 
 
