@@ -1618,6 +1618,32 @@ def test_toolpack_loader_schema_pointer_empty_fragment(tmp_path: Path) -> None:
     assert loader.get("tool.echo").input_schema["type"] == "object"
 
 
+def test_toolpack_loader_schema_fragment_only_reference(tmp_path: Path) -> None:
+    schema_path = tmp_path / "schema.json"
+    _write_json(
+        schema_path,
+        {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "$defs": {"Foo": {"type": "string"}},
+            "type": "object",
+            "properties": {"value": {"$ref": "#/$defs/Foo"}},
+        },
+    )
+
+    toolpacks_dir = tmp_path / "toolpacks"
+    toolpacks_dir.mkdir()
+    config = _spec_compliant_toolpack(
+        input_ref=os.path.relpath(schema_path, toolpacks_dir),
+        output_ref=os.path.relpath(schema_path, toolpacks_dir),
+    )
+    _write_yaml(toolpacks_dir / "fragment.tool.yaml", yaml.safe_dump(config, sort_keys=False))
+
+    loader = ToolpackLoader()
+    loader.load_dir(toolpacks_dir)
+    input_schema = loader.get("tool.echo").input_schema
+    assert input_schema["properties"]["value"]["type"] == "string"
+
+
 def test_toolpack_loader_schema_pointer_root(tmp_path: Path) -> None:
     schema_path = tmp_path / "schema.json"
     schema_doc = {

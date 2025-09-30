@@ -67,24 +67,29 @@ def test_pyflat_rejects_unknown_metric() -> None:
         )
 
 
-def test_pyflat_to_gpu_survives_base_flags() -> None:
+def test_pyflat_clone_handles_gpu_and_merge() -> None:
     backend = PyFlatBackend()
-    handle = backend.build(
-        {
-            "backend": "py_flat",
-            "kind": "flat",
-            "metric": "l2",
-            "dim": 2,
-        }
-    )
-
-    handle._factory_kwargs = {  # mimic VectorIndexHandle passing capability flags
-        "requires_training": False,
-        "supports_gpu": False,
+    spec = {
+        "backend": "py_flat",
+        "kind": "flat",
+        "metric": "l2",
+        "dim": 2,
     }
+    left = backend.build(spec)
+    right = backend.build(spec)
 
-    clone = handle.to_gpu()
+    left.add(np.array([[0.0, 0.0]], dtype=np.float32))
+    right.add(np.array([[1.0, 0.0]], dtype=np.float32))
 
-    assert clone is not handle
-    assert clone.is_gpu is False
-    assert clone.device is None
+    # Ensure clone uses the same kwargs VectorIndexHandle._clone emits.
+    left._factory_kwargs.update({"requires_training": False, "supports_gpu": False})
+
+    gpu_clone = left.to_gpu()
+    assert gpu_clone.ntotal() == left.ntotal()
+    assert gpu_clone.is_gpu is False
+    assert gpu_clone.device is None
+
+    right._factory_kwargs.update({"requires_training": False, "supports_gpu": False})
+    merged = left.merge_with(right)
+    assert merged.ntotal() == left.ntotal() + right.ntotal()
+    np.testing.assert_array_equal(merged._ids, np.arange(merged.ntotal(), dtype=np.int64))
