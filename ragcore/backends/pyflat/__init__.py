@@ -40,19 +40,22 @@ class PyFlatHandle(VectorIndexHandle):
     def __init__(
         self,
         spec: IndexSpec,
-        *,
-        requires_training: bool | None = None,
-        supports_gpu: bool | None = None,
+        **kwargs: Any,
     ) -> None:
+        requires_training = kwargs.pop("requires_training", False)
+        supports_gpu = kwargs.pop("supports_gpu", False)
         super().__init__(
             spec,
-            requires_training=False if requires_training is None else requires_training,
-            supports_gpu=False if supports_gpu is None else supports_gpu,
+            requires_training=requires_training,
+            supports_gpu=supports_gpu,
         )
         self._factory_kwargs = {
             "requires_training": self._requires_training,
             "supports_gpu": self._supports_gpu,
         }
+        if kwargs:
+            # Preserve any additional subclass kwargs for future clones.
+            self._factory_kwargs.update(kwargs)
 
 
 __all__ = ["PyFlatBackend", "PyFlatHandle"]
