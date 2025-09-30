@@ -280,7 +280,8 @@ def _build_docmap(corpus_dir: Path, documents: Sequence[IngestedDocument]) -> di
 
     for record in documents:
         metadata = dict(record.metadata)
-        doc_id = str(metadata.get("id") or record.path.stem)
+        raw_id = metadata.get("id") or metadata.get("slug") or record.path.stem
+        doc_id = str(raw_id)
         counter = seen.get(doc_id)
         if counter is None:
             seen[doc_id] = 0

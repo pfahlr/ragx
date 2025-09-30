@@ -61,5 +61,19 @@ class PyFlatHandle(VectorIndexHandle):
             "supports_gpu": self._supports_gpu,
         }
 
+    def _clone(self, *, empty: bool = False) -> VectorIndexHandle:
+        clone = PyFlatHandle(self._spec)
+        clone._requires_training = self._requires_training
+        clone._supports_gpu = self._supports_gpu
+        clone._is_trained = self._is_trained
+        clone._factory_kwargs = dict(self._factory_kwargs)
+        if not empty:
+            clone._vectors = self._vectors.copy()
+            clone._ids = self._ids.copy()
+            clone._next_id = self._next_id
+            clone.is_gpu = self.is_gpu
+            clone.device = self.device
+        return clone
+
 
 __all__ = ["PyFlatBackend", "PyFlatHandle"]

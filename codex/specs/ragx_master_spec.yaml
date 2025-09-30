@@ -217,247 +217,247 @@ components:
     risks:
       - enabling_shell_opens_attack_surface
 
-- id: mcp_server
-  phase: P0
-  title: MCP Server (HTTP + STDIO)
-  description: Deterministic server exposing tools and prompt registry via uniform Envelope.
-  responsibilities:
-    - Serve discovery, prompts, and tool invocations; load Toolpacks; schema-validate IO.
-  interfaces:
-    cli:
-      command: "mcp-server"
-      flags_ref: mcp_server
-    endpoints_http:
-      - { method: GET,  path: "/mcp/discover" }
-      - { method: GET,  path: "/mcp/prompt/{domain}/{name}/{major}" }
-      - { method: POST, path: "/mcp/tool/{tool_name}" }
-    stdio_methods:
-      - "mcp.discover"
-      - "mcp.prompt.get"
-      - "mcp.tool.invoke"
-    classes:
-      - { name: McpService, methods: [discover, get_prompt, invoke_tool] }
-      - { name: Registry,   methods: [discover, get_prompt] }
-      - { name: Toolpack,   fields: [id, version, deterministic, timeoutMs, limits, caps, inputSchema, outputSchema, execution, env, templating] }
-      - { name: Envelope,   fields: [ok, data, meta, errors] }
-    adapters:
-      - { name: http_transport, tool: any, transport: http }
-      - { name: stdio_transport, tool: any, transport: stdio }
-  schemas:
-    envelope: "apps/mcp_server/schemas/envelope.schema.json"
-    tools:
-      web_search_query_input:  "apps/mcp_server/schemas/tools/web_search_query.input.schema.json"
-      web_search_query_output: "apps/mcp_server/schemas/tools/web_search_query.output.schema.json"
-      vector_query_search_input:  "apps/mcp_server/schemas/tools/vector_query_search.input.schema.json"
-      vector_query_search_output: "apps/mcp_server/schemas/tools/vector_query_search.output.schema.json"
-      docs_load_fetch_input:  "apps/mcp_server/schemas/tools/docs_load_fetch.input.schema.json"
-      docs_load_fetch_output: "apps/mcp_server/schemas/tools/docs_load_fetch.output.schema.json"
-      citations_audit_check_input:  "apps/mcp_server/schemas/tools/citations_audit_check.input.schema.json"
-      citations_audit_check_output: "apps/mcp_server/schemas/tools/citations_audit_check.output.schema.json"
-      exports_render_markdown_input:  "apps/mcp_server/schemas/tools/exports_render_markdown.input.schema.json"
-      exports_render_markdown_output: "apps/mcp_server/schemas/tools/exports_render_markdown.output.schema.json"
-    toolpacks_dir: "apps/mcp_server/toolpacks/"
-    prompts_dir: "apps/mcp_server/prompts/"
-  dependencies: [fastapi, uvicorn, pydantic, jsonschema, jinja2, httpx, packaging]
-  observability:
-    logs: [trace_id, transport, tool, version, duration_ms, io_bytes, status, error_code]
-    metrics: [mcp_requests_total, mcp_request_duration_seconds_bucket, mcp_errors_total, mcp_io_bytes_total]
-    traces:
-      format: jsonl
-      path_default: "runs/mcp_trace.jsonl"
-  risks:
-    - backpressure_defaults
-    - subprocess_resource_limits
-  outputs:
-    - { type: discovery_doc, path: "/mcp/discover" }
+  - id: mcp_server
+    phase: P0
+    title: MCP Server (HTTP + STDIO)
+    description: Deterministic server exposing tools and prompt registry via uniform Envelope.
+    responsibilities:
+      - Serve discovery, prompts, and tool invocations; load Toolpacks; schema-validate IO.
+    interfaces:
+      cli:
+        command: "mcp-server"
+        flags_ref: mcp_server
+      endpoints_http:
+        - { method: GET,  path: "/mcp/discover" }
+        - { method: GET,  path: "/mcp/prompt/{domain}/{name}/{major}" }
+        - { method: POST, path: "/mcp/tool/{tool_name}" }
+      stdio_methods:
+        - "mcp.discover"
+        - "mcp.prompt.get"
+        - "mcp.tool.invoke"
+      classes:
+        - { name: McpService, methods: [discover, get_prompt, invoke_tool] }
+        - { name: Registry,   methods: [discover, get_prompt] }
+        - { name: Toolpack,   fields: [id, version, deterministic, timeoutMs, limits, caps, inputSchema, outputSchema, execution, env, templating] }
+        - { name: Envelope,   fields: [ok, data, meta, errors] }
+      adapters:
+        - { name: http_transport, tool: any, transport: http }
+        - { name: stdio_transport, tool: any, transport: stdio }
+    schemas:
+      envelope: "apps/mcp_server/schemas/envelope.schema.json"
+      tools:
+        web_search_query_input:  "apps/mcp_server/schemas/tools/web_search_query.input.schema.json"
+        web_search_query_output: "apps/mcp_server/schemas/tools/web_search_query.output.schema.json"
+        vector_query_search_input:  "apps/mcp_server/schemas/tools/vector_query_search.input.schema.json"
+        vector_query_search_output: "apps/mcp_server/schemas/tools/vector_query_search.output.schema.json"
+        docs_load_fetch_input:  "apps/mcp_server/schemas/tools/docs_load_fetch.input.schema.json"
+        docs_load_fetch_output: "apps/mcp_server/schemas/tools/docs_load_fetch.output.schema.json"
+        citations_audit_check_input:  "apps/mcp_server/schemas/tools/citations_audit_check.input.schema.json"
+        citations_audit_check_output: "apps/mcp_server/schemas/tools/citations_audit_check.output.schema.json"
+        exports_render_markdown_input:  "apps/mcp_server/schemas/tools/exports_render_markdown.input.schema.json"
+        exports_render_markdown_output: "apps/mcp_server/schemas/tools/exports_render_markdown.output.schema.json"
+      toolpacks_dir: "apps/mcp_server/toolpacks/"
+      prompts_dir: "apps/mcp_server/prompts/"
+    dependencies: [fastapi, uvicorn, pydantic, jsonschema, jinja2, httpx, packaging]
+    observability:
+      logs: [trace_id, transport, tool, version, duration_ms, io_bytes, status, error_code]
+      metrics: [mcp_requests_total, mcp_request_duration_seconds_bucket, mcp_errors_total, mcp_io_bytes_total]
+      traces:
+        format: jsonl
+        path_default: "runs/mcp_trace.jsonl"
+    risks:
+      - backpressure_defaults
+      - subprocess_resource_limits
+    outputs:
+      - { type: discovery_doc, path: "/mcp/discover" }
 
-- id: toolpacks_runtime
-  phase: P0
-  title: Declarative Toolpacks Runtime
-  description: Load and execute YAML-defined tools (python/node/php/cli/http) with JSON stdin/stdout, schema validation, and limits.
-  responsibilities:
-    - Load *.tool.yaml; resolve $ref; execute via subprocess/in-proc; idempotency cache.
-  interfaces:
-    classes:
-      - { name: ToolpackLoader, methods: [load_dir, list, get] }
-      - { name: Executor, methods: [run_toolpack] }
-    adapters:
-      - { name: kind_python, tool: any, transport: inproc_or_subprocess }
-      - { name: kind_node,   tool: any, transport: subprocess }
-      - { name: kind_php,    tool: any, transport: subprocess }
-      - { name: kind_cli,    tool: any, transport: subprocess }
-      - { name: kind_http,   tool: any, transport: http }
-  data_contracts:
-    execution_stdin_example: { json: { input: { any: "object" } } }
-    execution_stdout_example: { json: { any: "tool_data" } }
-  dependencies: [jinja2, httpx, packaging]
-  observability:
-    logs: [exec_kind, argv_or_module, exit_code, duration_ms, out_bytes]
-  metrics: [toolpack_exec_total, toolpack_timeout_total, toolpack_bytes_out_total]
-  risks:
-    - script_path_traversal
-    - nondeterministic_external_services
+  - id: toolpacks_runtime
+    phase: P0
+    title: Declarative Toolpacks Runtime
+    description: Load and execute YAML-defined tools (python/node/php/cli/http) with JSON stdin/stdout, schema validation, and limits.
+    responsibilities:
+      - Load *.tool.yaml; resolve $ref; execute via subprocess/in-proc; idempotency cache.
+    interfaces:
+      classes:
+        - { name: ToolpackLoader, methods: [load_dir, list, get] }
+        - { name: Executor, methods: [run_toolpack] }
+      adapters:
+        - { name: kind_python, tool: any, transport: inproc_or_subprocess }
+        - { name: kind_node,   tool: any, transport: subprocess }
+        - { name: kind_php,    tool: any, transport: subprocess }
+        - { name: kind_cli,    tool: any, transport: subprocess }
+        - { name: kind_http,   tool: any, transport: http }
+    data_contracts:
+      execution_stdin_example: { json: { input: { any: "object" } } }
+      execution_stdout_example: { json: { any: "tool_data" } }
+    dependencies: [jinja2, httpx, packaging]
+    observability:
+      logs: [exec_kind, argv_or_module, exit_code, duration_ms, out_bytes]
+    metrics: [toolpack_exec_total, toolpack_timeout_total, toolpack_bytes_out_total]
+    risks:
+      - script_path_traversal
+      - nondeterministic_external_services
 
-- id: core_tools
-  phase: P0
-  title: Core MCP Tools (canonical set)
-  description: Web search, docs loader, vector query, citation audit, and markdown renderer with normalized schemas.
-  responsibilities:
-    - Provide stable input/output schemas; normalize provider outputs.
-  interfaces:
-    stdio_methods:
-      - "mcp.tool:web.search.query"
-      - "mcp.tool:docs.load.fetch"
-      - "mcp.tool:vector.query.search"
-      - "mcp.tool:citations.audit.check"
-      - "mcp.tool:exports.render.markdown"
-  schemas:
-    ref: "*see mcp_server.schemas.tools*"
-  dependencies: []
-  observability:
-    metrics: [tool_success_total, tool_error_total, tool_duration_seconds_bucket]
-  risks:
-    - provider_normalization_gaps
+  - id: core_tools
+    phase: P0
+    title: Core MCP Tools (canonical set)
+    description: Web search, docs loader, vector query, citation audit, and markdown renderer with normalized schemas.
+    responsibilities:
+      - Provide stable input/output schemas; normalize provider outputs.
+    interfaces:
+      stdio_methods:
+        - "mcp.tool:web.search.query"
+        - "mcp.tool:docs.load.fetch"
+        - "mcp.tool:vector.query.search"
+        - "mcp.tool:citations.audit.check"
+        - "mcp.tool:exports.render.markdown"
+    schemas:
+      ref: "*see mcp_server.schemas.tools*"
+    dependencies: []
+    observability:
+      metrics: [tool_success_total, tool_error_total, tool_duration_seconds_bucket]
+    risks:
+      - provider_normalization_gaps
 
-- id: rest_facade
-  phase: P1
-  title: REST Parity Facade
-  description: Thin HTTP endpoints mirroring key MCP tools for convenience.
-  responsibilities:
-    - Provide /v1/search, /v1/plan, /v1/research, /v1/hitl/*.
-  interfaces:
-    endpoints_http:
-      - { method: POST, path: "/v1/search" }
-      - { method: POST, path: "/v1/plan" }
-      - { method: POST, path: "/v1/research" }
-      - { method: POST, path: "/v1/hitl/outline-review" }
-      - { method: POST, path: "/v1/hitl/questions-merge" }
-  dependencies: [fastapi]
-  observability:
-    logs: [route, status_code, duration_ms, payload_bytes]
-    metrics: [rest_requests_total, rest_request_duration_seconds_bucket]
-  risks:
-    - streaming_vs_sync_for_long_runs
+  - id: rest_facade
+    phase: P1
+    title: REST Parity Facade
+    description: Thin HTTP endpoints mirroring key MCP tools for convenience.
+    responsibilities:
+      - Provide /v1/search, /v1/plan, /v1/research, /v1/hitl/*.
+    interfaces:
+      endpoints_http:
+        - { method: POST, path: "/v1/search" }
+        - { method: POST, path: "/v1/plan" }
+        - { method: POST, path: "/v1/research" }
+        - { method: POST, path: "/v1/hitl/outline-review" }
+        - { method: POST, path: "/v1/hitl/questions-merge" }
+    dependencies: [fastapi]
+    observability:
+      logs: [route, status_code, duration_ms, payload_bytes]
+      metrics: [rest_requests_total, rest_request_duration_seconds_bucket]
+    risks:
+      - streaming_vs_sync_for_long_runs
 
-- id: retrieval_rerank
-  phase: P1
-  title: Enhanced Retrieval + Re-Ranking
-  description: Retriever factory with Bing/Tavily connectors via MCP, hybrid BM25+vector scoring, optional cross-encoder reranker.
-  responsibilities:
-    - Normalize results via web.search; combine BM25 & vector scores; optional rerank; NDCG gates.
-  interfaces:
-    cli:
-      command: "rw"
-      subcommands:
-        - { name: "search", flags_ref: retrieval }
-    classes:
-      - { name: RetrieverFactory, methods: [make_retriever] }
-      - { name: CrossEncoderReranker, methods: [rerank] }
-    adapters:
-      - { name: web_bing,  tool: mcp.tool:web.search.query, transport: http_or_stdio }
-      - { name: web_tavily, tool: mcp.tool:web.search.query, transport: http_or_stdio }
-  data_contracts:
-    search_input_example:
-      json: { q: "urban heat islands", recencyDays: 30, limit: 10, provider: "tavily" }
-    search_output_example:
-      json: { results: [ { title: "...", url: "https://...", snippet: "...", publishedAt: "2024-01-01T00:00:00Z" } ], meta: { provider: "tavily" } }
-  dependencies: [numpy, sentence-transformers, faiss]
-  observability:
-    metrics: [ndcg_at_3, ndcg_at_5, retrieval_latency_seconds, rerank_latency_seconds]
-    logs: [provider, hybrid_enabled, rerank_enabled]
-  risks:
-    - model_download_in_ci
-    - variability_across_providers
+  - id: retrieval_rerank
+    phase: P1
+    title: Enhanced Retrieval + Re-Ranking
+    description: Retriever factory with Bing/Tavily connectors via MCP, hybrid BM25+vector scoring, optional cross-encoder reranker.
+    responsibilities:
+      - Normalize results via web.search; combine BM25 & vector scores; optional rerank; NDCG gates.
+    interfaces:
+      cli:
+        command: "rw"
+        subcommands:
+          - { name: "search", flags_ref: retrieval }
+      classes:
+        - { name: RetrieverFactory, methods: [make_retriever] }
+        - { name: CrossEncoderReranker, methods: [rerank] }
+      adapters:
+        - { name: web_bing,  tool: mcp.tool:web.search.query, transport: http_or_stdio }
+        - { name: web_tavily, tool: mcp.tool:web.search.query, transport: http_or_stdio }
+    data_contracts:
+      search_input_example:
+        json: { q: "urban heat islands", recencyDays: 30, limit: 10, provider: "tavily" }
+      search_output_example:
+        json: { results: [ { title: "...", url: "https://...", snippet: "...", publishedAt: "2024-01-01T00:00:00Z" } ], meta: { provider: "tavily" } }
+    dependencies: [numpy, sentence-transformers, faiss]
+    observability:
+      metrics: [ndcg_at_3, ndcg_at_5, retrieval_latency_seconds, rerank_latency_seconds]
+      logs: [provider, hybrid_enabled, rerank_enabled]
+    risks:
+      - model_download_in_ci
+      - variability_across_providers
 
-- id: planner_multiperspective
-  phase: P1
-  title: Multi-Perspective Question Planning
-  description: Deterministic perspective/question generation and concept graph (mind-map).
-  responsibilities:
-    - Derive perspectives; generate questions with stable ids; export/import graph JSON.
-  interfaces:
-    cli:
-      command: "rw"
-      subcommands:
-        - { name: "plan", flags_ref: planner }
-    stdio_methods:
-      - "mcp.tool:planner.multi_perspective"
-    classes:
-      - { name: Perspective, methods: [derive_perspectives, generate_questions] }
-      - { name: MindMap, methods: [add_node, add_edge, to_json, from_json] }
-  data_contracts:
-    plan_input_example:
-      json: { topic: "Solar rooftops", depth: 2, maxPerspectives: 5, seed: 1337 }
-    plan_output_example:
-      json: { questions: [ { id: "q1", perspective: "historical", text: "..." } ], perspectives: ["historical"], graph: { nodes: {}, edges: [] } }
-  dependencies: []
-  observability:
-    metrics: [planner_latency_seconds, perspective_count, question_count]
-  risks:
-    - outline_integration_fidelity
+  - id: planner_multiperspective
+    phase: P1
+    title: Multi-Perspective Question Planning
+    description: Deterministic perspective/question generation and concept graph (mind-map).
+    responsibilities:
+      - Derive perspectives; generate questions with stable ids; export/import graph JSON.
+    interfaces:
+      cli:
+        command: "rw"
+        subcommands:
+          - { name: "plan", flags_ref: planner }
+      stdio_methods:
+        - "mcp.tool:planner.multi_perspective"
+      classes:
+        - { name: Perspective, methods: [derive_perspectives, generate_questions] }
+        - { name: MindMap, methods: [add_node, add_edge, to_json, from_json] }
+    data_contracts:
+      plan_input_example:
+        json: { topic: "Solar rooftops", depth: 2, maxPerspectives: 5, seed: 1337 }
+      plan_output_example:
+        json: { questions: [ { id: "q1", perspective: "historical", text: "..." } ], perspectives: ["historical"], graph: { nodes: {}, edges: [] } }
+    dependencies: []
+    observability:
+      metrics: [planner_latency_seconds, perspective_count, question_count]
+    risks:
+      - outline_integration_fidelity
 
-- id: hitl_checkpoints
-  phase: P1
-  title: Human-in-the-Loop Checkpoints
-  description: Outline approval (editor/stdin/noninteractive), question injection, source review; mind-map viewer.
-  responsibilities:
-    - Validate & merge user-provided edits/questions; pretty-print mind-map.
-  interfaces:
-    cli:
-      command: "rw"
-      subcommands:
-        - { name: "mindmap", flags_ref: planner }
-    endpoints_http:
-      - { method: POST, path: "/v1/hitl/outline-review" }
-      - { method: POST, path: "/v1/hitl/questions-merge" }
-    stdio_methods:
-      - "mcp.tool:hitl.outline_review"
-      - "mcp.tool:hitl.questions_merge"
-    classes:
-      - { name: Checkpointer, methods: [approve_outline, inject_questions, review_sources] }
-      - { name: MindMapView, methods: [pretty_print] }
-  data_contracts:
-    outline_schema_ref: "apps/mcp_server/schemas/hitl/outline.schema.json"
-    questions_schema_ref: "apps/mcp_server/schemas/hitl/questions.schema.json"
-    sources_schema_ref: "apps/mcp_server/schemas/hitl/sources.schema.json"
-  dependencies: [pyyaml]
-  observability:
-    metrics: [edits_applied_total, questions_merged_total, validation_errors_total]
-  risks:
-    - editor_mode_in_automation
+  - id: hitl_checkpoints
+    phase: P1
+    title: Human-in-the-Loop Checkpoints
+    description: Outline approval (editor/stdin/noninteractive), question injection, source review; mind-map viewer.
+    responsibilities:
+      - Validate & merge user-provided edits/questions; pretty-print mind-map.
+    interfaces:
+      cli:
+        command: "rw"
+        subcommands:
+          - { name: "mindmap", flags_ref: planner }
+      endpoints_http:
+        - { method: POST, path: "/v1/hitl/outline-review" }
+        - { method: POST, path: "/v1/hitl/questions-merge" }
+      stdio_methods:
+        - "mcp.tool:hitl.outline_review"
+        - "mcp.tool:hitl.questions_merge"
+      classes:
+        - { name: Checkpointer, methods: [approve_outline, inject_questions, review_sources] }
+        - { name: MindMapView, methods: [pretty_print] }
+    data_contracts:
+      outline_schema_ref: "apps/mcp_server/schemas/hitl/outline.schema.json"
+      questions_schema_ref: "apps/mcp_server/schemas/hitl/questions.schema.json"
+      sources_schema_ref: "apps/mcp_server/schemas/hitl/sources.schema.json"
+    dependencies: [pyyaml]
+    observability:
+      metrics: [edits_applied_total, questions_merged_total, validation_errors_total]
+    risks:
+      - editor_mode_in_automation
 
-- id: agents_pipeline
-  phase: P1
-  title: Multi-Agent Research Pipeline
-  description: Planner → Executor (parallel retrieval/summarization) → Publisher assembling report/outline/bibliography.
-  responsibilities:
-    - Deterministic outputs; parallel speedups; clear separation of concerns.
-  interfaces:
-    cli:
-      command: "rw"
-      subcommands:
-        - { name: "research", flags_ref: research }
-    stdio_methods:
-      - "mcp.tool:research.execute"
-    classes:
-      - { name: Planner,   methods: [plan] }
-      - { name: Executor,  methods: [run] }
-      - { name: Publisher, methods: [assemble] }
-  data_contracts:
-    research_input_example:
-      json: { topic: "Urban heat islands", parallel: 8, seed: 1337, maxTasks: 12 }
-    research_output_example:
-      json:
-        notes: [ { id: "n1", task_id: "t1", text: "...", sources: ["u1"], citation_keys: ["[1]"] } ]
-        sources: [ { id: "u1", url: "https://...", title: "...", snippet: "...", reliability: 0.8 } ]
-        artifacts: { report_md: "# Report\n...", outline_md: "# Outline\n...", bibliography_md: "# References\n..." }
-        run_id: "uuid"
-  dependencies: [anyio]
-  observability:
-    metrics: [executor_parallel_speedup, dedupe_ratio, citations_per_k_tokens]
-    logs: [task_count, note_count, source_count]
-  risks:
-    - backpressure_and_streaming_policies
+  - id: agents_pipeline
+    phase: P1
+    title: Multi-Agent Research Pipeline
+    description: Planner → Executor (parallel retrieval/summarization) → Publisher assembling report/outline/bibliography.
+    responsibilities:
+      - Deterministic outputs; parallel speedups; clear separation of concerns.
+    interfaces:
+      cli:
+        command: "rw"
+        subcommands:
+          - { name: "research", flags_ref: research }
+      stdio_methods:
+        - "mcp.tool:research.execute"
+      classes:
+        - { name: Planner,   methods: [plan] }
+        - { name: Executor,  methods: [run] }
+        - { name: Publisher, methods: [assemble] }
+    data_contracts:
+      research_input_example:
+        json: { topic: "Urban heat islands", parallel: 8, seed: 1337, maxTasks: 12 }
+      research_output_example:
+        json:
+          notes: [ { id: "n1", task_id: "t1", text: "...", sources: ["u1"], citation_keys: ["[1]"] } ]
+          sources: [ { id: "u1", url: "https://...", title: "...", snippet: "...", reliability: 0.8 } ]
+          artifacts: { report_md: "# Report\n...", outline_md: "# Outline\n...", bibliography_md: "# References\n..." }
+          run_id: "uuid"
+    dependencies: [anyio]
+    observability:
+      metrics: [executor_parallel_speedup, dedupe_ratio, citations_per_k_tokens]
+      logs: [task_count, note_count, source_count]
+    risks:
+      - backpressure_and_streaming_policies
 
   - id: flowscript_frontend
     phase: P1
@@ -492,180 +492,180 @@ components:
     outputs:
       - { type: artifact, id: flowscript_yaml, path_template: "runs/{run_id}/compiled.yaml" }
 
-# ===== Vector DB area split for maintainability =====
+  # ===== Vector DB area split for maintainability =====
 
-- id: vector_db_core
-  phase: P0
-  title: Vector DB Core (Interfaces + Orchestrator)
-  description: Stable Python registry + protocols; C++ interface design; CLI wrapper; CPU-serialized index contract. Consumed by MCP tool implementations and Serving Node; NOT imported directly by the Task Runner.
-  responsibilities:
-    - Provide Backend/Handle protocols, registry, CLI; enforce CPU serialization contract; shard merge API.
-    - Orchestrate ingestion from PDF and Markdown corpora discovered under --corpus-dir, extracting text and metadata (front-matter aware).
-  interfaces:
-    cli:
-      command: "vectordb-builder"
-      subcommands:
-        - { name: "build", flags_ref: vectordb_builder }
-        - { name: "merge", flags_ref: vectordb_builder }
-    python:
-      protocols:
-        - { name: Backend, methods: [capabilities, build] }
-        - { name: Handle,  methods: [requires_training, train, add, search, ntotal, serialize_cpu, to_gpu, merge_with, spec] }
-      registry: { module: "ragcore.registry", functions: [register, get, list_backends] }
-  data_contracts:
-    index_layout:
-      index_bin: "index.bin"
-      index_spec_json: "index_spec.json"
-      docmap_json: "docmap.json"
-      shards_dir: "shards/"
-    corpus_input:
-      description: "Files discovered under --corpus-dir; PDFs and Markdown are supported."
-      formats:
-        pdf: "Extract text and document metadata when available."
-        md: "Extract Markdown content; parse optional front-matter (YAML or key:value headers) above a '---' delimiter."
-  dependencies: [numpy]
-  observability:
-    metrics: [shards_merged_total, index_serialize_seconds, index_deserialize_seconds]
-    logs: [backend_selected, shard_merge_started, shard_merge_completed]
-  risks:
-    - cross-version_handle_incompatibility
+  - id: vector_db_core
+    phase: P0
+    title: Vector DB Core (Interfaces + Orchestrator)
+    description: Stable Python registry + protocols; C++ interface design; CLI wrapper; CPU-serialized index contract. Consumed by MCP tool implementations and Serving Node; NOT imported directly by the Task Runner.
+    responsibilities:
+      - Provide Backend/Handle protocols, registry, CLI; enforce CPU serialization contract; shard merge API.
+      - Orchestrate ingestion from PDF and Markdown corpora discovered under --corpus-dir, extracting text and metadata (front-matter aware).
+    interfaces:
+      cli:
+        command: "vectordb-builder"
+        subcommands:
+          - { name: "build", flags_ref: vectordb_builder }
+          - { name: "merge", flags_ref: vectordb_builder }
+      python:
+        protocols:
+          - { name: Backend, methods: [capabilities, build] }
+          - { name: Handle,  methods: [requires_training, train, add, search, ntotal, serialize_cpu, to_gpu, merge_with, spec] }
+        registry: { module: "ragcore.registry", functions: [register, get, list_backends] }
+    data_contracts:
+      index_layout:
+        index_bin: "index.bin"
+        index_spec_json: "index_spec.json"
+        docmap_json: "docmap.json"
+        shards_dir: "shards/"
+      corpus_input:
+        description: "Files discovered under --corpus-dir; PDFs and Markdown are supported."
+        formats:
+          pdf: "Extract text and document metadata when available."
+          md: "Extract Markdown content; parse optional front-matter (YAML or key:value headers) above a '---' delimiter."
+    dependencies: [numpy]
+    observability:
+      metrics: [shards_merged_total, index_serialize_seconds, index_deserialize_seconds]
+      logs: [backend_selected, shard_merge_started, shard_merge_completed]
+    risks:
+      - cross-version_handle_incompatibility
 
-- id: vector_backend_faiss
-  phase: P0
-  title: FAISS Backend (C++ + pybind11)
-  description: Flat, IVF-Flat, IVFPQ (CPU) with optional GPU serve; robust merge for flat; IVF merge requiring identical codebooks else reassign/re-encode.
-  responsibilities:
-    - Train/add/search; serialize CPU; to_gpu(); merge_with() across shards.
-  interfaces:
-    cxx:
-      classes:
-        - { name: ragcore::IIndex, methods: [requires_training, train, add, search, ntotal, spec, serialize_cpu, merge_with, to_gpu] }
-    python:
-      protocols:
-        - { name: Handle, methods: [train, add, search, serialize_cpu, to_gpu, merge_with] }
-  dependencies: [faiss, openmp, pybind11]
-  observability:
-    metrics: [faiss_build_seconds, faiss_add_vectors_total, faiss_search_request_duration_seconds_bucket, faiss_memory_bytes]
-    logs: [faiss_threads, index_kind, metric, params]
-  risks:
-    - ivf_pq_merge_requires_matching_codebooks
-    - cuda_vendor_lock_in
+  - id: vector_backend_faiss
+    phase: P0
+    title: FAISS Backend (C++ + pybind11)
+    description: Flat, IVF-Flat, IVFPQ (CPU) with optional GPU serve; robust merge for flat; IVF merge requiring identical codebooks else reassign/re-encode.
+    responsibilities:
+      - Train/add/search; serialize CPU; to_gpu(); merge_with() across shards.
+    interfaces:
+      cxx:
+        classes:
+          - { name: ragcore::IIndex, methods: [requires_training, train, add, search, ntotal, spec, serialize_cpu, merge_with, to_gpu] }
+      python:
+        protocols:
+          - { name: Handle, methods: [train, add, search, serialize_cpu, to_gpu, merge_with] }
+    dependencies: [faiss, openmp, pybind11]
+    observability:
+      metrics: [faiss_build_seconds, faiss_add_vectors_total, faiss_search_request_duration_seconds_bucket, faiss_memory_bytes]
+      logs: [faiss_threads, index_kind, metric, params]
+    risks:
+      - ivf_pq_merge_requires_matching_codebooks
+      - cuda_vendor_lock_in
 
-- id: vector_backend_hnsw
-  phase: P1
-  title: HNSW Backend (HNSWlib)
-  description: HNSW index via HNSWlib; merge via reinsertion; CPU serialization.
-  responsibilities:
-    - Add/search; serialize CPU; merge by reinserting shard vectors.
-  interfaces:
-    cxx:
-      classes:
-        - { name: ragcore::IIndex, methods: [add, search, ntotal, spec, serialize_cpu, merge_with] }
-  dependencies: [hnswlib]
-  observability:
-    metrics: [hnsw_add_vectors_total, hnsw_search_request_duration_seconds_bucket, hnsw_memory_bytes]
-    logs: [hnsw_params]
-  risks:
-    - true_graph_merge_nontrivial
+  - id: vector_backend_hnsw
+    phase: P1
+    title: HNSW Backend (HNSWlib)
+    description: HNSW index via HNSWlib; merge via reinsertion; CPU serialization.
+    responsibilities:
+      - Add/search; serialize CPU; merge by reinserting shard vectors.
+    interfaces:
+      cxx:
+        classes:
+          - { name: ragcore::IIndex, methods: [add, search, ntotal, spec, serialize_cpu, merge_with] }
+    dependencies: [hnswlib]
+    observability:
+      metrics: [hnsw_add_vectors_total, hnsw_search_request_duration_seconds_bucket, hnsw_memory_bytes]
+      logs: [hnsw_params]
+    risks:
+      - true_graph_merge_nontrivial
 
-- id: vector_backend_cuvs
-  phase: P1
-  title: GPU Backend (RAFT/cuVS)
-  description: IVF-Flat/IVF-PQ on GPU; CPU-serialize via FAISS interop or custom dump; merge via CPU path then re-upload.
-  responsibilities:
-    - Train/add/search on GPU; serialize to CPU; merge via CPU fallback.
-  interfaces:
-    cxx:
-      classes:
-        - { name: ragcore::IIndex, methods: [to_gpu, serialize_cpu, merge_with] }
-  dependencies: [raft_cuvs, cuda_toolkit]
-  observability:
-    metrics: [cuvs_build_seconds, cuvs_search_request_duration_seconds_bucket, cuvs_gpu_memory_bytes]
-    logs: [cuda_device, nlist, nprobe, pq_m, pq_bits]
-  risks:
-    - gpu_driver_compat
-    - limited_cross_vendor_support
+  - id: vector_backend_cuvs
+    phase: P1
+    title: GPU Backend (RAFT/cuVS)
+    description: IVF-Flat/IVF-PQ on GPU; CPU-serialize via FAISS interop or custom dump; merge via CPU path then re-upload.
+    responsibilities:
+      - Train/add/search on GPU; serialize to CPU; merge via CPU fallback.
+    interfaces:
+      cxx:
+        classes:
+          - { name: ragcore::IIndex, methods: [to_gpu, serialize_cpu, merge_with] }
+    dependencies: [raft_cuvs, cuda_toolkit]
+    observability:
+      metrics: [cuvs_build_seconds, cuvs_search_request_duration_seconds_bucket, cuvs_gpu_memory_bytes]
+      logs: [cuda_device, nlist, nprobe, pq_m, pq_bits]
+    risks:
+      - gpu_driver_compat
+      - limited_cross_vendor_support
 
-- id: adapter_milvus
-  phase: P1
-  title: Milvus Adapter (External DB)
-  description: Out-of-process adapter via gRPC/HTTP to Milvus; maps IndexSpec; handles add/search/serialize via export.
-  responsibilities:
-    - Translate build/add/search/merge to Milvus; manage collection/index params; export/import where possible.
-  interfaces:
-    adapters:
-      - { name: milvus_grpc_client, tool: vector_index, transport: grpc }
-    endpoints_http:
-      - { method: POST, path: "/adapter/milvus/search" }
-  dependencies: [pymilvus, grpcio]
-  observability:
-    metrics: [milvus_requests_total, milvus_request_duration_seconds_bucket]
-    logs: [milvus_collection, milvus_index_params]
-  risks:
-    - provider_api_compat_changes
-    - data_export_limitations
+  - id: adapter_milvus
+    phase: P1
+    title: Milvus Adapter (External DB)
+    description: Out-of-process adapter via gRPC/HTTP to Milvus; maps IndexSpec; handles add/search/serialize via export.
+    responsibilities:
+      - Translate build/add/search/merge to Milvus; manage collection/index params; export/import where possible.
+    interfaces:
+      adapters:
+        - { name: milvus_grpc_client, tool: vector_index, transport: grpc }
+      endpoints_http:
+        - { method: POST, path: "/adapter/milvus/search" }
+    dependencies: [pymilvus, grpcio]
+    observability:
+      metrics: [milvus_requests_total, milvus_request_duration_seconds_bucket]
+      logs: [milvus_collection, milvus_index_params]
+    risks:
+      - provider_api_compat_changes
+      - data_export_limitations
 
-- id: adapter_qdrant
-  phase: P1
-  title: Qdrant Adapter (External DB)
-  description: Out-of-process adapter via HTTP to Qdrant; supports HNSW and filters; bridges to our Search schema.
-  responsibilities:
-    - Translate add/search; manage collections; map filters/metadata; approximate serialize via collection dump.
-  interfaces:
-    adapters:
-      - { name: qdrant_http_client, tool: vector_index, transport: http }
-    endpoints_http:
-      - { method: POST, path: "/adapter/qdrant/search" }
-  dependencies: [qdrant-client, httpx]
-  observability:
-    metrics: [qdrant_requests_total, qdrant_request_duration_seconds_bucket]
-    logs: [qdrant_collection, qdrant_index_params]
-  risks:
-    - dump_format_nonportable
-    - filter_semantics_mismatch
+  - id: adapter_qdrant
+    phase: P1
+    title: Qdrant Adapter (External DB)
+    description: Out-of-process adapter via HTTP to Qdrant; supports HNSW and filters; bridges to our Search schema.
+    responsibilities:
+      - Translate add/search; manage collections; map filters/metadata; approximate serialize via collection dump.
+    interfaces:
+      adapters:
+        - { name: qdrant_http_client, tool: vector_index, transport: http }
+      endpoints_http:
+        - { method: POST, path: "/adapter/qdrant/search" }
+    dependencies: [qdrant-client, httpx]
+    observability:
+      metrics: [qdrant_requests_total, qdrant_request_duration_seconds_bucket]
+      logs: [qdrant_collection, qdrant_index_params]
+    risks:
+      - dump_format_nonportable
+      - filter_semantics_mismatch
 
-- id: research_collector
-  phase: P1
-  title: Research Collector CLI
-  description: Scrape → manifest.json → download scripts → match/enrich → corpus export (jsonl + pdfs). Standalone project; not part of Task Runner/MCP codebase.
-  repository: "git+ssh://example.com/your-org/research-collector.git"
-  artifacts_out: ["collector/manifest.json", "collector/corpus.jsonl", "collector/pdfs/"]
-  responsibilities:
-    - Build manifest, download PDFs/Markdown, enrich metadata, export corpus for indexing.
-  interfaces:
-    cli:
-      command: "research-collector"
-      subcommands:
-        - { name: "scrape" }
-        - { name: "emit-downloads" }
-        - { name: "match-enrich" }
-  data_contracts:
-    manifest_json: "collector/manifest.schema.json"
-    corpus_jsonl: "collector/corpus.schema.json"
-    markdown_front_matter:
-      description: "When Markdown has front-matter, prefer YAML; otherwise support key:value header blocks above a '---' delimiter."
-      precedence: "Front-matter keys override embedded metadata fields."
-  dependencies: [aria2c, jdownloader, pypdf_or_pymupdf]
-  observability:
-    logs: [download_success_rate, metadata_completion_rate]
-  risks:
-    - site_html_variability
+  - id: research_collector
+    phase: P1
+    title: Research Collector CLI
+    description: Scrape → manifest.json → download scripts → match/enrich → corpus export (jsonl + pdfs). Standalone project; not part of Task Runner/MCP codebase.
+    repository: "git+ssh://example.com/your-org/research-collector.git"
+    artifacts_out: ["collector/manifest.json", "collector/corpus.jsonl", "collector/pdfs/"]
+    responsibilities:
+      - Build manifest, download PDFs/Markdown, enrich metadata, export corpus for indexing.
+    interfaces:
+      cli:
+        command: "research-collector"
+        subcommands:
+          - { name: "scrape" }
+          - { name: "emit-downloads" }
+          - { name: "match-enrich" }
+    data_contracts:
+      manifest_json: "collector/manifest.schema.json"
+      corpus_jsonl: "collector/corpus.schema.json"
+      markdown_front_matter:
+        description: "When Markdown has front-matter, prefer YAML; otherwise support key:value header blocks above a '---' delimiter."
+        precedence: "Front-matter keys override embedded metadata fields."
+    dependencies: [aria2c, jdownloader, pypdf_or_pymupdf]
+    observability:
+      logs: [download_success_rate, metadata_completion_rate]
+    risks:
+      - site_html_variability
 
-- id: observability_ci
-  phase: P0
-  title: Observability & CI
-  description: Structured logs, JSONL traces, lint/type/test pipelines, conformance tests.
-  responsibilities:
-    - Enforce naming/style, schema validation, MCP conformance, DSL lints.
-  interfaces:
-    ci:
-      github_actions: ["lint", "typecheck", "unit", "integration", "e2e", "mcp_conformance"]
-  dependencies: [ruff, mypy, yamllint, pytest, coverage, clang-format, clang-tidy]
-  observability:
-    logs: [ci_step, status, duration_ms]
-  metrics: [tests_green_total, conformance_pass_total, style_pass_total]
-  risks:
-    - flakiness_if_external_network
+  - id: observability_ci
+    phase: P0
+    title: Observability & CI
+    description: Structured logs, JSONL traces, lint/type/test pipelines, conformance tests.
+    responsibilities:
+      - Enforce naming/style, schema validation, MCP conformance, DSL lints.
+    interfaces:
+      ci:
+        github_actions: ["lint", "typecheck", "unit", "integration", "e2e", "mcp_conformance"]
+    dependencies: [ruff, mypy, yamllint, pytest, coverage, clang-format, clang-tidy]
+    observability:
+      logs: [ci_step, status, duration_ms]
+    metrics: [tests_green_total, conformance_pass_total, style_pass_total]
+    risks:
+      - flakiness_if_external_network
 
 # Tool registry (for pricing + tags → used by adapters & linter)
 tool_registry:
@@ -784,6 +784,18 @@ open_decisions:
     question: If both embedded metadata and front-matter exist, which wins?
     options: [front_matter_overrides, prefer_embedded_metadata, merge_with_priority_front_matter]
     default: front_matter_overrides
+  - id: flowscript_parser_engine
+    question: Which runtime parses FlowScript in P1?
+    options: [peggy_node_subprocess, lark_python_inproc, tree_sitter_subprocess]
+    default: peggy_node_subprocess
+  - id: flowscript_error_surface
+    question: How to surface parse/compile errors?
+    options: [stderr_plain, envelope_structured, yaml_problem_markers]
+    default: envelope_structured
+  - id: flowscript_expr_interp
+    question: Expression semantics inside Expr strings?
+    options: [pass_through, jinja_eval_at_runtime, limited_expr_eval_at_compile]
+    default: pass_through
 
 # Test matrix (high-level)
 tests:
@@ -811,16 +823,3 @@ tests:
     - vectordb_build_md_fixture
   ci:
     coverage_minimum: 85
-
-  - id: flowscript_parser_engine
-    question: Which runtime parses FlowScript in P1?
-    options: [peggy_node_subprocess, lark_python_inproc, tree_sitter_subprocess]
-    default: peggy_node_subprocess
-  - id: flowscript_error_surface
-    question: How to surface parse/compile errors?
-    options: [stderr_plain, envelope_structured, yaml_problem_markers]
-    default: envelope_structured
-  - id: flowscript_expr_interp
-    question: Expression semantics inside Expr strings?
-    options: [pass_through, jinja_eval_at_runtime, limited_expr_eval_at_compile]
-    default: pass_through
