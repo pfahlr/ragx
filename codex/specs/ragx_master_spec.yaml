@@ -1,4 +1,3 @@
-
 # RAGX Master Spec
 version: 0.3
 metadata:
@@ -270,7 +269,7 @@ components:
       - subprocess_resource_limits
     outputs:
       - { type: discovery_doc, path: "/mcp/discover" }
-  
+
   - id: toolpacks_runtime
     phase: P0
     title: Declarative Toolpacks Runtime
@@ -297,7 +296,7 @@ components:
     risks:
       - script_path_traversal
       - nondeterministic_external_services
-  
+
   - id: core_tools
     phase: P0
     title: Core MCP Tools (canonical set)
@@ -318,7 +317,6 @@ components:
       metrics: [tool_success_total, tool_error_total, tool_duration_seconds_bucket]
     risks:
       - provider_normalization_gaps
-  
   - id: rest_facade
     phase: P1
     title: REST Parity Facade
@@ -338,7 +336,7 @@ components:
       metrics: [rest_requests_total, rest_request_duration_seconds_bucket]
     risks:
       - streaming_vs_sync_for_long_runs
-  
+
   - id: retrieval_rerank
     phase: P1
     title: Enhanced Retrieval + Re-Ranking
@@ -368,7 +366,7 @@ components:
     risks:
       - model_download_in_ci
       - variability_across_providers
-  
+
   - id: planner_multiperspective
     phase: P1
     title: Multi-Perspective Question Planning
@@ -395,7 +393,7 @@ components:
       metrics: [planner_latency_seconds, perspective_count, question_count]
     risks:
       - outline_integration_fidelity
-  
+
   - id: hitl_checkpoints
     phase: P1
     title: Human-in-the-Loop Checkpoints
@@ -425,7 +423,7 @@ components:
       metrics: [edits_applied_total, questions_merged_total, validation_errors_total]
     risks:
       - editor_mode_in_automation
-  
+
   - id: agents_pipeline
     phase: P1
     title: Multi-Agent Research Pipeline
@@ -458,7 +456,7 @@ components:
       logs: [task_count, note_count, source_count]
     risks:
       - backpressure_and_streaming_policies
-  
+
   - id: flowscript_frontend
     phase: P1
     title: FlowScript Frontend (human-readable DSL -> YAML DSL)
@@ -493,7 +491,7 @@ components:
       - { type: artifact, id: flowscript_yaml, path_template: "runs/{run_id}/compiled.yaml" }
 
   # ===== Vector DB area split for maintainability =====
-  
+
   - id: vector_db_core
     phase: P0
     title: Vector DB Core (Interfaces + Orchestrator)
@@ -529,7 +527,7 @@ components:
       logs: [backend_selected, shard_merge_started, shard_merge_completed]
     risks:
       - cross-version_handle_incompatibility
-  
+
   - id: vector_backend_faiss
     phase: P0
     title: FAISS Backend (C++ + pybind11)
@@ -550,7 +548,7 @@ components:
     risks:
       - ivf_pq_merge_requires_matching_codebooks
       - cuda_vendor_lock_in
-  
+
   - id: vector_backend_hnsw
     phase: P1
     title: HNSW Backend (HNSWlib)
@@ -567,7 +565,7 @@ components:
       logs: [hnsw_params]
     risks:
       - true_graph_merge_nontrivial
-  
+
   - id: vector_backend_cuvs
     phase: P1
     title: GPU Backend (RAFT/cuVS)
@@ -585,7 +583,7 @@ components:
     risks:
       - gpu_driver_compat
       - limited_cross_vendor_support
-  
+
   - id: adapter_milvus
     phase: P1
     title: Milvus Adapter (External DB)
@@ -604,7 +602,7 @@ components:
     risks:
       - provider_api_compat_changes
       - data_export_limitations
-  
+
   - id: adapter_qdrant
     phase: P1
     title: Qdrant Adapter (External DB)
@@ -623,7 +621,7 @@ components:
     risks:
       - dump_format_nonportable
       - filter_semantics_mismatch
-  
+
   - id: research_collector
     phase: P1
     title: Research Collector CLI
@@ -650,7 +648,7 @@ components:
       logs: [download_success_rate, metadata_completion_rate]
     risks:
       - site_html_variability
-  
+
   - id: observability_ci
     phase: P0
     title: Observability & CI
@@ -666,8 +664,7 @@ components:
     metrics: [tests_green_total, conformance_pass_total, style_pass_total]
     risks:
       - flakiness_if_external_network
-  
-  # Tool registry (for pricing + tags → used by adapters & linter)
+
 tool_registry:
   gpt:
     type: llm
