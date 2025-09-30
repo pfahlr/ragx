@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib
+import builtins
 import sys
 import types
 
@@ -76,3 +77,24 @@ def test_cpp_backend_uses_extension_when_available(monkeypatch: pytest.MonkeyPat
     info = backend.capabilities()
     assert info["available"] is True
     assert info["kinds"] == ["flat"]
+
+
+def test_cpp_backend_records_non_module_import_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    real_import = builtins.__import__
+
+    def failing_import(name, globals=None, locals=None, fromlist=(), level=0):
+        if name == "_ragcore_cpp":
+            raise ImportError("abi mismatch")
+        return real_import(name, globals, locals, fromlist, level)
+
+    monkeypatch.setattr(builtins, "__import__", failing_import)
+
+    module = _import_cpp_module(monkeypatch)
+
+    assert module.HAS_CPP_EXTENSION is False
+
+    backend = module.CppBackend()
+    reason = backend.capabilities()["reason"]
+    assert "abi mismatch" in reason
