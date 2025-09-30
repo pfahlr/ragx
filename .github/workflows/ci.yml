@@ -42,8 +42,9 @@ jobs:
       # Export pybind11_DIR so CMake can find it (portable)
       - name: Export pybind11_DIR
         run: |
-          echo "pybind11_DIR=$(python -m pybind11 --cmakedir)" >> $GITHUB_ENV
-          echo "Using pybind11_DIR=$pybind11_DIR"
+          pybind11_cmake_dir="$(python -m pybind11 --cmakedir)"
+          echo "pybind11_DIR=${pybind11_cmake_dir}" >> "$GITHUB_ENV"
+          echo "Using pybind11_DIR=${pybind11_cmake_dir}"
 
       # Install ccache (small, fast) so compiler launcher works
       - name: Install ccache
@@ -97,8 +98,6 @@ jobs:
       # Configure CMake (points to ./cpp as source dir)
       - name: Configure CMake
         if: ${{ steps.changes.outputs.native == 'true' && hashFiles('cpp/CMakeLists.txt') != '' }}
-        env:
-          pybind11_DIR: ${{ env.pybind11_DIR }}
         run: |
           mkdir -p ~/.cache/ccache
           ccache --max-size=200M || true
