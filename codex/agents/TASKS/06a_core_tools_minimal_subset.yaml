@@ -1,14 +1,102 @@
 id: 06a_core_tools_minimal_subset
-title: Core tools minimal subset over Python toolpacks
-description: >
-  Implement minimal Python toolpacks for exports.render.markdown,
-  vector.query.search (dummy), docs.load.fetch (local).
-
+title: Core MCP tools – minimal Python subset with structured observability
+owner: codex
+priority: P0
+depends_on:
+  - 05j_toolpacks_loader_execution_validation
+goal: >
+  Deliver the first production-quality slice of the MCP core tools catalog using
+  Python toolpacks: docs.load.fetch (local filesystem), vector.query.search
+  (deterministic dummy backend), and exports.render.markdown. Implement
+  structured observability, golden-log diffing, and rigorous tests that land
+  before runtime logic.
+alignment:
+  spec_refs:
+    - codex/specs/ragx_master_spec.yaml#components[toolpacks_runtime]
+    - codex/specs/ragx_master_spec.yaml#components[mcp_server]
+    - codex/specs/ragx_master_spec.yaml#components[dsl]
+  rationale: >
+    Toolpack schemas, MCP server transport envelopes, and DSL trace contracts are
+    defined in the master spec. This task must honor schema definitions,
+    logging/tracing requirements, and policy/budget guards.
+inputs:
+  - codex/specs/ragx_master_spec.yaml
+  - codex/agents/RUN_POLICY.md
+  - codex/agents/05x_toolpacks_dev_notes.md
+  - docs/toolpacks_loader.md
+outputs:
+  - apps/mcp_server/toolpacks/core/__init__.py
+  - apps/mcp_server/toolpacks/core/docs_load_fetch.py
+  - apps/mcp_server/toolpacks/core/vector_query_search.py
+  - apps/mcp_server/toolpacks/core/exports_render_markdown.py
+  - apps/mcp_server/logging/structured.py
+  - apps/mcp_server/logging/golden_diff.py
+  - apps/mcp_server/schemas/tools/docs.load.fetch.json
+  - apps/mcp_server/schemas/tools/vector.query.search.json
+  - apps/mcp_server/schemas/tools/exports.render.markdown.json
+  - tests/toolpacks/test_core_tools_minimal_subset.py
+  - tests/toolpacks/test_core_tools_logging.py
+  - tests/toolpacks/test_core_tools_log_diff.py
+  - tests/fixtures/core_tools/golden_logs.jsonl
+  - docs/mcp/core_tools_minimal.md
+deliverables:
+  - >
+    Minimal Python toolpack implementations for docs.load.fetch, vector.query.search,
+    and exports.render.markdown that satisfy schemas and policy guards while
+    keeping vector.query.search deterministic via seeded stub embeddings.
+  - >
+    JSON Schema files for each tool placed under apps/mcp_server/schemas/tools/
+    and referenced by the toolpack manifests.
+  - >
+    Structured JSON logging module emitting one event per tool invocation with
+    timestamp, agent_id, task_id, step_id, tool_id, status, retries, cost, and
+    correlation/run identifiers; logs must write to disk (JSONL) and be
+    retrievable in memory for assertions.
+  - >
+    Golden execution logs for the happy-path scenario committed under
+    tests/fixtures/core_tools/golden_logs.jsonl plus a diffing helper that uses
+    DeepDiff (or equivalent deterministic deep comparison) with whitelist support
+    for volatile fields (timestamps, run_id, correlation_id).
+  - >
+    Comprehensive docs that describe tool responsibilities, schema contracts,
+    logging fields, diff expectations, and how to extend the toolpack.
+test_plan:
+  sequencing: tests-first
+  description: >
+    Author failing tests that codify schema validation, tool outputs, structured
+    logging, retry behavior, and golden-log diffing before implementing toolpack
+    logic. Ensure fixtures are deterministic and seeds fixed.
 acceptance:
-  - tests/unit/test_core_tools_schemas.py pass
-  - tests/e2e/test_mcp_minimal_core_tools.py pass
-
-steps:
-  - Provide schema files under apps/mcp_server/schemas/tools/.
-  - Implement dummy Python toolpacks.
-  - Wire MCP server to load/serve these.
+  - tests/toolpacks/test_core_tools_minimal_subset.py passes (pytest -q -k core_tools_minimal_subset)
+  - tests/toolpacks/test_core_tools_logging.py passes and validates JSON schema + metadata fields
+  - tests/toolpacks/test_core_tools_log_diff.py passes and enforces DeepDiff-based regression guardrails
+  - Structured logs persist to runs/core_tools_minimal/logs.jsonl with one event per call
+  - Golden log diff only allows whitelisted keys (ts, run_id, correlation_id, step_id)
+  - MCP server discovery exposes the three tools with validated schemas via HTTP and STDIO transports
+paths_changed:
+  - apps/mcp_server/toolpacks/core/**
+  - apps/mcp_server/logging/**
+  - apps/mcp_server/schemas/tools/**
+  - tests/toolpacks/**
+  - tests/fixtures/core_tools/**
+  - docs/mcp/**
+observability:
+  logging:
+    event_schema: >
+      {"ts":"ISO8601","agent_id":"string","task_id":"string","step_id":"string","tool_id":"string",
+      "status":"enum[started|succeeded|failed|retry]","retries":0,"metadata":{...}}
+    disk_path: runs/core_tools_minimal/logs.jsonl
+    retention: commit_fixture
+  metrics:
+    - tool_calls_total
+    - retries_total
+    - tool_runtime_seconds
+ci:
+  run:
+    - pytest -q tests/toolpacks/test_core_tools_minimal_subset.py
+    - pytest -q tests/toolpacks/test_core_tools_logging.py
+    - pytest -q tests/toolpacks/test_core_tools_log_diff.py
+notes:
+  - Ensure policy/budget guards remain strict; vector.query.search must not hit external services.
+  - Validate schemas using jsonschema draft-07 and raise descriptive errors.
+  - Provide README updates only within docs/mcp/core_tools_minimal.md.
