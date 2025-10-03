@@ -25,13 +25,15 @@ REQUIRED_KEYS = {
     "input_bytes",
     "output_bytes",
     "metadata",
+    "run_id",
+    "attempt_id",
 }
 
 def _base_event(event: str, status: str, attempt: int) -> McpLogEvent:
     return McpLogEvent(
         ts=datetime.now(timezone.utc),
         agent_id="mcp_server",
-        task_id="06a_core_tools_minimal_subset",
+        task_id="06ab_core_tools_minimal_subset",
         step_id=attempt,
         trace_id=str(uuid4()),
         span_id=str(uuid4()),
@@ -48,7 +50,7 @@ def _base_event(event: str, status: str, attempt: int) -> McpLogEvent:
 
 def test_json_log_writer_persists_success_event(tmp_path: Path) -> None:
     log_path = tmp_path / "core-tools.jsonl"
-    writer = JsonLogWriter(log_path, agent_id="mcp_server", task_id="06a_core_tools_minimal_subset")
+    writer = JsonLogWriter(log_path, agent_id="mcp_server", task_id="06ab_core_tools_minimal_subset")
 
     event = _base_event(event="invocation_success", status="success", attempt=1)
     writer.write(event)
@@ -64,7 +66,7 @@ def test_json_log_writer_persists_success_event(tmp_path: Path) -> None:
 
 def test_json_log_writer_includes_error_payload(tmp_path: Path) -> None:
     log_path = tmp_path / "core-tools.jsonl"
-    writer = JsonLogWriter(log_path, agent_id="mcp_server", task_id="06a_core_tools_minimal_subset")
+    writer = JsonLogWriter(log_path, agent_id="mcp_server", task_id="06ab_core_tools_minimal_subset")
 
     failure = _base_event(event="invocation_failure", status="error", attempt=2)
     failure.error = {"code": "SIMULATED", "message": "forced failure"}

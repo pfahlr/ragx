@@ -1,0 +1,78 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Vector Query Search Output",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "hits": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "score": {
+            "type": "number"
+          },
+          "chunk": {
+            "type": "string"
+          },
+          "metadata": {
+            "type": "object",
+            "additionalProperties": true,
+            "required": [
+              "path",
+              "source",
+              "title"
+            ],
+            "properties": {
+              "path": {
+                "type": "string"
+              },
+              "source": {
+                "type": "string"
+              },
+              "title": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "required": [
+          "id",
+          "score",
+          "chunk",
+          "metadata"
+        ]
+      }
+    },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "query",
+        "top_k",
+        "corpus_size"
+      ],
+      "properties": {
+        "query": {
+          "type": "string"
+        },
+        "top_k": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "corpus_size": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    }
+  },
+  "required": [
+    "hits",
+    "metadata"
+  ]
+}

@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Exports Render Markdown Output",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "markdown": {
+      "type": "string",
+      "minLength": 1
+    },
+    "content_hash": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "title",
+        "template_sha256"
+      ],
+      "properties": {
+        "title": {
+          "type": "string"
+        },
+        "template_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "front_matter": {
+          "type": "object",
+          "additionalProperties": true
+        }
+      }
+    }
+  },
+  "required": [
+    "markdown",
+    "content_hash",
+    "metadata"
+  ]
+}

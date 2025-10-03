@@ -19,7 +19,7 @@ def runtime(tmp_path: Path) -> tuple[CoreToolsRuntime, JsonLogWriter]:
     loader = ToolpackLoader()
     loader.load_dir(TOOLPACK_DIR)
     log_path = tmp_path / "core-tools.jsonl"
-    logger = JsonLogWriter(log_path, agent_id="mcp_server", task_id="06a_core_tools_minimal_subset")
+    logger = JsonLogWriter(log_path, agent_id="mcp_server", task_id="06ab_core_tools_minimal_subset")
     runtime = CoreToolsRuntime(toolpacks=loader.list(), executor=Executor(), log_writer=logger)
     return runtime, logger
 

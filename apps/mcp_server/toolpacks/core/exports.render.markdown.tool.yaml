@@ -1,0 +1,30 @@
+id: mcp.tool:exports.render.markdown
+version: 0.1.0
+description: |
+  Render markdown with YAML front matter using a deterministic Jinja2 template.
+summary: Deterministic markdown renderer
+deterministic: true
+timeoutMs: 2000
+limits:
+  maxInputBytes: 8192
+  maxOutputBytes: 16384
+inputSchema:
+  $ref: ../../schemas/tools/exports_render_markdown.input.schema.json
+outputSchema:
+  $ref: ../../schemas/tools/exports_render_markdown.output.schema.json
+execution:
+  kind: python
+  module: apps.toolpacks.python.core.exports.render_markdown:render_markdown
+caps:
+  filesystem:
+    read:
+      - tests/fixtures/mcp/docs
+      - docs
+env: {}
+templating:
+  engine: jinja2
+metadata:
+  tags:
+    - exports
+    - markdown
+  owner: core-tools

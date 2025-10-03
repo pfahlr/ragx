@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Vector Query Search Input",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "query": {
+      "type": "string",
+      "minLength": 1
+    },
+    "top_k": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 10,
+      "default": 5
+    },
+    "filters": {
+      "type": "object",
+      "additionalProperties": true
+    }
+  },
+  "required": [
+    "query"
+  ]
+}

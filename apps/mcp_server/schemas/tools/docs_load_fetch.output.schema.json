@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Docs Load Fetch Output",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "document": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "type": "string"
+        },
+        "content": {
+          "type": "string"
+        },
+        "encoding": {
+          "type": "string"
+        },
+        "line_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "checksum": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      },
+      "required": [
+        "path",
+        "content",
+        "encoding",
+        "line_count",
+        "checksum"
+      ]
+    },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": true
+    }
+  },
+  "required": [
+    "document",
+    "metadata"
+  ]
+}

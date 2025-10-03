@@ -1,0 +1,28 @@
+id: mcp.tool:docs.load.fetch
+version: 0.1.0
+description: |
+  Load a local document and optional metadata from disk for deterministic tests.
+summary: Local document loader
+deterministic: true
+timeoutMs: 1500
+limits:
+  maxInputBytes: 4096
+  maxOutputBytes: 16384
+inputSchema:
+  $ref: ../../schemas/tools/docs_load_fetch.input.schema.json
+outputSchema:
+  $ref: ../../schemas/tools/docs_load_fetch.output.schema.json
+execution:
+  kind: python
+  module: apps.toolpacks.python.core.docs.load_fetch:load_fetch
+caps:
+  filesystem:
+    read:
+      - tests/fixtures/mcp/docs
+      - docs
+env: {}
+metadata:
+  tags:
+    - docs
+    - loader
+  owner: core-tools

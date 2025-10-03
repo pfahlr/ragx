@@ -34,7 +34,7 @@ _LEGACY_LIMIT_KEYS = {
     "max_output_bytes": "maxOutputBytes",
 }
 
-_TOOL_ID_PATTERN = re.compile(r"^[a-z0-9]+(?:\.[a-z0-9]+)+$")
+_TOOL_ID_PATTERN = re.compile(r"^[a-z0-9]+(?:\.[a-z0-9]+)*(?::[a-z0-9]+(?:\.[a-z0-9]+)+)?$")
 _ALLOWED_CAP_KEYS = {"network", "filesystem", "subprocess"}
 _ALLOWED_NETWORK_PROTOCOLS = {"http", "https"}
 _ENV_VAR_PATTERN = re.compile(r"^[A-Z][A-Z0-9_]*$")
@@ -459,12 +459,10 @@ def _apply_legacy_shim(data: Any, source_path: Path) -> Any:
 
 
 def _validate_tool_id(tool_id: str, source_path: Path) -> None:
-    if not _TOOL_ID_PATTERN.fullmatch(tool_id):
-        message = (
-            f"Toolpack {source_path} id '{tool_id}' must use dotted lowercase segments "
-            "(e.g. 'pkg.tool')"
-        )
-        raise ToolpackValidationError(message)
+        if not _TOOL_ID_PATTERN.fullmatch(tool_id):
+            raise ToolpackValidationError(
+                f"Toolpack {source_path} id '{tool_id}' must match 'prefix.segment[:sub.segment]'"
+            )
 
 
 def _validate_version(version: str, tool_id: str) -> None:

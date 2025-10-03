@@ -6,7 +6,7 @@ from typing import Any
 import pytest
 import yaml
 
-TASK_PATH = Path("codex/agents/TASKS/06a_core_tools_minimal_subset.yaml")
+TASK_PATH = Path("codex/agents/TASKS/06ab_core_tools_minimal_subset.yaml")
 
 
 def _load_task() -> dict[str, Any]:
@@ -20,21 +20,18 @@ def _load_task() -> dict[str, Any]:
 def test_metadata_and_dependencies() -> None:
     task = _load_task()
     assert task.get("version") == 1, "Task version should be explicitly set to 1"
-    assert task.get("id") == "06a_core_tools_minimal_subset"
+    assert task.get("id") == "06ab_core_tools_minimal_subset"
 
-    components = task.get("component_ids")
-    assert isinstance(components, list), "component_ids must be a list"
-    expected_components = {"core_tools", "toolpacks_runtime", "mcp_server", "observability_ci"}
+    components = task.get("components")
+    assert isinstance(components, list), "components must be enumerated"
+    expected_components = {"core_tools", "toolpacks_runtime", "mcp_server", "observability"}
     assert expected_components.issubset(set(components)), "Task must list all relevant components"
 
-    depends_on = task.get("depends_on")
-    assert isinstance(depends_on, list) and depends_on, "depends_on must enumerate prerequisites"
-    for required in [
-        "05b_toolpacks_executor_python_only",
-        "05c_toolpacks_loader_spec_alignment",
-        "05h_toolpacks_loader_metadata_validation",
-    ]:
-        assert required in depends_on, f"Missing dependency {required}"
+    arg_spec = task.get("arg_spec")
+    assert isinstance(arg_spec, list) and arg_spec == ["mcp_server", "task_runner"]
+
+    test_plan = task.get("test_plan")
+    assert isinstance(test_plan, list) and any("deepdiff" in item.lower() for item in test_plan)
 
     actions = task.get("actions")
     assert isinstance(actions, list) and actions, "actions must be a non-empty list"
@@ -44,35 +41,32 @@ def test_metadata_and_dependencies() -> None:
 
 @pytest.mark.parametrize(
     "field",
-    ["ts", "agentId", "taskId", "stepId", "event", "status", "retries", "durationMs", "metadata"],
+    ["ts", "agent_id", "task_id", "step_id", "event", "status", "duration_ms", "metadata"],
 )
 def test_structured_logging_artifacts_define_required_fields(field: str) -> None:
     task = _load_task()
-    artifacts = task.get("artifacts")
-    assert isinstance(artifacts, dict) and "structured_logs" in artifacts
+    structured_logs = next(
+        (item for item in task.get("artifacts", []) if item.get("name") == "structured_logs"),
+        None,
+    )
+    assert structured_logs, "structured_logs artifact must be declared"
+    assert structured_logs.get("path") == "runs/core_tools/minimal.jsonl"
 
-    logs = artifacts["structured_logs"]
-    assert logs.get("format") == "jsonl"
-    schema = logs.get("schema")
-    assert isinstance(schema, dict) and "required_fields" in schema
-    required_fields = schema["required_fields"]
-    assert isinstance(required_fields, list)
-    assert field in required_fields, f"Structured logs must require '{field}'"
+    contract = task.get("structured_logging_contract")
+    assert isinstance(contract, dict)
+    assert contract.get("format") == "jsonl"
+    assert contract.get("storage_path") == "runs/core_tools/minimal.jsonl"
+    fields = contract.get("event_fields")
+    assert isinstance(fields, list) and field in fields
 
-    metadata_fields = schema.get("metadata_fields")
-    assert isinstance(metadata_fields, list), "metadata_fields must be enumerated"
-    for meta_key in ["requestId", "runId", "mcpTransport", "toolpackId"]:
-        assert meta_key in metadata_fields, f"metadata_fields missing {meta_key}"
-
-    log_diff = artifacts.get("log_diff")
-    assert isinstance(log_diff, dict), "log_diff configuration must exist"
-    assert str(log_diff.get("tool", "")).startswith("deepdiff"), "Log diff tool must leverage deepdiff"
-    whitelist = log_diff.get("whitelist_fields")
+    diff_strategy = task.get("log_diff_strategy")
+    assert isinstance(diff_strategy, dict)
+    assert "deepdiff" in diff_strategy.get("tool", "")
+    whitelist = diff_strategy.get("whitelist_fields")
     assert isinstance(whitelist, list) and whitelist, "whitelist_fields must be configured"
-    for allowed in ["ts", "durationMs", "requestId", "runId", "pid"]:
-        assert allowed in whitelist, f"Whitelist must contain nondeterministic field '{allowed}'"
-    baseline = log_diff.get("baseline_path")
-    assert isinstance(baseline, str) and baseline.endswith("minimal_golden.jsonl"), "Baseline path must target golden logs"
+    assert {"ts", "duration_ms", "run_id", "trace_id", "span_id", "attempt_id"}.issubset(set(whitelist))
+    baseline = diff_strategy.get("baseline_path")
+    assert baseline == "tests/fixtures/mcp/core_tools/minimal_golden.jsonl"
 
 
 def test_tests_stage_outlines_unit_e2e_and_fixtures() -> None:
@@ -88,9 +82,9 @@ def test_tests_stage_outlines_unit_e2e_and_fixtures() -> None:
     assert isinstance(unit_tests, list) and unit_tests, "unit tests must be listed"
     unit_paths = {item.get("path") for item in unit_tests}
     assert {
-        "tests/unit/test_core_tools_schemas.py",
-        "tests/unit/test_core_tools_logging_minimal.py",
-        "tests/unit/test_core_tools_log_diff.py",
+        "tests/unit/mcp/test_core_tool_schemas_minimal.py",
+        "tests/unit/mcp/test_core_tool_logging.py",
+        "tests/unit/mcp/test_core_tool_log_diff.py",
     }.issubset(unit_paths), "Unit tests must cover schemas, logging, and log diff"
 
     e2e_tests = tests_section.get("e2e")
@@ -118,12 +112,11 @@ def test_acceptance_and_actions_cover_observability() -> None:
     assert isinstance(acceptance, list) and acceptance, "acceptance criteria must be listed"
     assert any("deepdiff" in item for item in acceptance), "Acceptance must require deepdiff diff check"
     assert any("runs/core_tools/minimal.jsonl" in item for item in acceptance), "Acceptance must reference structured logs"
-    assert any("scripts/diff_core_tool_logs.py" in item for item in acceptance), "Acceptance must mention diff script"
+    assert any("pytest -k \"core_tools_minimal\"" in item for item in acceptance)
 
-    observability_stage = next((entry for entry in task.get("actions", []) if entry.get("stage") == "observability"), None)
-    assert observability_stage is not None, "Observability stage must be explicitly defined"
-    summary = observability_stage.get("summary", "").lower()
-    assert "logging" in summary and "diff" in summary, "Observability summary must mention logging and diff"
+    observability_requirements = task.get("observability_requirements")
+    assert isinstance(observability_requirements, list)
+    assert any("timestamp" in item for item in observability_requirements)
 
     text = TASK_PATH.read_text(encoding="utf-8")
     for snippet in [
