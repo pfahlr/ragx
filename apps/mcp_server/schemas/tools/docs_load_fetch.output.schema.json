@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ragx.dev/schemas/tools/docs_load_fetch.output.schema.json",
+  "title": "docs.load.fetch output",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["document", "metadata"],
+  "properties": {
+    "document": {
+      "type": "string"
+    },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["title", "source_path", "characters", "checksum", "tags"],
+      "properties": {
+        "title": {
+          "type": "string"
+        },
+        "source_path": {
+          "type": "string"
+        },
+        "characters": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "checksum": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "tags": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "authors": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}
