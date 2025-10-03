@@ -13,11 +13,26 @@ from jsonschema.exceptions import SchemaError, ValidationError
 
 from apps.toolpacks.loader import Toolpack, ToolpackValidationError
 
-__all__ = ["Executor", "ToolpackExecutionError"]
+__all__ = ["Executor", "ToolpackExecutionError", "ToolpackValidationFailure"]
 
 
 class ToolpackExecutionError(Exception):
     """Raised when executing a Toolpack fails."""
+
+
+class ToolpackValidationFailure(ToolpackExecutionError):
+    """Raised when Toolpack input/output validation fails."""
+
+    def __init__(
+        self,
+        *,
+        stage: str,
+        message: str,
+        details: Mapping[str, Any] | None = None,
+    ) -> None:
+        super().__init__(message)
+        self.stage = stage
+        self.details = dict(details or {})
 
 
 class Executor:
@@ -127,8 +142,10 @@ class Executor:
 
 def _ensure_mapping(value: Any, *, stage: str, toolpack: Toolpack) -> dict[str, Any]:
     if not isinstance(value, Mapping):
-        raise ToolpackExecutionError(
-            f"Toolpack {toolpack.id} {stage} payload must be a mapping"
+        raise ToolpackValidationFailure(
+            stage=stage,
+            message=f"Toolpack {toolpack.id} {stage} payload must be a mapping",
+            details={"expected": "mapping"},
         )
     return dict(value)
 
@@ -150,6 +167,22 @@ def _validate_instance(
             f"Toolpack {toolpack.id} schema failed validation: {exc.message}"
         ) from exc
     except ValidationError as exc:
-        raise ToolpackExecutionError(
-            f"Toolpack {toolpack.id} {stage} failed JSON schema validation: {exc.message}"
+        details: dict[str, Any] = {
+            "message": exc.message,
+            "path": list(exc.path),
+            "schemaPath": list(exc.schema_path),
+        }
+        details["validator"] = exc.validator
+        if exc.validator_value is not None:
+            details["validatorValue"] = exc.validator_value
+        if exc.validator == "required" and isinstance(exc.validator_value, list):
+            details["missing"] = list(exc.validator_value)
+        if exc.context:
+            details["context"] = [ctx.message for ctx in exc.context]
+        raise ToolpackValidationFailure(
+            stage=stage,
+            message=(
+                f"Toolpack {toolpack.id} {stage} failed JSON schema validation: {exc.message}"
+            ),
+            details=details,
         ) from exc

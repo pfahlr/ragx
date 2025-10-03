@@ -12,7 +12,7 @@ from uuid import UUID, uuid4, uuid5
 from jsonschema import Draft202012Validator, validators
 
 from apps.mcp_server.logging import JsonLogWriter
-from apps.toolpacks.executor import Executor, ToolpackExecutionError
+from apps.toolpacks.executor import Executor, ToolpackExecutionError, ToolpackValidationFailure
 from apps.toolpacks.loader import Toolpack, ToolpackLoader
 
 from .envelope import Envelope, EnvelopeError, EnvelopeMeta
@@ -282,11 +282,12 @@ class McpService:
             prompt = self._prompts.get(prompt_id)
         except KeyError:
             return self._error_response(
-                code="MCP_UNKNOWN_PROMPT",
+                code="NOT_FOUND",
                 message=f"Prompt '{prompt_id}' not found",
                 context=ctx,
                 payload=payload,
                 prompt_id=prompt_id,
+                details={"resource": "prompt", "promptId": prompt_id},
             )
         data = prompt.to_payload()
         self._schemas.validator("prompt.response.schema.json").validate(data)
@@ -303,18 +304,30 @@ class McpService:
         ctx = self._normalise_context(context, "tool", "mcp.tool.invoke", payload)
         if tool_id not in self._toolpacks:
             return self._error_response(
-                code="MCP_UNKNOWN_TOOL",
+                code="NOT_FOUND",
                 message=f"Tool '{tool_id}' not found",
                 context=ctx,
                 payload=payload,
                 tool_id=tool_id,
+                details={"resource": "tool", "toolId": tool_id},
             )
         toolpack = self._toolpacks[tool_id]
         try:
             result = self._executor.run_toolpack(toolpack, arguments)
+        except ToolpackValidationFailure as exc:
+            code = "INVALID_INPUT" if exc.stage == "input" else "INTERNAL"
+            details: dict[str, Any] = {"stage": exc.stage, **exc.details}
+            return self._error_response(
+                code=code,
+                message=str(exc),
+                context=ctx,
+                payload=payload,
+                tool_id=tool_id,
+                details=details,
+            )
         except ToolpackExecutionError as exc:
             return self._error_response(
-                code="MCP_VALIDATION_ERROR",
+                code="INTERNAL",
                 message=str(exc),
                 context=ctx,
                 payload=payload,
@@ -407,6 +420,7 @@ class McpService:
         payload: Mapping[str, Any],
         tool_id: str | None = None,
         prompt_id: str | None = None,
+        details: Mapping[str, Any] | None = None,
     ) -> Envelope:
         ids = self._request_ids(context)
         step_id = self._log_manager.next_step_id()
@@ -428,10 +442,17 @@ class McpService:
             tool_id=tool_id,
             prompt_id=prompt_id,
         )
-        envelope = Envelope.failure(error=EnvelopeError(code=code, message=message), meta=meta)
+        error_details = dict(details) if details is not None else None
+        envelope = Envelope.failure(
+            error=EnvelopeError(code=code, message=message, details=error_details),
+            meta=meta,
+        )
         self._schemas.validator("envelope.schema.json").validate(
             envelope.model_dump(by_alias=True)
         )
+        error_payload: dict[str, Any] = {"code": code, "message": message}
+        if error_details is not None:
+            error_payload["details"] = error_details
         self._log_manager.emit(
             ServerLogEvent(
                 ts=datetime.now(UTC),
@@ -446,7 +467,7 @@ class McpService:
                 attempt=context.attempt,
                 input_bytes=ids["input_bytes"],
                 output_bytes=0,
-                error={"code": code, "message": message},
+                error=error_payload,
                 metadata={
                     "toolId": tool_id,
                     "promptId": prompt_id,

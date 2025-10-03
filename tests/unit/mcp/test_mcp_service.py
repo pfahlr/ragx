@@ -121,5 +121,7 @@ def test_invoke_tool_invalid_payload_returns_error(service: McpService) -> None:
     )
     payload = envelope.model_dump(by_alias=True)
     assert payload["ok"] is False
-    assert payload["error"]["code"] == "MCP_VALIDATION_ERROR"
+    assert payload["error"]["code"] == "INVALID_INPUT"
+    assert payload["error"]["details"]["stage"] == "input"
+    assert payload["error"]["details"]["missing"] == ["path"]
     assert "path" in payload["error"]["message"].lower()
