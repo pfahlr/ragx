@@ -3,12 +3,15 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from deepdiff import DeepDiff
+import pytest
 
 from apps.mcp_server.logging import JsonLogWriter
 from apps.mcp_server.runtime.core_tools import CoreToolsRuntime
 from apps.toolpacks.executor import Executor
 from apps.toolpacks.loader import ToolpackLoader
+
+deepdiff = pytest.importorskip("deepdiff")
+DeepDiff = deepdiff.DeepDiff
 
 TOOLPACK_DIR = Path("apps/mcp_server/toolpacks/core")
 GOLDEN_LOG = Path("tests/fixtures/mcp/core_tools/minimal_golden.jsonl")
@@ -50,11 +53,14 @@ def test_logs_match_golden(tmp_path: Path, monkeypatch) -> None:
         task_id="core-tools",
     )
 
-    runtime.invoke("mcp.tool:exports.render.markdown", {
-        "title": "Demo",
-        "template": "# {{ title }}",
-        "body": "example",
-    })
+    runtime.invoke(
+        "mcp.tool:exports.render.markdown",
+        {
+            "title": "Demo",
+            "template": "# {{ title }}",
+            "body": "example",
+        },
+    )
     runtime.invoke("mcp.tool:vector.query.search", {"query": "retrieval", "topK": 2})
     runtime.invoke(
         "mcp.tool:docs.load.fetch",
@@ -64,6 +70,7 @@ def test_logs_match_golden(tmp_path: Path, monkeypatch) -> None:
         },
     )
 
+    writer.close()
     produced = _normalise(writer.path)
     golden = _normalise(GOLDEN_LOG)
     diff = DeepDiff(golden, produced, ignore_order=True)

@@ -38,7 +38,9 @@ def runtime(tmp_path: Path) -> tuple[CoreToolsRuntime, JsonLogWriter]:
     return runtime, logger
 
 
-def test_exports_render_markdown_invocation(runtime: tuple[CoreToolsRuntime, JsonLogWriter]) -> None:
+def test_exports_render_markdown_invocation(
+    runtime: tuple[CoreToolsRuntime, JsonLogWriter],
+) -> None:
     runtime_instance, logger = runtime
     payload = {
         "title": "Core Tools Demo",
@@ -54,7 +56,9 @@ def test_exports_render_markdown_invocation(runtime: tuple[CoreToolsRuntime, Jso
     assert logger.path.exists()
 
 
-def test_docs_load_fetch_reads_fixture(runtime: tuple[CoreToolsRuntime, JsonLogWriter]) -> None:
+def test_docs_load_fetch_reads_fixture(
+    runtime: tuple[CoreToolsRuntime, JsonLogWriter],
+) -> None:
     runtime_instance, _ = runtime
     payload = {
         "path": str(FIXTURE_DIR / "sample_article.md"),
@@ -65,7 +69,9 @@ def test_docs_load_fetch_reads_fixture(runtime: tuple[CoreToolsRuntime, JsonLogW
     assert result["metadata"]["title"] == "Sample Article"
 
 
-def test_vector_query_search_invocation(runtime: tuple[CoreToolsRuntime, JsonLogWriter]) -> None:
+def test_vector_query_search_invocation(
+    runtime: tuple[CoreToolsRuntime, JsonLogWriter],
+) -> None:
     runtime_instance, logger = runtime
     result = runtime_instance.invoke(
         "mcp.tool:vector.query.search",

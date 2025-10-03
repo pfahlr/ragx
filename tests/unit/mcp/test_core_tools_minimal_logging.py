@@ -1,18 +1,16 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from uuid import uuid4
-
-import pytest
 
 from apps.mcp_server.logging import JsonLogWriter, McpLogEvent
 
 
 def _event(event: str, status: str, attempt: int) -> McpLogEvent:
     return McpLogEvent(
-        ts=datetime.now(timezone.utc),
+        ts=datetime.now(UTC),
         agent_id="mcp_server",
         task_id="06aV2",
         step_id=attempt,

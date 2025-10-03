@@ -7,6 +7,8 @@ from pathlib import Path
 
 import pytest
 
+pytest.importorskip("deepdiff")
+
 SCRIPT = Path("scripts/diff_core_tool_logs.py")
 GOLDEN = Path("tests/fixtures/mcp/core_tools/minimal_golden.jsonl")
 

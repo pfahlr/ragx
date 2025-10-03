@@ -21,7 +21,7 @@ class _Document:
     source_path: str
 
     @classmethod
-    def from_fixture(cls, doc_id: str, path: Path) -> "_Document":
+    def from_fixture(cls, doc_id: str, path: Path) -> _Document:
         text = path.read_text(encoding="utf-8")
         title_line = text.splitlines()[0].lstrip("# ") if text else doc_id
         return cls(
@@ -62,7 +62,7 @@ def _score(query: str, document: _Document) -> float:
 
 def _tie_breaker(doc_id: str) -> float:
     seed = os.getenv("RAGX_SEED", "0")
-    digest = hashlib.sha256(f"{doc_id}:{seed}".encode("utf-8")).hexdigest()
+    digest = hashlib.sha256(f"{doc_id}:{seed}".encode()).hexdigest()
     return int(digest[:8], 16) / 0xFFFFFFFF
 
 

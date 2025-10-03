@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import json
 import os
-from dataclasses import dataclass, field, asdict
-from datetime import datetime, timezone
+from dataclasses import asdict, dataclass, field
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
@@ -33,7 +33,7 @@ class McpLogEvent:
 
     def to_serialisable(self) -> dict[str, Any]:
         payload = asdict(self)
-        payload["ts"] = self.ts.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
+        payload["ts"] = self.ts.astimezone(UTC).isoformat().replace("+00:00", "Z")
         return payload
 
 
@@ -71,7 +71,7 @@ class JsonLogWriter:
         latest_dir = self._latest_symlink.parent
         latest_dir.mkdir(parents=True, exist_ok=True)
 
-        timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+        timestamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
         name = f"{prefix.name}.{timestamp}.{self._run_id}.jsonl"
         path = directory / name
 
@@ -137,7 +137,7 @@ class JsonLogWriter:
         if not self._file.closed:
             self._file.close()
 
-    def __enter__(self) -> "JsonLogWriter":
+    def __enter__(self) -> JsonLogWriter:
         return self
 
     def __exit__(self, *_: object) -> None:

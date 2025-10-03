@@ -2,11 +2,9 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from uuid import uuid4
-
-import pytest
 
 from apps.mcp_server.logging import JsonLogWriter, McpLogEvent
 
@@ -29,7 +27,7 @@ REQUIRED_KEYS = {
 
 def _base_event(event: str, status: str, attempt: int) -> McpLogEvent:
     return McpLogEvent(
-        ts=datetime.now(timezone.utc),
+        ts=datetime.now(UTC),
         agent_id="mcp_server",
         task_id="06a_core_tools_minimal_subset",
         step_id=attempt,
@@ -47,13 +45,22 @@ def _base_event(event: str, status: str, attempt: int) -> McpLogEvent:
     )
 
 def test_json_log_writer_persists_success_event(tmp_path: Path) -> None:
-    log_path = tmp_path / "core-tools.jsonl"
-    writer = JsonLogWriter(log_path, agent_id="mcp_server", task_id="06a_core_tools_minimal_subset")
+    storage_prefix = tmp_path / "runs/core_tools/minimal"
+    latest_symlink = tmp_path / "runs/core_tools/minimal.jsonl"
+    writer = JsonLogWriter(
+        agent_id="mcp_server",
+        task_id="06a_core_tools_minimal_subset",
+        storage_prefix=storage_prefix,
+        latest_symlink=latest_symlink,
+        schema_version="0.1.0",
+        deterministic=True,
+    )
 
     event = _base_event(event="invocation_success", status="success", attempt=1)
-    writer.write(event)
+    writer.write(event, attempt_id=writer.new_attempt_id())
+    writer.close()
 
-    content = log_path.read_text(encoding="utf-8").strip().splitlines()
+    content = writer.path.read_text(encoding="utf-8").strip().splitlines()
     assert len(content) == 1
     payload = json.loads(content[0])
     assert REQUIRED_KEYS.issubset(payload.keys())
@@ -63,22 +70,30 @@ def test_json_log_writer_persists_success_event(tmp_path: Path) -> None:
 
 
 def test_json_log_writer_includes_error_payload(tmp_path: Path) -> None:
-    log_path = tmp_path / "core-tools.jsonl"
-    writer = JsonLogWriter(log_path, agent_id="mcp_server", task_id="06a_core_tools_minimal_subset")
+    storage_prefix = tmp_path / "runs/core_tools/minimal"
+    latest_symlink = tmp_path / "runs/core_tools/minimal.jsonl"
+    writer = JsonLogWriter(
+        agent_id="mcp_server",
+        task_id="06a_core_tools_minimal_subset",
+        storage_prefix=storage_prefix,
+        latest_symlink=latest_symlink,
+        schema_version="0.1.0",
+        deterministic=True,
+    )
 
     failure = _base_event(event="invocation_failure", status="error", attempt=2)
     failure.error = {"code": "SIMULATED", "message": "forced failure"}
-    writer.write(failure)
+    writer.write(failure, attempt_id=writer.new_attempt_id())
 
     retry = _base_event(event="invocation_retry", status="error", attempt=3)
     retry.error = {"code": "RETRY", "message": "retryable"}
-    writer.write(retry)
+    writer.write(retry, attempt_id=writer.new_attempt_id())
+    writer.close()
 
-    lines = [json.loads(line) for line in log_path.read_text(encoding="utf-8").splitlines()]
+    lines = [json.loads(line) for line in writer.path.read_text(encoding="utf-8").splitlines()]
     assert lines[0]["error"] == {"code": "SIMULATED", "message": "forced failure"}
     assert lines[1]["event"] == "invocation_retry"
     assert lines[1]["attempt"] == 3
     assert lines[1]["error"]["code"] == "RETRY"
-
 
 

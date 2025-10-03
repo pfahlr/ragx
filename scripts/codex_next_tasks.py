@@ -70,7 +70,11 @@ def load_tasks(directory: Path | None = None) -> list[TaskRecord]:
 
     records: list[TaskRecord] = []
     for task_path in sorted(base.glob("*.yaml")):
-        data = yaml.safe_load(task_path.read_text(encoding="utf-8")) or {}
+        try:
+            loaded = yaml.safe_load(task_path.read_text(encoding="utf-8"))
+        except yaml.YAMLError:
+            loaded = None
+        data = loaded or {}
         task_id = str(data.get("id") or task_path.stem)
         title = _coerce_title(data.get("title"), fallback="(missing title)")
         component_ids = _coerce_component_ids(data.get("component_ids"))

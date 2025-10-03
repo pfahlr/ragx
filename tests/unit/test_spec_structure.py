@@ -80,7 +80,12 @@ def test_spec_tests_section_and_flowscript_decisions_are_structured() -> None:
     tests_section = tests_data["tests"]
     assert isinstance(tests_section, dict)
     assert "unit" in tests_section
-    flattened = [item for bucket in tests_section.values() if isinstance(bucket, list) for item in bucket]
+    flattened = [
+        item
+        for bucket in tests_section.values()
+        if isinstance(bucket, list)
+        for item in bucket
+    ]
     for decision in (
         "flowscript_parser_engine",
         "flowscript_error_surface",
@@ -97,9 +102,14 @@ def test_spec_tests_section_and_flowscript_decisions_are_structured() -> None:
         for entry in decisions
         if isinstance(entry, dict) and "id" in entry
     }
-    assert {"flowscript_parser_engine", "flowscript_error_surface", "flowscript_expr_interp"}.issubset(decision_ids)
+    assert {
+        "flowscript_parser_engine",
+        "flowscript_error_surface",
+        "flowscript_expr_interp",
+    }.issubset(decision_ids)
 
- def test_spec_tests_section_is_mapping() -> None:
+
+def test_spec_tests_section_is_mapping() -> None:
     spec = _load_spec()
     tests_section = spec.get("tests")
     assert isinstance(tests_section, dict), "spec.tests must be a mapping"
@@ -154,5 +164,4 @@ def test_minimal_spec_yaml_layout_loads(tmp_path: Path) -> None:
     loaded = yaml.safe_load(sample.read_text(encoding="utf-8"))
     assert loaded["tests"]["unit"] == ["smoke"]
     assert loaded["open_decisions"][0]["id"] == "example_decision"
-
 

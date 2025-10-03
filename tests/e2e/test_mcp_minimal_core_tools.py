@@ -43,7 +43,10 @@ def test_end_to_end_invocations(tmp_path, monkeypatch) -> None:
         },
     )
 
-    hits = runtime.invoke("mcp.tool:vector.query.search", {"query": doc["metadata"]["title"], "topK": 1})
+    hits = runtime.invoke(
+        "mcp.tool:vector.query.search",
+        {"query": doc["metadata"]["title"], "topK": 1},
+    )
     render = runtime.invoke(
         "mcp.tool:exports.render.markdown",
         {

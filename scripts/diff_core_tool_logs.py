@@ -3,14 +3,22 @@ from __future__ import annotations
 
 import argparse
 import json
+from collections.abc import Iterable
 from pathlib import Path
-from typing import Iterable
 
 from deepdiff import DeepDiff
 
 DEFAULT_NEW = Path("runs/core_tools/minimal.jsonl")
 DEFAULT_GOLDEN = Path("tests/fixtures/mcp/core_tools/minimal_golden.jsonl")
-DEFAULT_WHITELIST = ["ts", "duration_ms", "run_id", "trace_id", "span_id", "attempt_id", "log_path"]
+DEFAULT_WHITELIST = [
+    "ts",
+    "duration_ms",
+    "run_id",
+    "trace_id",
+    "span_id",
+    "attempt_id",
+    "log_path",
+]
 
 
 def _load_log(path: Path, whitelist: Iterable[str]) -> list[dict[str, object]]:
@@ -33,7 +41,12 @@ def _load_log(path: Path, whitelist: Iterable[str]) -> list[dict[str, object]]:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Diff core tool logs using DeepDiff")
-    parser.add_argument("--new", dest="new_log", default=str(DEFAULT_NEW), help="Path to the newly generated log")
+    parser.add_argument(
+        "--new",
+        dest="new_log",
+        default=str(DEFAULT_NEW),
+        help="Path to the newly generated log",
+    )
     parser.add_argument(
         "--golden",
         dest="golden_log",

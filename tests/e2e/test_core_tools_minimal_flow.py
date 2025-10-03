@@ -55,7 +55,10 @@ def test_flow_from_example_fixture(tmp_path, monkeypatch) -> None:
     )
 
     assert "markdown" in render and render["markdown"].startswith("---")
-    hits = runtime.invoke("mcp.tool:vector.query.search", {"query": document["metadata"]["title"], "topK": 3})
+    hits = runtime.invoke(
+        "mcp.tool:vector.query.search",
+        {"query": document["metadata"]["title"], "topK": 3},
+    )
     assert len(hits["hits"]) == 2
 
     records = [json.loads(line) for line in writer.path.read_text(encoding="utf-8").splitlines()]

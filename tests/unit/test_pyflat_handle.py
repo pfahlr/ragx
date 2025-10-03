@@ -4,7 +4,6 @@ import numpy as np
 
 from ragcore.backends.pyflat import PyFlatBackend, PyFlatHandle
 
-
 SPEC = {"backend": "py_flat", "kind": "flat", "metric": "l2", "dim": 4}
 
 

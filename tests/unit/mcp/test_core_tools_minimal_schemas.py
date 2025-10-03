@@ -1,5 +1,4 @@
 from __future__ import annotations
-from __future__ import annotations
 
 import json
 import re
@@ -113,7 +112,8 @@ def test_vector_query_search_output_schema_documents_hits_structure() -> None:
 
 
 def test_docs_load_fetch_input_schema_requires_paths() -> None:
-    schema = json.loads((SCHEMA_DIR / "docs_load_fetch.input.schema.json").read_text(encoding="utf-8"))
+    schema_path = SCHEMA_DIR / "docs_load_fetch.input.schema.json"
+    schema = json.loads(schema_path.read_text(encoding="utf-8"))
     assert "path" in schema["required"]
     path_schema = schema["properties"]["path"]
     assert path_schema["type"] == "string"

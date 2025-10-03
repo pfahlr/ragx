@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-import os
 from pathlib import Path
 from typing import Any
 
@@ -19,7 +18,10 @@ SCHEMA_VERSION = "0.1.0"
 
 
 @pytest.fixture()
-def runtime(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> tuple[CoreToolsRuntime, JsonLogWriter]:
+def runtime(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> tuple[CoreToolsRuntime, JsonLogWriter]:
     monkeypatch.setenv("RAGX_SEED", "1234")
     loader = ToolpackLoader()
     loader.load_dir(TOOLPACK_DIR)
@@ -46,10 +48,13 @@ def runtime(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> tuple[CoreToolsR
 
 
 def _read_events(log_path: Path) -> list[dict[str, Any]]:
-    return [json.loads(line) for line in log_path.read_text(encoding="utf-8").splitlines() if line.strip()]
+    lines = log_path.read_text(encoding="utf-8").splitlines()
+    return [json.loads(line) for line in lines if line.strip()]
 
 
-def test_exports_render_markdown_is_deterministic(runtime: tuple[CoreToolsRuntime, JsonLogWriter]) -> None:
+def test_exports_render_markdown_is_deterministic(
+    runtime: tuple[CoreToolsRuntime, JsonLogWriter],
+) -> None:
     runtime_instance, writer = runtime
     payload = {
         "title": "Core Tools Demo",
@@ -60,9 +65,20 @@ def test_exports_render_markdown_is_deterministic(runtime: tuple[CoreToolsRuntim
 
     result = runtime_instance.invoke("mcp.tool:exports.render.markdown", payload)
 
-    expected_markdown = """---\nauthors:\n- RAGX\ntags:\n- demo\ntitle: Core Tools Demo\n---\n# Core Tools Demo\n\nHello from deterministic stub.\n"""
+    expected_markdown = (
+        "---\n"
+        "authors:\n"
+        "- RAGX\n"
+        "tags:\n"
+        "- demo\n"
+        "title: Core Tools Demo\n"
+        "---\n"
+        "# Core Tools Demo\n\n"
+        "Hello from deterministic stub.\n"
+    )
     assert result["markdown"] == expected_markdown
-    assert result["contentHash"] == hashlib.sha256(expected_markdown.encode("utf-8")).hexdigest()
+    digest = hashlib.sha256(expected_markdown.encode("utf-8")).hexdigest()
+    assert result["contentHash"] == digest
     assert result["metadata"]["title"] == "Core Tools Demo"
 
     events = _read_events(writer.path)
@@ -73,7 +89,9 @@ def test_exports_render_markdown_is_deterministic(runtime: tuple[CoreToolsRuntim
     assert success["output_bytes"] >= len(expected_markdown.encode("utf-8"))
 
 
-def test_vector_query_search_returns_sorted_hits(runtime: tuple[CoreToolsRuntime, JsonLogWriter]) -> None:
+def test_vector_query_search_returns_sorted_hits(
+    runtime: tuple[CoreToolsRuntime, JsonLogWriter],
+) -> None:
     runtime_instance, writer = runtime
     payload = {"query": "retrieval quality", "topK": 2}
     first = runtime_instance.invoke("mcp.tool:vector.query.search", payload)
@@ -96,7 +114,9 @@ def test_vector_query_search_returns_sorted_hits(runtime: tuple[CoreToolsRuntime
     assert last_event["attempt"] == 0
 
 
-def test_docs_load_fetch_reads_fixture(runtime: tuple[CoreToolsRuntime, JsonLogWriter]) -> None:
+def test_docs_load_fetch_reads_fixture(
+    runtime: tuple[CoreToolsRuntime, JsonLogWriter],
+) -> None:
     runtime_instance, writer = runtime
     payload = {
         "path": str(DOC_FIXTURE_DIR / "sample_article.md"),
@@ -113,7 +133,9 @@ def test_docs_load_fetch_reads_fixture(runtime: tuple[CoreToolsRuntime, JsonLogW
     assert any(evt["tool_id"] == "mcp.tool:docs.load.fetch" for evt in events)
 
 
-def test_runtime_raises_for_unknown_tool(runtime: tuple[CoreToolsRuntime, JsonLogWriter]) -> None:
+def test_runtime_raises_for_unknown_tool(
+    runtime: tuple[CoreToolsRuntime, JsonLogWriter],
+) -> None:
     runtime_instance, _ = runtime
     with pytest.raises(KeyError):
         runtime_instance.invoke("mcp.tool:unknown", {})

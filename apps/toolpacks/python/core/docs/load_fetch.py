@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Mapping
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any
 
 
 def _read_text(path: Path, encoding: str) -> str:
@@ -23,7 +24,9 @@ def run(payload: Mapping[str, Any]) -> dict[str, Any]:
     path = Path(payload["path"]).expanduser().resolve()
     encoding = str(payload.get("encoding", "utf-8"))
     metadata_path_value = payload.get("metadataPath")
-    metadata_path = Path(metadata_path_value).expanduser().resolve() if metadata_path_value else None
+    metadata_path = None
+    if metadata_path_value:
+        metadata_path = Path(metadata_path_value).expanduser().resolve()
 
     content = _read_text(path, encoding)
     metadata = _load_metadata(metadata_path)

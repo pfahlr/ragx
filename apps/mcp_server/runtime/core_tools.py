@@ -2,9 +2,10 @@ from __future__ import annotations
 
 import json
 import time
+from collections.abc import Mapping
 from dataclasses import dataclass
-from datetime import datetime, timezone
-from typing import Any, Mapping
+from datetime import UTC, datetime
+from typing import Any
 from uuid import uuid4
 
 from apps.mcp_server.logging import JsonLogWriter, McpLogEvent
@@ -71,7 +72,7 @@ class CoreToolsRuntime:
         context = self._start_invocation(toolpack, payload)
         self._log_writer.write(
             McpLogEvent(
-                ts=datetime.now(timezone.utc),
+                ts=datetime.now(UTC),
                 agent_id=self._agent_id,
                 task_id=self._task_id,
                 step_id=context.step_id,
@@ -97,7 +98,7 @@ class CoreToolsRuntime:
         except ToolpackExecutionError as exc:
             self._log_writer.write(
                 McpLogEvent(
-                    ts=datetime.now(timezone.utc),
+                    ts=datetime.now(UTC),
                     agent_id=self._agent_id,
                     task_id=self._task_id,
                     step_id=context.step_id,
@@ -126,7 +127,7 @@ class CoreToolsRuntime:
 
         self._log_writer.write(
             McpLogEvent(
-                ts=datetime.now(timezone.utc),
+                ts=datetime.now(UTC),
                 agent_id=self._agent_id,
                 task_id=self._task_id,
                 step_id=context.step_id,
@@ -149,7 +150,11 @@ class CoreToolsRuntime:
         )
         return output_mapping
 
-    def _start_invocation(self, toolpack: Toolpack, payload: Mapping[str, Any]) -> _InvocationContext:
+    def _start_invocation(
+        self,
+        toolpack: Toolpack,
+        payload: Mapping[str, Any],
+    ) -> _InvocationContext:
         self._step_counter += 1
         attempt_id = self._log_writer.new_attempt_id()
         trace_id = str(uuid4())
