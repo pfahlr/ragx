@@ -1,0 +1,24 @@
+id: mcp.tool:docs.load.fetch
+name: docs.load.fetch
+version: 0.1.0
+description: Load local Markdown fixtures and accompanying metadata for deterministic tests.
+deterministic: true
+timeoutMs: 1500
+limits:
+  maxInputBytes: 16384
+  maxOutputBytes: 65536
+inputSchema:
+  $ref: ../../schemas/tools/docs_load_fetch.input.schema.json
+outputSchema:
+  $ref: ../../schemas/tools/docs_load_fetch.output.schema.json
+execution:
+  kind: python
+  module: apps.toolpacks.python.core.docs.load_fetch:run
+caps:
+  filesystem:
+    read:
+      - tests/fixtures
+metadata:
+  owner: core
+  tags:
+    - core-tools

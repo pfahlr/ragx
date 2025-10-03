@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "docs.load.fetch output",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "document": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "path": {"type": "string", "format": "uri-reference"},
+        "content": {"type": "string"},
+        "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"}
+      },
+      "required": ["path", "content", "sha256"]
+    },
+    "metadata": {"type": "object", "additionalProperties": true},
+    "stats": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "bytes": {"type": "integer", "minimum": 0}
+      },
+      "required": ["bytes"]
+    }
+  },
+  "required": ["document", "metadata", "stats"]
+}

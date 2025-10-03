@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "exports.render.markdown input",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "title": {"type": "string", "minLength": 1},
+    "template": {"type": "string", "minLength": 1},
+    "body": {"type": "string"},
+    "frontMatter": {"type": "object", "additionalProperties": true},
+    "metadata": {"type": "object", "additionalProperties": true}
+  },
+  "required": ["title", "template", "body"]
+}

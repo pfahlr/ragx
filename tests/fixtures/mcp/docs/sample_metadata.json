@@ -1,0 +1,7 @@
+{
+  "title": "Sample Article",
+  "summary": "Retrieval augmented generation thrives on deterministic tooling.",
+  "authors": ["RAGX"],
+  "tags": ["retrieval", "demo"],
+  "source": "tests/fixtures/mcp/docs/sample_article.md"
+}

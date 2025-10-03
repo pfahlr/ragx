@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "docs.load.fetch input",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "path": {"type": "string", "format": "uri-reference"},
+    "metadataPath": {"type": "string", "format": "uri-reference"},
+    "encoding": {"type": "string", "default": "utf-8"}
+  },
+  "required": ["path"]
+}

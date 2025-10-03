@@ -459,7 +459,8 @@ def _apply_legacy_shim(data: Any, source_path: Path) -> Any:
 
 
 def _validate_tool_id(tool_id: str, source_path: Path) -> None:
-    if not _TOOL_ID_PATTERN.fullmatch(tool_id):
+    candidate = tool_id.replace(":", ".")
+    if not _TOOL_ID_PATTERN.fullmatch(candidate):
         message = (
             f"Toolpack {source_path} id '{tool_id}' must use dotted lowercase segments "
             "(e.g. 'pkg.tool')"
