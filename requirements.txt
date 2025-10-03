@@ -1,3 +1,7 @@
+uvicorn
+pydantic
+httpx
+fastapi
 jinja2
 jsonschema
 numpy
@@ -5,7 +9,6 @@ pyyaml
 packaging
 pytest
 pytest-cov
-numpy
 ruff
 mypy
 yamllint

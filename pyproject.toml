@@ -23,11 +23,15 @@ addopts = "-q"
 name = "ragx"
 dynamic = ["version"]
 dependencies = [
+    "fastapi",
+    "httpx",
     "jinja2",
     "jsonschema",
     "numpy",
     "packaging",
+    "pydantic",
     "pyyaml",
+    "uvicorn",
 ]
 
 [project.optional-dependencies]
@@ -39,3 +43,6 @@ dev = [
     "ruff",
     "yamllint",
 ]
+
+[project.scripts]
+mcp-server = "apps.mcp_server.cli:main"
