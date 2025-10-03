@@ -19,6 +19,17 @@ __all__ = ["Executor", "ToolpackExecutionError"]
 class ToolpackExecutionError(Exception):
     """Raised when executing a Toolpack fails."""
 
+    def __init__(
+        self,
+        message: str,
+        *,
+        code: str = "INTERNAL",
+        details: Mapping[str, Any] | None = None,
+    ) -> None:
+        super().__init__(message)
+        self.code = code
+        self.details = dict(details or {})
+
 
 class Executor:
     """Execute Toolpack definitions for supported execution kinds."""
@@ -32,7 +43,9 @@ class Executor:
         execution_kind = toolpack.execution.get("kind")
         if execution_kind != "python":
             raise ToolpackExecutionError(
-                f"Unsupported execution kind '{execution_kind}' for toolpack {toolpack.id}"
+                f"Unsupported execution kind '{execution_kind}' for toolpack {toolpack.id}",
+                code="UNSUPPORTED",
+                details={"executionKind": execution_kind},
             )
 
         input_payload = _ensure_mapping(payload, stage="input", toolpack=toolpack)
@@ -56,7 +69,8 @@ class Executor:
                 result = asyncio.run(result)
         except Exception as exc:  # pragma: no cover - execution failure path
             raise ToolpackExecutionError(
-                f"Toolpack {toolpack.id} execution failed: {exc}"
+                f"Toolpack {toolpack.id} execution failed: {exc}",
+                code="INTERNAL",
             ) from exc
 
         output_payload = _ensure_mapping(result, stage="output", toolpack=toolpack)
@@ -120,7 +134,9 @@ class Executor:
             serialised = json.dumps(envelope, sort_keys=True, separators=(",", ":"))
         except TypeError as exc:
             raise ToolpackExecutionError(
-                f"Toolpack {toolpack.id} input is not JSON serialisable for caching"
+                f"Toolpack {toolpack.id} input is not JSON serialisable for caching",
+                code="INVALID_INPUT",
+                details={"stage": "input", "error": str(exc)},
             ) from exc
         return hashlib.sha256(serialised.encode("utf-8")).hexdigest()
 
@@ -128,7 +144,9 @@ class Executor:
 def _ensure_mapping(value: Any, *, stage: str, toolpack: Toolpack) -> dict[str, Any]:
     if not isinstance(value, Mapping):
         raise ToolpackExecutionError(
-            f"Toolpack {toolpack.id} {stage} payload must be a mapping"
+            f"Toolpack {toolpack.id} {stage} payload must be a mapping",
+            code="INVALID_INPUT" if stage == "input" else "INTERNAL",
+            details={"stage": stage, "actualType": type(value).__name__},
         )
     return dict(value)
 
@@ -150,6 +168,14 @@ def _validate_instance(
             f"Toolpack {toolpack.id} schema failed validation: {exc.message}"
         ) from exc
     except ValidationError as exc:
+        error_details = {
+            "stage": stage,
+            "error": exc.message,
+            "path": list(exc.path),
+            "schemaPath": list(exc.schema_path),
+        }
         raise ToolpackExecutionError(
-            f"Toolpack {toolpack.id} {stage} failed JSON schema validation: {exc.message}"
+            f"Toolpack {toolpack.id} {stage} failed JSON schema validation: {exc.message}",
+            code="INVALID_INPUT" if stage == "input" else "INTERNAL",
+            details=error_details,
         ) from exc

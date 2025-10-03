@@ -23,6 +23,16 @@ _AGENT_ID = "mcp_server"
 _TASK_ID = "06b_mcp_server_bootstrap"
 _SCHEMA_VERSION_DEFAULT = "0.1.0"
 _DETERMINISTIC_NAMESPACE = UUID("c1fd1c20-77b7-4f73-b39c-8ed2dd2f2d8c")
+_CANONICAL_ERROR_CODES = {
+    "INVALID_INPUT",
+    "NOT_FOUND",
+    "RATE_LIMIT",
+    "TIMEOUT",
+    "UNAVAILABLE",
+    "INTERNAL",
+    "NONDETERMINISTIC",
+    "UNSUPPORTED",
+}
 
 
 @dataclass(slots=True)
@@ -282,11 +292,12 @@ class McpService:
             prompt = self._prompts.get(prompt_id)
         except KeyError:
             return self._error_response(
-                code="MCP_UNKNOWN_PROMPT",
+                code="NOT_FOUND",
                 message=f"Prompt '{prompt_id}' not found",
                 context=ctx,
                 payload=payload,
                 prompt_id=prompt_id,
+                details={"promptId": prompt_id},
             )
         data = prompt.to_payload()
         self._schemas.validator("prompt.response.schema.json").validate(data)
@@ -303,22 +314,24 @@ class McpService:
         ctx = self._normalise_context(context, "tool", "mcp.tool.invoke", payload)
         if tool_id not in self._toolpacks:
             return self._error_response(
-                code="MCP_UNKNOWN_TOOL",
+                code="NOT_FOUND",
                 message=f"Tool '{tool_id}' not found",
                 context=ctx,
                 payload=payload,
                 tool_id=tool_id,
+                details={"toolId": tool_id},
             )
         toolpack = self._toolpacks[tool_id]
         try:
             result = self._executor.run_toolpack(toolpack, arguments)
         except ToolpackExecutionError as exc:
             return self._error_response(
-                code="MCP_VALIDATION_ERROR",
+                code=exc.code,
                 message=str(exc),
                 context=ctx,
                 payload=payload,
                 tool_id=tool_id,
+                details=exc.details,
             )
         data = {
             "toolId": tool_id,
@@ -407,10 +420,13 @@ class McpService:
         payload: Mapping[str, Any],
         tool_id: str | None = None,
         prompt_id: str | None = None,
+        details: Mapping[str, Any] | None = None,
     ) -> Envelope:
         ids = self._request_ids(context)
         step_id = self._log_manager.next_step_id()
         duration_ms = _duration_ms(context.start_time)
+        canonical_code = self._canonical_error_code(code)
+        details_payload = dict(details) if details else None
         meta = EnvelopeMeta.from_ids(
             request_id=ids["request_id"],
             trace_id=ids["trace_id"],
@@ -428,10 +444,16 @@ class McpService:
             tool_id=tool_id,
             prompt_id=prompt_id,
         )
-        envelope = Envelope.failure(error=EnvelopeError(code=code, message=message), meta=meta)
+        envelope = Envelope.failure(
+            error=EnvelopeError(code=canonical_code, message=message, details=details_payload),
+            meta=meta,
+        )
         self._schemas.validator("envelope.schema.json").validate(
             envelope.model_dump(by_alias=True)
         )
+        error_dict: dict[str, Any] = {"code": canonical_code, "message": message}
+        if details_payload:
+            error_dict["details"] = details_payload
         self._log_manager.emit(
             ServerLogEvent(
                 ts=datetime.now(UTC),
@@ -446,7 +468,7 @@ class McpService:
                 attempt=context.attempt,
                 input_bytes=ids["input_bytes"],
                 output_bytes=0,
-                error={"code": code, "message": message},
+                error=error_dict,
                 metadata={
                     "toolId": tool_id,
                     "promptId": prompt_id,
@@ -457,6 +479,12 @@ class McpService:
             )
         )
         return envelope
+
+    def _canonical_error_code(self, code: str) -> str:
+        candidate = str(code).upper()
+        if candidate in _CANONICAL_ERROR_CODES:
+            return candidate
+        return "INTERNAL"
 
     def _normalise_context(
         self,
