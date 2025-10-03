@@ -13,11 +13,30 @@ from jsonschema.exceptions import SchemaError, ValidationError
 
 from apps.toolpacks.loader import Toolpack, ToolpackValidationError
 
-__all__ = ["Executor", "ToolpackExecutionError"]
+__all__ = ["Executor", "ToolpackExecutionError", "ToolpackSchemaValidationError"]
 
 
 class ToolpackExecutionError(Exception):
     """Raised when executing a Toolpack fails."""
+
+
+class ToolpackSchemaValidationError(ToolpackExecutionError):
+    """Raised when a Toolpack input or output fails schema validation."""
+
+    def __init__(
+        self,
+        *,
+        toolpack: Toolpack,
+        stage: str,
+        error: ValidationError,
+    ) -> None:
+        message = (
+            f"Toolpack {toolpack.id} {stage} failed JSON schema validation: {error.message}"
+        )
+        super().__init__(message)
+        self.toolpack = toolpack
+        self.stage = stage
+        self.error = error
 
 
 class Executor:
@@ -150,6 +169,8 @@ def _validate_instance(
             f"Toolpack {toolpack.id} schema failed validation: {exc.message}"
         ) from exc
     except ValidationError as exc:
-        raise ToolpackExecutionError(
-            f"Toolpack {toolpack.id} {stage} failed JSON schema validation: {exc.message}"
+        raise ToolpackSchemaValidationError(
+            toolpack=toolpack,
+            stage=stage,
+            error=exc,
         ) from exc

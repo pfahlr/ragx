@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 import time
-from collections.abc import Iterable, Mapping
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
@@ -10,9 +10,14 @@ from typing import Any
 from uuid import UUID, uuid4, uuid5
 
 from jsonschema import Draft202012Validator, validators
+from jsonschema.exceptions import ValidationError
 
 from apps.mcp_server.logging import JsonLogWriter
-from apps.toolpacks.executor import Executor, ToolpackExecutionError
+from apps.toolpacks.executor import (
+    Executor,
+    ToolpackExecutionError,
+    ToolpackSchemaValidationError,
+)
 from apps.toolpacks.loader import Toolpack, ToolpackLoader
 
 from .envelope import Envelope, EnvelopeError, EnvelopeMeta
@@ -23,6 +28,12 @@ _AGENT_ID = "mcp_server"
 _TASK_ID = "06b_mcp_server_bootstrap"
 _SCHEMA_VERSION_DEFAULT = "0.1.0"
 _DETERMINISTIC_NAMESPACE = UUID("c1fd1c20-77b7-4f73-b39c-8ed2dd2f2d8c")
+
+
+@dataclass(frozen=True)
+class ToolSchemaValidators:
+    input: Draft202012Validator
+    output: Draft202012Validator
 
 
 @dataclass(slots=True)
@@ -216,6 +227,7 @@ class McpService:
         self,
         *,
         toolpacks: dict[str, Toolpack],
+        tool_validators: dict[str, ToolSchemaValidators],
         executor: Executor,
         prompts: PromptRepository,
         schema_store: SchemaStore,
@@ -223,6 +235,7 @@ class McpService:
         schema_version: str,
     ) -> None:
         self._toolpacks = toolpacks
+        self._tool_validators = tool_validators
         self._executor = executor
         self._prompts = prompts
         self._schemas = schema_store
@@ -248,6 +261,13 @@ class McpService:
         loader = ToolpackLoader()
         loader.load_dir(toolpacks_dir)
         toolpacks = {pack.id: pack for pack in loader.list()}
+        validators_map = {
+            toolpack.id: ToolSchemaValidators(
+                input=_json_schema_validator_for(toolpack.input_schema),
+                output=_json_schema_validator_for(toolpack.output_schema),
+            )
+            for toolpack in toolpacks.values()
+        }
         executor = Executor()
         prompts = PromptRepository(prompts_dir)
         schema_store = SchemaStore(schema_dir)
@@ -258,6 +278,7 @@ class McpService:
         )
         return cls(
             toolpacks=toolpacks,
+            tool_validators=validators_map,
             executor=executor,
             prompts=prompts,
             schema_store=schema_store,
@@ -282,7 +303,7 @@ class McpService:
             prompt = self._prompts.get(prompt_id)
         except KeyError:
             return self._error_response(
-                code="MCP_UNKNOWN_PROMPT",
+                code="NOT_FOUND",
                 message=f"Prompt '{prompt_id}' not found",
                 context=ctx,
                 payload=payload,
@@ -299,30 +320,77 @@ class McpService:
         arguments: Mapping[str, Any],
         context: RequestContext | None = None,
     ) -> Envelope:
-        payload = {"toolId": tool_id, "arguments": dict(arguments)}
+        argument_payload = dict(arguments)
+        payload = {"toolId": tool_id, "arguments": argument_payload}
         ctx = self._normalise_context(context, "tool", "mcp.tool.invoke", payload)
         if tool_id not in self._toolpacks:
             return self._error_response(
-                code="MCP_UNKNOWN_TOOL",
+                code="NOT_FOUND",
                 message=f"Tool '{tool_id}' not found",
                 context=ctx,
                 payload=payload,
                 tool_id=tool_id,
             )
         toolpack = self._toolpacks[tool_id]
+        validators = self._tool_validators[tool_id]
         try:
-            result = self._executor.run_toolpack(toolpack, arguments)
+            validators.input.validate(argument_payload)
+        except ValidationError as exc:
+            return self._error_response(
+                code="INVALID_INPUT",
+                message=f"Tool '{tool_id}' input failed validation: {exc.message}",
+                context=ctx,
+                payload=payload,
+                tool_id=tool_id,
+                details=_schema_error_details(
+                    tool_id=tool_id,
+                    stage="tool.input",
+                    error=exc,
+                ),
+            )
+        try:
+            result = self._executor.run_toolpack(toolpack, argument_payload)
+        except ToolpackSchemaValidationError as exc:
+            stage_code = "INVALID_INPUT" if exc.stage == "input" else "INTERNAL"
+            return self._error_response(
+                code=stage_code,
+                message=str(exc),
+                context=ctx,
+                payload=payload,
+                tool_id=tool_id,
+                details=_schema_error_details(
+                    tool_id=tool_id,
+                    stage=f"tool.{exc.stage}",
+                    error=exc.error,
+                ),
+            )
         except ToolpackExecutionError as exc:
             return self._error_response(
-                code="MCP_VALIDATION_ERROR",
+                code="INTERNAL",
                 message=str(exc),
                 context=ctx,
                 payload=payload,
                 tool_id=tool_id,
             )
+        result_payload = dict(result)
+        try:
+            validators.output.validate(result_payload)
+        except ValidationError as exc:
+            return self._error_response(
+                code="INTERNAL",
+                message=f"Tool '{tool_id}' output failed validation: {exc.message}",
+                context=ctx,
+                payload=payload,
+                tool_id=tool_id,
+                details=_schema_error_details(
+                    tool_id=tool_id,
+                    stage="tool.output",
+                    error=exc,
+                ),
+            )
         data = {
             "toolId": tool_id,
-            "result": dict(result),
+            "result": result_payload,
             "metadata": {
                 "toolpack": {
                     "id": toolpack.id,
@@ -332,7 +400,21 @@ class McpService:
                 }
             },
         }
-        self._schemas.validator("tool.response.schema.json").validate(data)
+        try:
+            self._schemas.validator("tool.response.schema.json").validate(data)
+        except ValidationError as exc:
+            return self._error_response(
+                code="INTERNAL",
+                message=f"Tool '{tool_id}' response failed validation: {exc.message}",
+                context=ctx,
+                payload=payload,
+                tool_id=tool_id,
+                details=_schema_error_details(
+                    tool_id=tool_id,
+                    stage="tool.response",
+                    error=exc,
+                ),
+            )
         return self._finalise_envelope(data, ctx, tool_id=tool_id)
 
     def health(self, context: RequestContext | None = None) -> dict[str, Any]:
@@ -407,6 +489,7 @@ class McpService:
         payload: Mapping[str, Any],
         tool_id: str | None = None,
         prompt_id: str | None = None,
+        details: Mapping[str, Any] | None = None,
     ) -> Envelope:
         ids = self._request_ids(context)
         step_id = self._log_manager.next_step_id()
@@ -428,10 +511,21 @@ class McpService:
             tool_id=tool_id,
             prompt_id=prompt_id,
         )
-        envelope = Envelope.failure(error=EnvelopeError(code=code, message=message), meta=meta)
+        normalised_details = (
+            {str(key): _normalise_detail_value(value) for key, value in details.items()}
+            if details is not None
+            else None
+        )
+        envelope = Envelope.failure(
+            error=EnvelopeError(code=code, message=message, details=normalised_details),
+            meta=meta,
+        )
         self._schemas.validator("envelope.schema.json").validate(
             envelope.model_dump(by_alias=True)
         )
+        error_payload: dict[str, Any] = {"code": code, "message": message}
+        if normalised_details is not None:
+            error_payload["details"] = normalised_details
         self._log_manager.emit(
             ServerLogEvent(
                 ts=datetime.now(UTC),
@@ -446,7 +540,7 @@ class McpService:
                 attempt=context.attempt,
                 input_bytes=ids["input_bytes"],
                 output_bytes=0,
-                error={"code": code, "message": message},
+                error=error_payload,
                 metadata={
                     "toolId": tool_id,
                     "promptId": prompt_id,
@@ -549,3 +643,38 @@ def _prompt_from_payload(data: Mapping[str, Any], path: Path) -> Prompt:
 
 def _duration_ms(start: float) -> float:
     return (time.perf_counter() - start) * 1000.0
+
+
+def _json_schema_validator_for(schema: Mapping[str, Any]) -> Draft202012Validator:
+    validator_cls = validators.validator_for(schema)
+    validator_cls.check_schema(schema)
+    return validator_cls(schema)
+
+
+def _normalise_detail_value(value: Any) -> Any:
+    if isinstance(value, Mapping):
+        return {str(key): _normalise_detail_value(val) for key, val in value.items()}
+    if isinstance(value, Sequence) and not isinstance(value, str | bytes | bytearray):
+        return [_normalise_detail_value(item) for item in value]
+    try:
+        json.dumps(value)
+    except TypeError:
+        return repr(value)
+    return value
+
+
+def _schema_error_details(
+    *,
+    tool_id: str | None,
+    stage: str,
+    error: ValidationError,
+) -> dict[str, Any]:
+    return {
+        "toolId": tool_id,
+        "stage": stage,
+        "message": error.message,
+        "instancePath": [str(part) for part in error.path],
+        "schemaPath": [str(part) for part in error.schema_path],
+        "validator": error.validator,
+        "validatorValue": _normalise_detail_value(error.validator_value),
+    }
