@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.ragx.dev/mcp/tools/docs_load_fetch.input.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "path": {"type": "string", "minLength": 1},
+    "metadata_path": {"type": "string"},
+    "encoding": {"type": "string"}
+  },
+  "required": ["path"]
+}

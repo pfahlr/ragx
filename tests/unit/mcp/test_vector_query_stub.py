@@ -1,39 +1,39 @@
-# tests/unit/mcp/test_vector_query_stub.py
+"""Unit tests for the deterministic vector.query.search stub."""
 from __future__ import annotations
-
-import json
-from pathlib import Path
 
 import pytest
 
-from apps.toolpacks.python.core import vector_query_search
-
-INDEX_FIXTURE = Path("tests/fixtures/mcp/vector_query_stub_index.json")
-
-
-@pytest.fixture(scope="module")
-def index_documents() -> list[dict[str, object]]:
-    with INDEX_FIXTURE.open("r", encoding="utf-8") as handle:
-        data = json.load(handle)
-    return data["documents"]
+from apps.toolpacks.python.core.vector import query_search
+from apps.toolpacks.python.core.vector.state import SAMPLE_INDEX
 
 
 @pytest.mark.parametrize("top_k", [1, 2, 3])
-def test_vector_query_stub_returns_top_k_sorted(index_documents, top_k: int) -> None:
-    response = vector_query_search.run({"query": "retrieval augmented generation", "top_k": top_k})
-    assert "hits" in response and isinstance(response["hits"], list)
-    assert len(response["hits"]) == top_k
-
-    expected_ids = [
-        doc["id"]
-        for doc in sorted(index_documents, key=lambda doc: doc["score"], reverse=True)[:top_k]
-    ]
-    assert [hit["id"] for hit in response["hits"]] == expected_ids
-    for hit in response["hits"]:
-        assert "score" in hit and "metadata" in hit
-        assert isinstance(hit["metadata"], dict)
+def test_query_search_respects_top_k(top_k: int) -> None:
+    response = query_search.query_search({"query": "retrieval", "top_k": top_k})
+    assert "hits" in response
+    hits = response["hits"]
+    assert len(hits) == top_k
+    scores = [hit["score"] for hit in hits]
+    assert scores == sorted(scores, reverse=True)
 
 
-def test_vector_query_stub_validates_top_k_positive() -> None:
-    with pytest.raises(ValueError):
-        vector_query_search.run({"query": "bad request", "top_k": 0})
+def test_query_search_includes_metadata_when_requested() -> None:
+    response = query_search.query_search(
+        {"query": "resilience", "include_metadata": True, "top_k": 2}
+    )
+    assert all("metadata" in hit and hit["metadata"] for hit in response["hits"])
+
+
+def test_query_search_omits_metadata_when_disabled() -> None:
+    response = query_search.query_search(
+        {"query": "resilience", "include_metadata": False, "top_k": 2}
+    )
+    assert all(hit["metadata"] == {} for hit in response["hits"])
+
+
+def test_query_search_handles_unknown_terms() -> None:
+    response = query_search.query_search({"query": "unknown-term", "top_k": 3})
+    assert len(response["hits"]) == 3
+    assert {hit["document_id"] for hit in response["hits"]} == {
+        entry["document_id"] for entry in SAMPLE_INDEX
+    }

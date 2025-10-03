@@ -1,0 +1,17 @@
+id: vector.query.search
+version: 0.1.0
+deterministic: true
+timeoutMs: 1500
+limits:
+  maxInputBytes: 16384
+  maxOutputBytes: 32768
+inputSchema:
+  $ref: ../../schemas/tools/vector_query_search.input.schema.json
+outputSchema:
+  $ref: ../../schemas/tools/vector_query_search.output.schema.json
+execution:
+  kind: python
+  module: apps.toolpacks.python.core.vector.query_search:query_search
+env: {}
+caps:
+  network: []

@@ -1,0 +1,19 @@
+id: docs.load.fetch
+version: 0.1.0
+deterministic: true
+timeoutMs: 2000
+limits:
+  maxInputBytes: 32768
+  maxOutputBytes: 65536
+inputSchema:
+  $ref: ../../schemas/tools/docs_load_fetch.input.schema.json
+outputSchema:
+  $ref: ../../schemas/tools/docs_load_fetch.output.schema.json
+execution:
+  kind: python
+  module: apps.toolpacks.python.core.docs.load_fetch:load_fetch
+caps:
+  filesystem:
+    read:
+      - tests/fixtures/mcp/core_tools/docs
+env: {}

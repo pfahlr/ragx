@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.ragx.dev/mcp/tools/exports_render_markdown.output.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "markdown": {"type": "string"},
+    "content_hash": {"type": "string", "minLength": 1},
+    "metadata": {
+      "type": "object",
+      "additionalProperties": true
+    }
+  },
+  "required": ["markdown", "content_hash"]
+}

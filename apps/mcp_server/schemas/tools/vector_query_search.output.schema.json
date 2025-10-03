@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.ragx.dev/mcp/tools/vector_query_search.output.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "hits": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "document_id": {"type": "string"},
+          "score": {"type": "number"},
+          "metadata": {"type": "object", "additionalProperties": true}
+        },
+        "required": ["document_id", "score", "metadata"]
+      }
+    }
+  },
+  "required": ["hits"]
+}

@@ -1,98 +1,163 @@
+version: 1
 id: 06ab_core_tools_minimal_subset
-components:
-- core_tools
-- mcp_server
-- toolpacks_runtime
-- observability
+title: Core tools minimal subset over Python toolpacks
+component_ids:
+  - core_tools
+  - mcp_server
+  - toolpacks_runtime
+  - observability
+depends_on:
+  - 05b_toolpacks_executor_python_only
+  - 05c_toolpacks_loader_spec_alignment
+  - 05h_toolpacks_loader_metadata_validation
 arg_spec:
-- mcp_server
-- task_runner
+  - mcp_server
+  - task_runner
 
+description: >-
+  Implement the minimal deterministic MCP core tools for exports.render.markdown,
+  vector.query.search, and docs.load.fetch using Python toolpacks. Ensure
+  structured logging with DeepDiff regression checks.
 
 test_plan:
-- Author schema validation unit tests using Draft2020-12
-- Add structured logging tests for success/retry/failure
-- Create golden fixture for logs and DeepDiff comparison
-- Include retry/fallback/error simulation
+  - Author schema validation unit tests using Draft2020-12
+  - Add structured logging tests for success/retry/failure
+  - Create golden fixture for logs and DeepDiff comparison
+  - Include retry/fallback/error simulation
 
+actions:
+  - stage: tests
+    summary: Establish regression tests for schemas, tool invocations, logging, and diff script
+    tests:
+      unit:
+        - path: tests/unit/mcp/test_core_tool_schemas.py
+          description: Validate JSON schemas using Draft2020-12
+        - path: tests/unit/mcp/test_core_tool_logging.py
+          description: Ensure structured log payloads contain required fields
+        - path: tests/unit/mcp/test_core_tool_invocations.py
+          description: Invoke python toolpacks through runtime
+        - path: tests/unit/mcp/test_core_tool_log_diff.py
+          description: Compare structured logs with golden fixture via DeepDiff
+        - path: tests/unit/mcp/test_log_diff_script.py
+          description: Verify diff helper script exit codes
+      e2e:
+        - path: tests/e2e/test_mcp_minimal_core_tools.py
+          description: Smoke runtime and ensure structured log file is produced
+      fixtures:
+        - path: tests/fixtures/mcp/core_tools/minimal_golden.jsonl
+          description: Golden structured log for regression diffs
+        - path: tests/fixtures/mcp/core_tools/docs/example.md
+          description: Local markdown fixture for docs.load.fetch
+        - path: tests/fixtures/mcp/core_tools/docs/example.json
+          description: Metadata fixture for docs.load.fetch
+  - stage: implementation
+    summary: Implement schemas, python toolpacks, runtime wiring, and structured logging pipeline
+  - stage: observability
+    summary: Wire structured JSON logging with DeepDiff diff tooling and retention policy
 
 observability_requirements:
-- Structured JSON logs MUST include timestamp, agent_id, task_id, and step_id
-for every event and persist to runs/core_tools/minimal.jsonl
-- Log pipeline must be resilient to errors and flushed on shutdown
-
+  - Structured JSON logs MUST include timestamp, agent_id, task_id, and step_id for every event
+    and persist to runs/core_tools/minimal.jsonl
+  - Log pipeline must be resilient to errors and flushed on shutdown
 
 structured_logging_contract:
-format: jsonl
-storage_path: runs/core_tools/minimal.jsonl
-retention: keep-last-5
-event_fields:
-- ts
-- agent_id
-- task_id
-- step_id
-- trace_id
-- span_id
-- tool_id
-- event
-- status
-- duration_ms
-- attempt
-- input_bytes
-- output_bytes
-- error
-- metadata
-
-
-log_diff_strategy:
-tool: deepdiff.DeepDiff
-baseline_path: tests/fixtures/mcp/core_tools/minimal_golden.jsonl
-whitelist_fields:
-- ts
-- duration_ms
-- run_id
-- trace_id
-- span_id
-- attempt_id
-notes: >-
-Use DeepDiff to compare structured logs against the golden fixture,
-ignoring expected volatile fields.
-
+  format: jsonl
+  storage_path: runs/core_tools/minimal.jsonl
+  retention: keep-last-5
+  event_fields:
+    - ts
+    - agent_id
+    - task_id
+    - step_id
+    - trace_id
+    - span_id
+    - tool_id
+    - event
+    - status
+    - duration_ms
+    - attempt
+    - input_bytes
+    - output_bytes
+    - error
+    - metadata
+  metadata_fields:
+    - run_id
+    - attempt_id
+    - schema_version
+    - deterministic
+  volatile_fields:
+    - ts
+    - trace_id
+    - span_id
+    - duration_ms
+    - run_id
+    - attempt_id
 
 artifacts:
-- name: schemas
-paths:
-- apps/mcp_server/schemas/tools/exports_render_markdown.input.schema.json
-- apps/mcp_server/schemas/tools/exports_render_markdown.output.schema.json
-- apps/mcp_server/schemas/tools/vector_query_search.input.schema.json
-- apps/mcp_server/schemas/tools/vector_query_search.output.schema.json
-- apps/mcp_server/schemas/tools/docs_load_fetch.input.schema.json
-- apps/mcp_server/schemas/tools/docs_load_fetch.output.schema.json
-- name: toolpacks
-paths:
-- apps/mcp_server/toolpacks/core/exports.render.markdown.tool.yaml
-- apps/mcp_server/toolpacks/core/vector.query.search.tool.yaml
-- apps/mcp_server/toolpacks/core/docs.load.fetch.tool.yaml
-- name: python_modules
-paths:
-- apps/toolpacks/python/core/exports/render_markdown.py
-- apps/toolpacks/python/core/vector/query_search.py
-- apps/toolpacks/python/core/docs/load_fetch.py
-- name: structured_logs
-path: runs/core_tools/minimal.jsonl
-- name: golden_fixture
-path: tests/fixtures/mcp/core_tools/minimal_golden.jsonl
-- name: doc_fixture
-path: tests/fixtures/mcp/core_tools/docs/example.md
-- name: documentation
-path: docs/core_tools/minimal.md
-- name: log_diff_script
-path: scripts/diff_core_tool_logs.py
-
+  schemas:
+    - path: apps/mcp_server/schemas/tools/exports_render_markdown.input.schema.json
+    - path: apps/mcp_server/schemas/tools/exports_render_markdown.output.schema.json
+    - path: apps/mcp_server/schemas/tools/vector_query_search.input.schema.json
+    - path: apps/mcp_server/schemas/tools/vector_query_search.output.schema.json
+    - path: apps/mcp_server/schemas/tools/docs_load_fetch.input.schema.json
+    - path: apps/mcp_server/schemas/tools/docs_load_fetch.output.schema.json
+  toolpacks:
+    - path: apps/mcp_server/toolpacks/core/exports.render.markdown.tool.yaml
+    - path: apps/mcp_server/toolpacks/core/vector.query.search.tool.yaml
+    - path: apps/mcp_server/toolpacks/core/docs.load.fetch.tool.yaml
+  python_modules:
+    - path: apps/toolpacks/python/core/exports/render_markdown.py
+    - path: apps/toolpacks/python/core/vector/query_search.py
+    - path: apps/toolpacks/python/core/docs/load_fetch.py
+  structured_logs:
+    format: jsonl
+    path: runs/core_tools/minimal.jsonl
+    schema:
+      required_fields:
+        - ts
+        - agent_id
+        - task_id
+        - step_id
+        - trace_id
+        - span_id
+        - tool_id
+        - event
+        - status
+        - duration_ms
+        - attempt
+        - input_bytes
+        - output_bytes
+      metadata_fields:
+        - run_id
+        - attempt_id
+        - schema_version
+        - deterministic
+  log_diff:
+    tool: deepdiff.DeepDiff
+    baseline_path: tests/fixtures/mcp/core_tools/minimal_golden.jsonl
+    whitelist_fields:
+      - ts
+      - duration_ms
+      - run_id
+      - trace_id
+      - span_id
+      - attempt_id
+  doc_fixture:
+    path: tests/fixtures/mcp/core_tools/docs/example.md
+  metadata_fixture:
+    path: tests/fixtures/mcp/core_tools/docs/example.json
+  golden_fixture:
+    path: tests/fixtures/mcp/core_tools/minimal_golden.jsonl
+  documentation:
+    path: docs/core_tools/minimal.md
+  log_diff_script:
+    path: scripts/diff_core_tool_logs.py
 
 acceptance:
-- pytest -k "core_tools_minimal"
-- Structured log file exists and passes schema validation
-- DeepDiff reports no diffs except in whitelisted fields
-- All tests (unit, integration, regression) must pass
-- Toolpacks auto-load in MCP server and return deterministic responses
+  - pytest tests/unit/mcp -k core
+  - pytest tests/e2e/test_mcp_minimal_core_tools.py
+  - Structured log file runs/core_tools/minimal.jsonl exists and passes schema validation
+  - deepdiff reports no diffs except in whitelisted fields
+  - scripts/diff_core_tool_logs.py reports no differences compared to the golden fixture
+  - All tests (unit, integration, regression) must pass
+  - Toolpacks auto-load in MCP server and return deterministic responses
