@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ragx.dev/schemas/tools/exports_render_markdown.output.schema.json",
+  "title": "exports.render.markdown output",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["markdown", "content_hash", "metadata", "front_matter"],
+  "properties": {
+    "markdown": {
+      "type": "string"
+    },
+    "content_hash": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["title", "word_count", "front_matter_keys", "summary"],
+      "properties": {
+        "title": {
+          "type": "string"
+        },
+        "word_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "front_matter_keys": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "summary": {
+          "type": "string"
+        }
+      }
+    },
+    "front_matter": {
+      "type": "object",
+      "additionalProperties": true
+    }
+  }
+}

@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ragx.dev/schemas/tools/exports_render_markdown.input.schema.json",
+  "title": "exports.render.markdown input",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["title", "template", "body"],
+  "properties": {
+    "title": {
+      "type": "string",
+      "minLength": 1
+    },
+    "template": {
+      "type": "string",
+      "minLength": 1
+    },
+    "body": {
+      "type": "string"
+    },
+    "front_matter": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "simulate_error": {
+      "type": "boolean"
+    }
+  }
+}
