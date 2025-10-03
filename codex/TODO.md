@@ -24,7 +24,9 @@
 - [x] codex/agents/TASKS/05i_toolpacks_loader_caps_env_templating.yaml
 - [x] codex/agents/TASKS/05j_toolpacks_loader_execution_validation.yaml
 
-- [ ] codex/agents/TASKS/06a_core_tools_minimal_subset.yaml
+- [x] codex/agents/TASKS/06a_core_tools_minimal_subset.yaml
+- [x] codex/agents/TASKS/06ab_core_tools_minimal_subset.yaml
+- [x] codex/agents/TASKS/06aV2_core_tools_minimal_subset.yaml
 - [ ] codex/agents/TASKS/06b_mcp_server_bootstrap.yaml
 - [ ] codex/agents/TASKS/06c_mcp_envelope_and_schema_validation.yaml
 - [ ] codex/agents/TASKS/06d_mcp_toolpacks_transport.yaml

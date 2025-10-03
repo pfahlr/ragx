@@ -1,0 +1,177 @@
+version: 3
+id: 06b_mcp_server_bootstrap
+title: MCP server bootstrap (HTTP + STDIO + structured logging)
+summary: >
+  Stand up the MCP server over FastAPI (HTTP) and JSON-RPC (STDIO) with a shared
+  McpService, envelope-shaped responses validated by Draft 2020-12 schemas, and a
+  deterministic structured-logging pipeline guarded by DeepDiff.
+description: >
+  Implement a production-ready bootstrap that exposes discovery, prompt retrieval,
+  and tool invocation over both HTTP and STDIO. Enforce schema validation for requests
+  and responses, emit JSONL logs with keep-last-5 rotation and a stable "latest"
+  symlink, and provide a CLI to toggle transports and deterministic test runs.
+component_ids: [mcp_server, toolpacks_runtime, observability, cli]
+depends_on:
+  - 05a_toolpacks_loader_minimal
+  - 05b_toolpacks_executor_python_only
+  - 05c_toolpacks_loader_spec_alignment
+  - 05h_toolpacks_loader_metadata_validation
+  - 06a_core_tools_minimal_subset
+  - 06ab_core_tools_minimal_subset
+arg_spec: [mcp_server, task_runner]
+
+server_contract:
+  transports:
+    http:
+      framework: fastapi
+      endpoints:
+        - { method: GET,  path: /mcp/discover,              response: envelope }
+        - { method: GET,  path: /mcp/prompt/{promptId},     response: envelope }
+        - { method: POST, path: /mcp/tool/{toolId},         response: envelope }
+        - { method: GET,  path: /healthz,                   response: { status: ok } }
+      shutdown: graceful (await tasks, flush logs)
+    stdio:
+      protocol: json-rpc 2.0 (newline-delimited frames)
+      lifecycle:
+        - read JSON from stdin
+        - validate request
+        - dispatch to McpService
+        - write JSON to stdout with flush-per-message
+      control:
+        - support cancel notifications
+        - graceful shutdown with buffer flush
+  shared_service:
+    class: McpService
+    methods: [discover, get_prompt, invoke_tool, health]
+    behavior:
+      - Validate inputs/outputs against schemas
+      - Invoke toolpacks runtime with DI and deterministic seed (RAGX_SEED)
+      - Return envelope with ok|error and trace/span identifiers
+  cli:
+    command: mcp-server
+    flags:
+      - --http                 # enable HTTP transport
+      - --stdio                # enable STDIO transport
+      - --host 0.0.0.0
+      - --port 8070
+      - --log-level [info|debug]
+      - --once                 # serve a single request deterministically then exit
+      - --deterministic-ids    # use UUID5 for requestId from payload (test/golden)
+
+observability_requirements:
+  - Emit structured JSONL for every request/response across transports
+  - Include ISO8601 timestamps, run/session identifiers, transport, route, correlation IDs
+  - Flush on each write; rotate keep-last-5; provide stable "latest" symlink
+
+structured_logging_contract:
+  format: jsonl
+  storage_path_prefix: runs/mcp_server/bootstrap
+  latest_symlink: runs/mcp_server/bootstrap.latest.jsonl
+  retention: keep-last-5
+  event_fields:
+    - ts            # ISO8601 Z
+    - agentId
+    - taskId
+    - stepId
+    - transport     # http|stdio
+    - route         # discover|prompt|tool|health
+    - method        # e.g., mcp.discover, mcp.get_prompt
+    - traceId
+    - spanId
+    - requestId
+    - status        # ok|retry|err
+    - durationMs
+    - attempt
+    - inputBytes
+    - outputBytes
+    - error         # nullable structured object
+    - metadata      # small diagnostics (toolId, promptId, etc.)
+  metadata_fields:
+    - runId
+    - attemptId
+    - schemaVersion
+    - deterministic
+  volatile_fields: [ts, traceId, spanId, durationMs, runId, attemptId, requestId]
+
+log_diff_strategy:
+  tool: deepdiff.DeepDiff
+  baseline_path: tests/fixtures/mcp/server/bootstrap_golden.jsonl
+  compatibility_symlink: tests/fixtures/mcp/logs/mcp_server_bootstrap_golden.jsonl
+  whitelist_fields: [ts, durationMs, traceId, spanId, runId, attemptId, requestId]
+  notes: >
+    Compare generated logs to the golden while ignoring volatile IDs/timings.
+    Enforce byte-stable envelopes for deterministic fixtures.
+
+artifacts:
+  service_layer:
+    paths:
+      - apps/mcp_server/service/__init__.py
+      - apps/mcp_server/service/envelope.py
+      - apps/mcp_server/service/mcp_service.py
+  transports:
+    paths:
+      - apps/mcp_server/http/__init__.py
+      - apps/mcp_server/http/routes.py
+      - apps/mcp_server/http/main.py
+      - apps/mcp_server/stdio/__init__.py
+      - apps/mcp_server/stdio/server.py
+  schemas:
+    paths:
+      - apps/mcp_server/schemas/mcp/envelope.schema.json
+      - apps/mcp_server/schemas/mcp/discover.response.schema.json
+      - apps/mcp_server/schemas/mcp/prompt.response.schema.json
+      - apps/mcp_server/schemas/mcp/tool.response.schema.json
+      - apps/mcp_server/schemas/mcp/health.response.schema.json
+  structured_logs:
+    path: runs/mcp_server/bootstrap.latest.jsonl
+  golden_fixtures:
+    paths:
+      - tests/fixtures/mcp/server/bootstrap_golden.jsonl
+      - tests/fixtures/mcp/logs/mcp_server_bootstrap_golden.jsonl
+  documentation:
+    path: docs/mcp_server/bootstrap.md
+  log_diff_script:
+    path: scripts/diff_mcp_server_logs.py
+
+test_plan:
+  unit:
+    - tests/unit/mcp/test_envelope_schema.py
+    - tests/unit/mcp/test_mcp_service.py
+    - tests/unit/mcp/test_http_transport.py
+    - tests/unit/mcp/test_stdio_transport.py
+    - tests/unit/mcp/test_mcp_logging.py
+    - tests/unit/mcp/test_log_diff_script.py
+  integration:
+    - tests/integration/mcp/test_http_endpoints_bootstrap.py
+    - tests/integration/mcp/test_stdio_end_to_end.py
+    - tests/integration/mcp/test_transport_parity.py
+  e2e:
+    - tests/e2e/test_mcp_server_bootstrap.py
+  fixtures:
+    - tests/fixtures/mcp/server/bootstrap_golden.jsonl
+    - tests/fixtures/mcp/logs/mcp_server_bootstrap_golden.jsonl
+
+actions:
+  - stage: tests
+    summary: Establish schema, service, transport, and logging regression suites before code.
+  - stage: implementation
+    summary: Build shared service, HTTP and STDIO frontends, CLI, and deterministic envelopes.
+    tasks:
+      - Envelope & response models (Pydantic v2), strict Draft 2020-12 validation
+      - FastAPI routes + app factory with OpenAPI toggle
+      - STDIO asyncio JSON-RPC loop with cancel & graceful shutdown
+      - CLI to launch transports (single or concurrent) with --once deterministic mode
+  - stage: observability
+    summary: Produce structured logs, golden fixture, diff tooling, and docs.
+    tasks:
+      - Emit JSONL logs with rotation + latest symlink
+      - Generate golden in --once mode, commit fixture, add diff script
+      - Write docs for startup, flags, schema, troubleshooting
+
+acceptance:
+  - pytest -k "mcp_server_bootstrap"
+  - GET /mcp/discover and STDIO discover return ok envelopes matching schemas
+  - /mcp/prompt/{id} and /mcp/tool/{id} return deterministic envelopes across transports
+  - runs/mcp_server/bootstrap.latest.jsonl exists and validates against logging schema
+  - diff script passes with whitelist; rotation keeps ≤5 files; symlink updated
+  - CLI supports HTTP-only, STDIO-only, or both concurrently with clean shutdown
