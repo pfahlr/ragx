@@ -23,7 +23,7 @@ def _event(event: str, status: str, attempt: int) -> McpLogEvent:
         attempt=attempt,
         input_bytes=42,
         output_bytes=128,
-        metadata={"schema_version": "0.1.0"},
+        metadata={"schemaVersion": "0.1.0"},
         error=None,
     )
 
@@ -49,24 +49,24 @@ def test_log_writer_serialises_event(tmp_path: Path) -> None:
     record = payloads[0]
     for required in (
         "ts",
-        "agent_id",
-        "task_id",
-        "step_id",
-        "trace_id",
-        "span_id",
-        "tool_id",
+        "agentId",
+        "taskId",
+        "stepId",
+        "traceId",
+        "spanId",
+        "toolId",
         "event",
         "status",
-        "duration_ms",
+        "durationMs",
         "attempt",
-        "input_bytes",
-        "output_bytes",
+        "inputBytes",
+        "outputBytes",
         "metadata",
     ):
         assert required in record
-    assert record["metadata"]["schema_version"] == "0.1.0"
+    assert record["metadata"]["schemaVersion"] == "0.1.0"
     assert record["metadata"]["deterministic"] is True
-    assert Path(record["metadata"]["log_path"]).name.startswith("minimal")
+    assert Path(record["metadata"]["logPath"]).name.startswith("minimal")
 
 
 def test_log_rotation_keeps_latest_symlink(tmp_path: Path) -> None:

@@ -10,18 +10,18 @@ from apps.mcp_server.logging import JsonLogWriter, McpLogEvent
 
 REQUIRED_KEYS = {
     "ts",
-    "agent_id",
-    "task_id",
-    "step_id",
-    "trace_id",
-    "span_id",
-    "tool_id",
+    "agentId",
+    "taskId",
+    "stepId",
+    "traceId",
+    "spanId",
+    "toolId",
     "event",
     "status",
     "attempt",
-    "duration_ms",
-    "input_bytes",
-    "output_bytes",
+    "durationMs",
+    "inputBytes",
+    "outputBytes",
     "metadata",
 }
 
@@ -40,7 +40,7 @@ def _base_event(event: str, status: str, attempt: int) -> McpLogEvent:
         attempt=attempt,
         input_bytes=42,
         output_bytes=128,
-        metadata={"schema_version": "0.1.0", "deterministic": True},
+        metadata={"schemaVersion": "0.1.0", "deterministic": True},
         error=None,
     )
 

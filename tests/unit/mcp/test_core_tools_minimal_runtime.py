@@ -86,7 +86,7 @@ def test_exports_render_markdown_is_deterministic(
     assert invoke["event"] == "tool.invoke"
     assert success["event"] == "tool.ok"
     assert success["status"] == "ok"
-    assert success["output_bytes"] >= len(expected_markdown.encode("utf-8"))
+    assert success["outputBytes"] >= len(expected_markdown.encode("utf-8"))
 
 
 def test_vector_query_search_returns_sorted_hits(
@@ -108,7 +108,7 @@ def test_vector_query_search_returns_sorted_hits(
     # ensure logging captured byte counts for cached response as well
     events = _read_events(writer.path)
     last_event = events[-1]
-    assert last_event["tool_id"] == "mcp.tool:vector.query.search"
+    assert last_event["toolId"] == "mcp.tool:vector.query.search"
     assert last_event["event"] == "tool.ok"
     assert last_event["status"] == "ok"
     assert last_event["attempt"] == 0
@@ -130,7 +130,7 @@ def test_docs_load_fetch_reads_fixture(
     assert result["metadata"]["title"] == "Sample Article"
 
     events = _read_events(writer.path)
-    assert any(evt["tool_id"] == "mcp.tool:docs.load.fetch" for evt in events)
+    assert any(evt["toolId"] == "mcp.tool:docs.load.fetch" for evt in events)
 
 
 def test_runtime_raises_for_unknown_tool(

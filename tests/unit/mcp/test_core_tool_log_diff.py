@@ -16,7 +16,18 @@ DeepDiff = deepdiff.DeepDiff
 
 TOOLPACK_DIR = Path("apps/mcp_server/toolpacks/core")
 GOLDEN_LOG = Path("tests/fixtures/mcp/logs/core_tools_minimal_golden.jsonl")
-WHITELIST = {"ts", "trace_id", "span_id", "duration_ms", "run_id", "attempt_id"}
+WHITELIST = {
+    "ts",
+    "traceId",
+    "spanId",
+    "durationMs",
+    "runId",
+    "attemptId",
+    "logPath",
+    "schemaVersion",
+    "inputBytes",
+    "outputBytes",
+}
 
 
 def _normalise_log(path: Path) -> list[dict[str, object]]:
@@ -25,8 +36,9 @@ def _normalise_log(path: Path) -> list[dict[str, object]]:
         record = json.loads(line)
         for field in WHITELIST:
             record.pop(field, None)
+            record.get("metadata", {}).pop(field, None)
         events.append(record)
-    return sorted(events, key=lambda evt: (evt["step_id"], evt["attempt"]))
+    return sorted(events, key=lambda evt: (evt["stepId"], evt["attempt"]))
 
 
 def test_log_diff_against_golden(tmp_path: Path) -> None:
@@ -52,11 +64,15 @@ def test_log_diff_against_golden(tmp_path: Path) -> None:
 
     runtime.invoke(
         "mcp.tool:exports.render.markdown",
-        {"title": "Demo", "template": "{{ title }}", "body": "x"},
+        {
+            "title": "Demo",
+            "template": "# {{ title }}",
+            "body": "example",
+        },
     )
     runtime.invoke(
         "mcp.tool:vector.query.search",
-        {"query": "retrieval testing", "topK": 2},
+        {"query": "retrieval", "topK": 2},
     )
     runtime.invoke(
         "mcp.tool:docs.load.fetch",
