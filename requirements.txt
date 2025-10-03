@@ -5,9 +5,12 @@ pyyaml
 packaging
 pytest
 pytest-cov
-numpy
 ruff
 mypy
 yamllint
 pybind11
 deepdiff>=6.7.0
+fastapi
+uvicorn
+pydantic
+httpx
