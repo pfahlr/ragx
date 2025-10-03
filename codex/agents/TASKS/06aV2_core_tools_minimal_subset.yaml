@@ -1,0 +1,143 @@
+version: 3
+id: 06ab_core_tools_minimal_subset
+title: MCP core tools minimal subset + structured logging + DeepDiff regression
+summary: >
+  Ship deterministic Python toolpacks for exports.render.markdown, vector.query.search,
+  and docs.load.fetch with JSON Schema contracts, retry-aware structured JSONL logging,
+  and DeepDiff-based regression guardrails, extending 06a.
+
+description: >
+  Implement 3 core tools over the Python toolpacks runtime with strict schema validation,
+  deterministic outputs, and a resilient logging pipeline. Produce golden fixtures and a
+  diff script that enforce stability while whitelisting volatile fields.
+
+component_ids: [core_tools, mcp_server, toolpacks_runtime, observability]
+depends_on:
+  - 05a_toolpacks_loader_minimal
+  - 05b_toolpacks_executor_python_only
+  - 05c_toolpacks_loader_spec_alignment
+  - 05h_toolpacks_loader_metadata_validation
+  - 06a_core_tools_minimal_subset
+arg_spec: [mcp_server, task_runner]
+
+observability_requirements:
+  - Every event includes ts, agent_id, task_id, step_id; logs are JSONL and flushed on each write.
+  - Keep-last-5 rotation by run; provide a stable "latest" symlink.
+  - Pipeline survives retries/errors and flushes on shutdown.
+
+structured_logging_contract:
+  format: jsonl
+  # Write each run to a new file for rotation, plus maintain a stable pointer for tests.
+  storage_path_prefix: runs/core_tools/minimal
+  latest_symlink: runs/core_tools/minimal.jsonl
+  retention: keep-last-5
+  event_fields:
+    - ts            # ISO8601 with Z
+    - agent_id
+    - task_id
+    - step_id
+    - trace_id
+    - span_id
+    - tool_id
+    - event         # e.g., "tool.invoke", "tool.retry", "tool.ok", "tool.err"
+    - status        # "ok" | "retry" | "err"
+    - duration_ms
+    - attempt       # 0-based
+    - input_bytes
+    - output_bytes
+    - error         # nullable, structured object
+    - metadata      # free-form, small
+  metadata_fields:
+    - run_id        # UUIDv4 (constant for the run)
+    - attempt_id    # UUIDv4 (constant per end-to-end attempt)
+    - schema_version
+    - deterministic # bool (true in tests)
+  volatile_fields: [ts, trace_id, span_id, duration_ms, run_id, attempt_id]
+
+log_diff_strategy:
+  tool: deepdiff.DeepDiff
+  baseline_path: tests/fixtures/mcp/core_tools/minimal_golden.jsonl
+  compatibility_symlink: tests/fixtures/mcp/logs/core_tools_minimal_golden.jsonl
+  whitelist_fields: [ts, duration_ms, run_id, trace_id, span_id, attempt_id]
+  notes: >
+    Compare generated logs to the golden while ignoring volatile identifiers and durations.
+    The compatibility symlink preserves older tooling paths.
+
+artifacts:
+  schemas:
+    paths:
+      - apps/mcp_server/schemas/tools/exports_render_markdown.input.schema.json
+      - apps/mcp_server/schemas/tools/exports_render_markdown.output.schema.json
+      - apps/mcp_server/schemas/tools/vector_query_search.input.schema.json
+      - apps/mcp_server/schemas/tools/vector_query_search.output.schema.json
+      - apps/mcp_server/schemas/tools/docs_load_fetch.input.schema.json
+      - apps/mcp_server/schemas/tools/docs_load_fetch.output.schema.json
+  toolpacks:
+    paths:
+      - apps/mcp_server/toolpacks/core/exports.render.markdown.tool.yaml
+      - apps/mcp_server/toolpacks/core/vector.query.search.tool.yaml
+      - apps/mcp_server/toolpacks/core/docs.load.fetch.tool.yaml
+  python_modules:
+    paths:
+      - apps/toolpacks/python/core/exports/render_markdown.py
+      - apps/toolpacks/python/core/vector/query_search.py
+      - apps/toolpacks/python/core/docs/load_fetch.py
+  structured_logs:
+    # Latest symlink for acceptance tests; per-run files live next to it
+    path: runs/core_tools/minimal.jsonl
+  golden_fixtures:
+    paths:
+      - tests/fixtures/mcp/core_tools/minimal_golden.jsonl
+      - tests/fixtures/mcp/logs/core_tools_minimal_golden.jsonl   # symlink to the above
+  doc_fixtures:
+    paths:
+      - tests/fixtures/mcp/core_tools/docs/example.md
+      - tests/fixtures/mcp/core_tools/docs/example.json
+      - tests/fixtures/mcp/docs/sample_article.md
+      - tests/fixtures/mcp/docs/sample_metadata.json
+  documentation:
+    path: docs/core_tools/minimal.md
+  log_diff_script:
+    path: scripts/diff_core_tool_logs.py
+
+test_plan:
+  unit:
+    - tests/unit/mcp/test_core_tools_minimal_schemas.py
+    - tests/unit/mcp/test_core_tools_minimal_runtime.py
+    - tests/unit/mcp/test_core_tools_minimal_logging.py
+    - tests/unit/mcp/test_core_tools_minimal_log_diff.py
+    - tests/unit/mcp/test_log_diff_script.py
+  e2e:
+    - tests/e2e/test_mcp_minimal_core_tools.py
+    - tests/e2e/test_core_tools_minimal_flow.py
+  fixtures:
+    - tests/fixtures/mcp/core_tools/minimal_golden.jsonl
+    - tests/fixtures/mcp/logs/core_tools_minimal_golden.jsonl
+    - tests/fixtures/mcp/core_tools/docs/example.md
+    - tests/fixtures/mcp/core_tools/docs/example.json
+    - tests/fixtures/mcp/docs/sample_article.md
+    - tests/fixtures/mcp/docs/sample_metadata.json
+
+actions:
+  - stage: tests
+    summary: Establish regression suites for schemas, runtime, logging, and DeepDiff before code.
+  - stage: implementation
+    summary: Implement deterministic toolpacks, schemas, runtime wiring, and byte-counting hooks.
+    tasks:
+      - Deterministic outputs with seeded randomness (RAGX_SEED) and stable sorting.
+      - JSON Schemas (Draft 2020-12); enforce camelCase keys per master spec.
+      - Retry-aware logger; flush-on-write; rotation (keep-last-5); symlink latest.
+  - stage: observability
+    summary: Produce golden logs, diff tooling, and docs.
+    tasks:
+      - Generate first golden via deterministic run; lock it in.
+      - scripts/diff_core_tool_logs.py to compare new runs vs golden w/ whitelist.
+      - docs/core_tools/minimal.md with troubleshooting and invariants.
+
+acceptance:
+  - pytest -k "core_tools_minimal"
+  - pytest tests/e2e/test_mcp_minimal_core_tools.py
+  - runs/core_tools/minimal.jsonl exists and passes schema validation.
+  - DeepDiff shows no diffs except whitelisted fields via scripts/diff_core_tool_logs.py.
+  - Toolpacks auto-load and return deterministic responses (including across retries).
+  - Rotation keeps only 5 most recent per-run files and maintains latest symlink.
