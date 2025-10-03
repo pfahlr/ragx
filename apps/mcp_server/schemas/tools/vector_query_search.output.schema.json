@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Vector Query Search Output",
+  "type": "object",
+  "properties": {
+    "hits": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "score": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "snippet": {
+            "type": "string"
+          },
+          "metadata": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        },
+        "required": ["id", "score", "snippet", "metadata"],
+        "additionalProperties": false
+      }
+    },
+    "meta": {
+      "type": "object",
+      "properties": {
+        "provider": {
+          "type": "string"
+        },
+        "query": {
+          "type": "string"
+        },
+        "top_k": {
+          "type": "integer"
+        }
+      },
+      "required": ["provider", "query", "top_k"],
+      "additionalProperties": true
+    }
+  },
+  "required": ["hits", "meta"],
+  "additionalProperties": false
+}

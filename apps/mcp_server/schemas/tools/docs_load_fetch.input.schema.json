@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Docs Load Fetch Input",
+  "type": "object",
+  "properties": {
+    "path": {
+      "type": "string",
+      "format": "path"
+    },
+    "metadata_path": {
+      "type": "string",
+      "format": "path"
+    }
+  },
+  "required": ["path", "metadata_path"],
+  "additionalProperties": false
+}

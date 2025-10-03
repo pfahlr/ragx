@@ -1,0 +1,34 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Exports Render Markdown Output",
+  "type": "object",
+  "properties": {
+    "markdown": {
+      "type": "string"
+    },
+    "content_hash": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "metadata": {
+      "type": "object",
+      "properties": {
+        "title": {
+          "type": "string"
+        },
+        "content_type": {
+          "type": "string",
+          "const": "text/markdown"
+        },
+        "hash_algorithm": {
+          "type": "string",
+          "const": "sha256"
+        }
+      },
+      "required": ["title", "content_type", "hash_algorithm"],
+      "additionalProperties": true
+    }
+  },
+  "required": ["markdown", "content_hash", "metadata"],
+  "additionalProperties": false
+}

@@ -5,8 +5,8 @@ pyyaml
 packaging
 pytest
 pytest-cov
-numpy
 ruff
 mypy
 yamllint
 pybind11
+deepdiff

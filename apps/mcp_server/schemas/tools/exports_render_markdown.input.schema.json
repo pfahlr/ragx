@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Exports Render Markdown Input",
+  "type": "object",
+  "properties": {
+    "title": {
+      "type": "string",
+      "minLength": 1
+    },
+    "template": {
+      "type": "string",
+      "minLength": 1
+    },
+    "body": {
+      "type": "string"
+    },
+    "front_matter": {
+      "type": "object",
+      "additionalProperties": true
+    }
+  },
+  "required": ["title", "template", "body"],
+  "additionalProperties": false
+}

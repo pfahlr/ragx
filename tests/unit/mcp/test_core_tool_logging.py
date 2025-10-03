@@ -2,11 +2,9 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from uuid import uuid4
-
-import pytest
 
 from apps.mcp_server.logging import JsonLogWriter, McpLogEvent
 
@@ -29,9 +27,9 @@ REQUIRED_KEYS = {
 
 def _base_event(event: str, status: str, attempt: int) -> McpLogEvent:
     return McpLogEvent(
-        ts=datetime.now(timezone.utc),
+        ts=datetime.now(UTC),
         agent_id="mcp_server",
-        task_id="06a_core_tools_minimal_subset",
+        task_id="06ab_core_tools_minimal_subset",
         step_id=attempt,
         trace_id=str(uuid4()),
         span_id=str(uuid4()),
@@ -48,7 +46,11 @@ def _base_event(event: str, status: str, attempt: int) -> McpLogEvent:
 
 def test_json_log_writer_persists_success_event(tmp_path: Path) -> None:
     log_path = tmp_path / "core-tools.jsonl"
-    writer = JsonLogWriter(log_path, agent_id="mcp_server", task_id="06a_core_tools_minimal_subset")
+    writer = JsonLogWriter(
+        log_path,
+        agent_id="mcp_server",
+        task_id="06ab_core_tools_minimal_subset",
+    )
 
     event = _base_event(event="invocation_success", status="success", attempt=1)
     writer.write(event)
@@ -64,7 +66,11 @@ def test_json_log_writer_persists_success_event(tmp_path: Path) -> None:
 
 def test_json_log_writer_includes_error_payload(tmp_path: Path) -> None:
     log_path = tmp_path / "core-tools.jsonl"
-    writer = JsonLogWriter(log_path, agent_id="mcp_server", task_id="06a_core_tools_minimal_subset")
+    writer = JsonLogWriter(
+        log_path,
+        agent_id="mcp_server",
+        task_id="06ab_core_tools_minimal_subset",
+    )
 
     failure = _base_event(event="invocation_failure", status="error", attempt=2)
     failure.error = {"code": "SIMULATED", "message": "forced failure"}
