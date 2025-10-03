@@ -23,11 +23,15 @@ addopts = "-q"
 name = "ragx"
 dynamic = ["version"]
 dependencies = [
+    "fastapi",
     "jinja2",
+    "httpx",
     "jsonschema",
     "numpy",
     "packaging",
+    "pydantic",
     "pyyaml",
+    "uvicorn",
 ]
 
 [project.optional-dependencies]

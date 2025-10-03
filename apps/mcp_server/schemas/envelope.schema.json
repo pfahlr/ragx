@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "MCP Envelope",
+  "type": "object",
+  "required": ["ok", "meta", "errors"],
+  "properties": {
+    "ok": {"type": "boolean"},
+    "data": {"type": ["object", "null"]},
+    "meta": {
+      "type": "object",
+      "required": ["transport", "trace_id"],
+      "properties": {
+        "transport": {"type": "string"},
+        "trace_id": {"type": "string"}
+      },
+      "additionalProperties": true
+    },
+    "errors": {
+      "type": "array",
+      "items": {"type": "object"}
+    }
+  },
+  "additionalProperties": false
+}
