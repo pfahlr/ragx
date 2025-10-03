@@ -1,0 +1,199 @@
+version: 1
+id: 106a_mcp_server_prod_enhancements
+title: MCP server production enhancements (telemetry, security, CI, performance)
+summary: >
+  Layer production-grade telemetry, security, resilience, CI automation, and performance
+  tuning onto the MCP server bootstrap while preserving deterministic tests and fixtures.
+description: >
+  Add OpenTelemetry tracing, Prometheus metrics, log sampling/redaction, transport
+  equivalence/property-based tests, security hardening (auth, limits, rate caps),
+  resilience patterns (timeouts, retries, circuit breaker, STDIO backpressure),
+  performance optimizations (orjson, caching, Pydantic v2), configuration flags,
+  and CI/CD workflows for golden management and artifact publishing.
+component_ids: [observability, mcp_server, security, ci_cd, performance]
+depends_on:
+  - 06b_mcp_server_bootstrap
+  - 06ab_core_tools_minimal_subset
+arg_spec: [mcp_server, task_runner]
+
+observability_extensions:
+  tracing:
+    framework: opentelemetry
+    exporters: [otlp]
+    spans:
+      attributes:
+        - transport
+        - route
+        - requestId
+        - attempt
+        - status
+        - toolId
+        - promptId
+    propagation: traceId/spanId carried into envelopes and logs
+  metrics:
+    framework: prometheus_client
+    endpoint: /metrics
+    series:
+      - name: mcp_requests_total
+        type: counter
+        labels: [transport, route, status]
+      - name: mcp_request_duration_seconds
+        type: histogram
+        labels: [transport, route, status]
+      - name: mcp_retries_total
+        type: counter
+        labels: [transport, route]
+      - name: mcp_stdio_queue_depth
+        type: gauge
+      - name: mcp_schema_validation_failures_total
+        type: counter
+        labels: [kind]   # request|response
+  logs:
+    sampling:
+      ok_percent: 10
+      err_percent: 100
+      tests_force_full: true
+    redaction:
+      denylist_keys: [authorization, apiKey, password, token]
+      policy: strip-before-serialize
+
+transport_equivalence:
+  normalization:
+    strip_fields: [ts, durationMs, traceId, spanId, requestId, runId, attemptId]
+    ignore_transport_specifics: true
+  property_based_tests:
+    framework: hypothesis
+    cases: 200
+    targets: [discover, get_prompt, invoke_tool]
+
+security_hardening:
+  authz:
+    http: bearer_token
+    stdio: assume-local, optional signed envelopes (ed25519)
+  limits:
+    max_request_bytes: 1048576
+    request_timeout_ms: 5000
+    retries: 3
+  rate_limit:
+    per_route_rps_default: 50
+    burst: 100
+  cors:
+    default: deny
+    allowlist: []
+  tls_guidance:
+    ingress_termination: recommended
+  pii_redaction_tests:
+    ensure_no_denied_keys_in_logs: true
+
+resilience_patterns:
+  retries_backoff_ms: [50, 100, 200]   # deterministic in tests
+  circuit_breaker:
+    half_open_after_ms: 30000
+    metrics_label: toolId
+  stdio_backpressure:
+    queue_max: 1024
+    on_full: backpressure   # or "drop_with_error"
+  graceful_shutdown:
+    signals: [SIGINT, SIGTERM]
+    drain_queue: true
+    flush_logs: true
+
+performance_tuning:
+  json_codec: orjson
+  models: pydantic_v2_compiled
+  caching:
+    prompt_ttl_s: 60
+    lru_max_items: 512
+  concurrency:
+    http_workers: auto
+    execution_pools:
+      tool_invocations: thread_pool
+      io_tasks: async
+  compression:
+    enable_http_compression: true
+
+configuration_flags:
+  - { name: --deterministic-ids, default: false, desc: "Use UUID5 requestId for goldens" }
+  - { name: MCP_MAX_REQ_BYTES, default: "1048576", desc: "Reject oversized payloads" }
+  - { name: MCP_REQ_TIMEOUT_MS, default: "5000", desc: "Per-request deadline" }
+  - { name: MCP_RETRY_ATTEMPTS, default: "3", desc: "Retry ceiling" }
+  - { name: MCP_LOG_SAMPLE_OK_PCT, default: "10", desc: "Sampling for ok logs" }
+  - { name: MCP_LOG_RETENTION, default: "5", desc: "Keep-last-N log files" }
+  - { name: MCP_HTTP_WORKERS, default: "auto", desc: "Uvicorn workers" }
+  - { name: MCP_STDIO_QUEUE_MAX, default: "1024", desc: "STDIO backpressure cap" }
+  - { name: MCP_RATE_LIMIT_RPS, default: "50", desc: "Default per-route RPS" }
+  - { name: RAGX_SEED, default: "42", desc: "Deterministic seed" }
+
+artifacts:
+  code:
+    paths:
+      - apps/mcp_server/observability/otel.py
+      - apps/mcp_server/observability/metrics.py
+      - apps/mcp_server/observability/redaction.py
+      - apps/mcp_server/http/middleware.py
+      - apps/mcp_server/stdio/queue.py
+  dashboards_docs:
+    paths:
+      - docs/mcp_server/observability.md
+      - docs/mcp_server/security.md
+      - docs/mcp_server/performance.md
+  scripts:
+    paths:
+      - scripts/run_mcp_http.sh
+      - scripts/run_mcp_stdio.sh
+      - scripts/diff_mcp_server_logs.py
+  ci:
+    paths:
+      - .github/workflows/mcp_server_ci.yml
+
+test_plan:
+  unit:
+    - tests/unit/mcp/test_logging_redaction.py
+    - tests/unit/mcp/test_metrics_exposure.py
+    - tests/unit/mcp/test_tracing_context.py
+    - tests/unit/mcp/test_rate_limit.py
+    - tests/unit/mcp/test_backpressure_policy.py
+  integration:
+    - tests/integration/mcp/test_http_metrics_and_traces.py
+    - tests/integration/mcp/test_stdio_queue_and_cancel.py
+  property_based:
+    - tests/property/test_transport_equivalence.py
+  e2e:
+    - tests/e2e/test_mcp_server_prod_enhancements.py
+  security:
+    - tests/security/test_pii_redaction_in_logs.py
+    - tests/security/test_auth_bearer_http.py
+
+actions:
+  - stage: observability
+    summary: Add tracing, metrics, sampling/redaction, and docs.
+    tasks:
+      - Instrument HTTP/STDIO with OpenTelemetry spans and attributes
+      - Expose Prometheus /metrics and core series
+      - Implement log sampling & redaction with unit tests
+  - stage: security_resilience
+    summary: Add auth, limits, rate limiting, backpressure, circuit breaker.
+    tasks:
+      - Bearer auth for HTTP, optional signed envelopes for STDIO
+      - Request size/timeout limits, retry/backoff, circuit breaker wrappers
+      - Bounded STDIO queue with backpressure or drop policy
+  - stage: performance
+    summary: Optimize serialization, caching, and concurrency.
+    tasks:
+      - Switch to orjson, compile Pydantic validators
+      - Add LRU/TTL caches for prompts/meta
+      - Tune HTTP workers and execution pools
+  - stage: ci_cd
+    summary: Extend pipeline for reproducible goldens and artifacts.
+    tasks:
+      - Matrix tests (py310/311/312), deterministic --once golden job
+      - Upload logs/schemas as artifacts; optional golden auto-update job (label-gated)
+      - Security scans: pip-audit, license, secret scanning
+
+acceptance:
+  - All new unit/integration/property/e2e tests pass
+  - /metrics exposes expected series; spans include correlation attributes
+  - Logs show redaction of denylisted keys; sampling obeys configuration (tests force full)
+  - Rate limiting works; oversize/timeouts return structured errors
+  - STDIO backpressure behaves per policy; circuit breaker metrics emitted
+  - CI pipeline produces deterministic goldens and publishes artifacts
