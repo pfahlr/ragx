@@ -5,6 +5,8 @@ from pathlib import Path
 
 import pytest
 
+pytest.importorskip("pydantic")
+
 from apps.mcp_server.service.mcp_service import McpService, RequestContext
 
 SCHEMA_DIR = Path("apps/mcp_server/schemas/mcp")

@@ -51,9 +51,21 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         default="INFO",
         help="Logging level",
     )
-    parser.add_argument("--once", action="store_true", help="Run a deterministic single-request cycle and exit")
-    parser.add_argument("--deterministic-ids", action="store_true", help="Use deterministic UUID5 request identifiers")
-    parser.add_argument("--log-dir", default="runs", help="Directory for structured logs")
+    parser.add_argument(
+        "--once",
+        action="store_true",
+        help="Run a deterministic single-request cycle and exit",
+    )
+    parser.add_argument(
+        "--deterministic-ids",
+        action="store_true",
+        help="Use deterministic UUID5 request identifiers",
+    )
+    parser.add_argument(
+        "--log-dir",
+        default="runs",
+        help="Directory for structured logs",
+    )
     return parser.parse_args(argv)
 
 

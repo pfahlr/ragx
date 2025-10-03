@@ -32,7 +32,11 @@ def build_router(service: McpService) -> APIRouter:
     @router.post("/mcp/tool/{tool_id}")
     def invoke_tool(tool_id: str, payload: ToolInvocationPayload) -> dict[str, Any]:
         context = RequestContext(transport="http", route="tool", method="mcp.tool.invoke")
-        envelope = service.invoke_tool(tool_id=tool_id, arguments=payload.arguments, context=context)
+        envelope = service.invoke_tool(
+            tool_id=tool_id,
+            arguments=payload.arguments,
+            context=context,
+        )
         return envelope.model_dump(by_alias=True)
 
     @router.get("/healthz")

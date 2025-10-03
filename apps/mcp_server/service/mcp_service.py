@@ -2,10 +2,11 @@ from __future__ import annotations
 
 import json
 import time
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Iterable, Mapping
+from typing import Any
 from uuid import UUID, uuid4, uuid5
 
 from jsonschema import Draft202012Validator, validators
@@ -36,7 +37,7 @@ class RequestContext:
     start_time: float = field(default_factory=time.perf_counter)
     attempt: int = 0
 
-    def clone_with_payload(self, payload: Mapping[str, Any]) -> "RequestContext":
+    def clone_with_payload(self, payload: Mapping[str, Any]) -> RequestContext:
         return RequestContext(
             transport=self.transport,
             route=self.route,
@@ -243,7 +244,7 @@ class McpService:
         schema_version: str = _SCHEMA_VERSION_DEFAULT,
         deterministic_logs: bool = True,
         logger: ServerLogManager | None = None,
-    ) -> "McpService":
+    ) -> McpService:
         loader = ToolpackLoader()
         loader.load_dir(toolpacks_dir)
         toolpacks = {pack.id: pack for pack in loader.list()}

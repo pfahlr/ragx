@@ -4,6 +4,10 @@ import asyncio
 from pathlib import Path
 
 import pytest
+
+pytest.importorskip("fastapi")
+pytest.importorskip("pydantic")
+
 from fastapi.testclient import TestClient
 
 from apps.mcp_server.http.main import create_app

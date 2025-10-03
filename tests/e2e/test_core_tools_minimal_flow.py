@@ -62,7 +62,7 @@ def test_flow_from_example_fixture(tmp_path, monkeypatch) -> None:
     assert len(hits["hits"]) == 2
 
     records = [json.loads(line) for line in writer.path.read_text(encoding="utf-8").splitlines()]
-    tool_ids = {record["tool_id"] for record in records}
+    tool_ids = {record["toolId"] for record in records}
     assert tool_ids == {
         "mcp.tool:docs.load.fetch",
         "mcp.tool:exports.render.markdown",

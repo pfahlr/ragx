@@ -21,7 +21,11 @@ def test_server_log_diff(tmp_path: Path, whitelisted: bool) -> None:
     new_log = tmp_path / "run.jsonl"
     new_log.write_text(GOLDEN.read_text(encoding="utf-8"), encoding="utf-8")
 
-    records = [json.loads(line) for line in new_log.read_text(encoding="utf-8").splitlines() if line.strip()]
+    records = [
+        json.loads(line)
+        for line in new_log.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
     assert records, "expected at least one log record"
 
     if whitelisted:

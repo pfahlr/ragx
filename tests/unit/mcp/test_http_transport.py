@@ -9,7 +9,7 @@ pytest.importorskip("fastapi")
 from fastapi.testclient import TestClient
 
 from apps.mcp_server.http.main import create_app
-from apps.mcp_server.service.mcp_service import McpService, RequestContext
+from apps.mcp_server.service.mcp_service import McpService
 
 SCHEMA_DIR = Path("apps/mcp_server/schemas/mcp")
 TOOLPACKS_DIR = Path("apps/mcp_server/toolpacks")

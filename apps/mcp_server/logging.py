@@ -1,13 +1,11 @@
 from __future__ import annotations
 
-from __future__ import annotations
-
 import json
 import os
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Protocol
 from uuid import uuid4
 
 __all__ = ["JsonLogWriter", "McpLogEvent"]
@@ -34,8 +32,6 @@ class McpLogEvent:
     error: dict[str, Any] | None = None
 
     def to_serialisable(self) -> dict[str, Any]:
-        """Return a spec-compliant dictionary for JSON serialisation."""
-
         return {
             "ts": self.ts.astimezone(UTC).isoformat().replace("+00:00", "Z"),
             "agentId": self.agent_id,
@@ -132,7 +128,7 @@ class JsonLogWriter:
     def new_attempt_id(self) -> str:
         return str(uuid4())
 
-    def write(self, event: McpLogEvent, *, attempt_id: str) -> None:
+    def write(self, event: LogEvent, *, attempt_id: str) -> None:
         record = event.to_serialisable()
         metadata = dict(record.get("metadata", {}))
         metadata.update(
@@ -165,3 +161,8 @@ class JsonLogWriter:
         parent_parts = list(self._storage_prefix.parent.parts)
         tail = parent_parts[-2:] if len(parent_parts) >= 2 else parent_parts
         return str(Path(*tail, self._path.name))
+
+
+class LogEvent(Protocol):
+    def to_serialisable(self) -> dict[str, Any]:
+        """Return a JSON-ready dictionary."""

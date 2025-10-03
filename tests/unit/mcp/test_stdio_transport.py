@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 import asyncio
-import json
-import asyncio
 from pathlib import Path
 
 import pytest
+
+pytest.importorskip("pydantic")
 
 from apps.mcp_server.service.mcp_service import McpService
 from apps.mcp_server.stdio.server import JsonRpcStdioServer
@@ -51,13 +51,13 @@ def test_stdio_tool_invoke(server: JsonRpcStdioServer) -> None:
     fixture_path = Path("tests/fixtures/mcp/docs/sample_article.md")
     response = asyncio.run(
         server.handle_request(
-        _request(
-            "mcp.tool.invoke",
-            params={
-                "toolId": "mcp.tool:docs.load.fetch",
-                "arguments": {"path": str(fixture_path)},
-            },
-        )
+            _request(
+                "mcp.tool.invoke",
+                params={
+                    "toolId": "mcp.tool:docs.load.fetch",
+                    "arguments": {"path": str(fixture_path)},
+                },
+            )
         )
     )
     assert response["result"]["ok"] is True
@@ -66,6 +66,8 @@ def test_stdio_tool_invoke(server: JsonRpcStdioServer) -> None:
 
 def test_stdio_cancel_notification(server: JsonRpcStdioServer) -> None:
     response = asyncio.run(
-        server.handle_notification({"jsonrpc": "2.0", "method": "$/cancel", "params": {"id": "req-1"}})
+        server.handle_notification(
+            {"jsonrpc": "2.0", "method": "$/cancel", "params": {"id": "req-1"}}
+        )
     )
     assert response is None

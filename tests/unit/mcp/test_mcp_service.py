@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import os
 import time
 from pathlib import Path
 from typing import Any
@@ -11,7 +10,6 @@ from jsonschema import Draft202012Validator
 
 pytest.importorskip("pydantic")
 
-from apps.mcp_server.service.envelope import Envelope
 from apps.mcp_server.service.mcp_service import McpService, RequestContext
 
 SCHEMA_DIR = Path("apps/mcp_server/schemas/mcp")

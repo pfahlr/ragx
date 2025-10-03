@@ -5,6 +5,9 @@ import json
 from pathlib import Path
 
 import pytest
+
+pytest.importorskip("pydantic")
+
 from jsonschema import Draft202012Validator
 
 from apps.mcp_server.service.mcp_service import McpService
@@ -42,7 +45,9 @@ def _validator(name: str) -> Draft202012Validator:
 
 
 def test_stdio_end_to_end(server: JsonRpcStdioServer) -> None:
-    discover = asyncio.run(server.handle_request({"jsonrpc": "2.0", "id": "d1", "method": "mcp.discover"}))
+    discover = asyncio.run(
+        server.handle_request({"jsonrpc": "2.0", "id": "d1", "method": "mcp.discover"})
+    )
     _validator("discover.response.schema.json").validate(discover["result"]["data"])
 
     prompt = asyncio.run(

@@ -61,7 +61,7 @@ class EnvelopeMeta(BaseModel):
         output_bytes: int = 0,
         tool_id: str | None = None,
         prompt_id: str | None = None,
-    ) -> "EnvelopeMeta":
+    ) -> EnvelopeMeta:
         return cls(
             requestId=str(request_id),
             traceId=str(trace_id),
@@ -92,11 +92,11 @@ class Envelope(BaseModel):
     meta: EnvelopeMeta
 
     @classmethod
-    def success(cls, *, data: dict[str, Any], meta: EnvelopeMeta) -> "Envelope":
+    def success(cls, *, data: dict[str, Any], meta: EnvelopeMeta) -> Envelope:
         return cls(ok=True, data=data, error=None, meta=meta)
 
     @classmethod
-    def failure(cls, *, error: EnvelopeError, meta: EnvelopeMeta) -> "Envelope":
+    def failure(cls, *, error: EnvelopeError, meta: EnvelopeMeta) -> Envelope:
         return cls(ok=False, data=None, error=error, meta=meta)
 
     def to_dict(self) -> dict[str, Any]:

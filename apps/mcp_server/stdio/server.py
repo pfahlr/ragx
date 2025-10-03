@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import asyncio
 import json
-from typing import Any, Mapping
+from collections.abc import Mapping
+from typing import Any
 
 from apps.mcp_server.service.mcp_service import McpService, RequestContext
 
@@ -50,7 +51,11 @@ class JsonRpcStdioServer:
                 method="mcp.tool.invoke",
                 deterministic_ids=self._deterministic_ids,
             )
-            envelope = self._service.invoke_tool(tool_id=tool_id, arguments=arguments, context=context)
+            envelope = self._service.invoke_tool(
+                tool_id=tool_id,
+                arguments=arguments,
+                context=context,
+            )
             result = envelope.model_dump(by_alias=True)
             response = {"jsonrpc": "2.0", "result": result}
         else:
@@ -66,7 +71,13 @@ class JsonRpcStdioServer:
         # Currently only $/cancel is recognised; all notifications are ignored.
         return None
 
-    async def serve(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter, *, once: bool = False) -> None:
+    async def serve(
+        self,
+        reader: asyncio.StreamReader,
+        writer: asyncio.StreamWriter,
+        *,
+        once: bool = False,
+    ) -> None:
         while True:
             line = await reader.readline()
             if not line:

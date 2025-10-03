@@ -4,6 +4,10 @@ import json
 from pathlib import Path
 
 import pytest
+
+pytest.importorskip("fastapi")
+pytest.importorskip("pydantic")
+
 from fastapi.testclient import TestClient
 from jsonschema import Draft202012Validator
 

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import os
 import subprocess
 import sys
@@ -8,11 +7,17 @@ from pathlib import Path
 
 import pytest
 
+pytest.importorskip("uvicorn")
+pytest.importorskip("pydantic")
+
 GOLDEN_LOG = Path("tests/fixtures/mcp/server/bootstrap_golden.jsonl")
 DIFF_SCRIPT = Path("scripts/diff_mcp_server_logs.py")
 
 
-def test_mcp_server_once_mode_generates_deterministic_log(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_mcp_server_once_mode_generates_deterministic_log(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     if not GOLDEN_LOG.exists():
         pytest.fail(f"Golden log missing: {GOLDEN_LOG}")
 
