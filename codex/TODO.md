@@ -27,7 +27,8 @@
 - [x] codex/agents/TASKS/06a_core_tools_minimal_subset.yaml
 - [x] codex/agents/TASKS/06ab_core_tools_minimal_subset.yaml
 - [x] codex/agents/TASKS/06aV2_core_tools_minimal_subset.yaml
-- [ ] codex/agents/TASKS/06b_mcp_server_bootstrap.yaml
+- [x] codex/agents/TASKS/06b_mcp_server_bootstrap.yaml
+- [x] codex/agents/TASKS/06bV2_mcp_server_bootstrap.yaml
 - [ ] codex/agents/TASKS/06c_mcp_envelope_and_schema_validation.yaml
 - [ ] codex/agents/TASKS/06d_mcp_toolpacks_transport.yaml
 
@@ -110,3 +111,9 @@
 - [ ] codex/agents/TASKS/60a-codex-bootstrap-and-guardrails.yaml
 
 - [ ] codex/agents/TASKS/70a-docs-foundation.yaml
+
+
+---
+## Phase II
+---
+- [ ] codex/agents/TASKS/106a-mcp-server-prod-enhancements.yaml
