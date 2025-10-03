@@ -10,3 +10,4 @@ ruff
 mypy
 yamllint
 pybind11
+deepdiff>=6.7.0

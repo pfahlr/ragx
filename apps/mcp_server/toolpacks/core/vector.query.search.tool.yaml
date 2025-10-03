@@ -1,0 +1,24 @@
+id: mcp.tool:vector.query.search
+name: vector.query.search
+version: 0.1.0
+description: Deterministic vector search stub operating over fixture documents.
+deterministic: true
+timeoutMs: 1500
+limits:
+  maxInputBytes: 8192
+  maxOutputBytes: 32768
+inputSchema:
+  $ref: ../../schemas/tools/vector_query_search.input.schema.json
+outputSchema:
+  $ref: ../../schemas/tools/vector_query_search.output.schema.json
+execution:
+  kind: python
+  module: apps.toolpacks.python.core.vector.query_search:run
+caps:
+  filesystem:
+    read:
+      - tests/fixtures
+metadata:
+  owner: core
+  tags:
+    - core-tools
