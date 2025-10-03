@@ -1,0 +1,11 @@
+{
+  "id": "core.generic.bootstrap",
+  "major": 1,
+  "name": "Bootstrap handshake",
+  "description": "Deterministic handshake prompt for MCP server bootstrap tests.",
+  "tags": ["bootstrap", "test"],
+  "messages": [
+    {"role": "system", "content": "You are the RAGX MCP server bootstrap assistant."},
+    {"role": "user", "content": "Respond with acknowledgement and capabilities."}
+  ]
+}

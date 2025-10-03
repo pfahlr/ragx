@@ -15,7 +15,7 @@ DeepDiff = deepdiff.DeepDiff
 
 TOOLPACK_DIR = Path("apps/mcp_server/toolpacks/core")
 GOLDEN_LOG = Path("tests/fixtures/mcp/core_tools/minimal_golden.jsonl")
-WHITELIST = {"ts", "trace_id", "span_id", "duration_ms", "run_id", "attempt_id", "log_path"}
+WHITELIST = {"ts", "traceId", "spanId", "durationMs", "runId", "attemptId", "logPath"}
 
 
 def _normalise(path: Path) -> list[dict[str, object]]:
@@ -26,7 +26,7 @@ def _normalise(path: Path) -> list[dict[str, object]]:
             payload["metadata"].pop(field, None)
             payload.pop(field, None)
         events.append(payload)
-    return sorted(events, key=lambda item: (item["tool_id"], item["event"], item["attempt"]))
+    return sorted(events, key=lambda item: (item["toolId"], item["event"], item["attempt"]))
 
 
 def test_logs_match_golden(tmp_path: Path, monkeypatch) -> None:
@@ -37,8 +37,8 @@ def test_logs_match_golden(tmp_path: Path, monkeypatch) -> None:
     storage_prefix = tmp_path / "runs/core_tools/minimal"
     latest = tmp_path / "runs/core_tools/minimal.jsonl"
     writer = JsonLogWriter(
-        agent_id="test-agent",
-        task_id="core-tools",
+        agent_id="mcp_server",
+        task_id="06a_core_tools_minimal_subset",
         storage_prefix=storage_prefix,
         latest_symlink=latest,
         schema_version="0.1.0",
@@ -49,8 +49,8 @@ def test_logs_match_golden(tmp_path: Path, monkeypatch) -> None:
         toolpacks=loader.list(),
         executor=Executor(),
         log_writer=writer,
-        agent_id="test-agent",
-        task_id="core-tools",
+        agent_id="mcp_server",
+        task_id="06a_core_tools_minimal_subset",
     )
 
     runtime.invoke(

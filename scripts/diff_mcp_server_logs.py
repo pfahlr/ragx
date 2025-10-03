@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 from __future__ import annotations
 
 import argparse
@@ -8,57 +7,43 @@ from pathlib import Path
 
 from deepdiff import DeepDiff
 
-DEFAULT_NEW = Path("runs/core_tools/minimal.jsonl")
-DEFAULT_GOLDEN = Path("tests/fixtures/mcp/core_tools/minimal_golden.jsonl")
+DEFAULT_NEW = Path("runs/mcp_server/bootstrap.latest.jsonl")
+DEFAULT_GOLDEN = Path("tests/fixtures/mcp/server/bootstrap_golden.jsonl")
 DEFAULT_WHITELIST = [
     "ts",
     "durationMs",
-    "runId",
     "traceId",
     "spanId",
+    "runId",
     "attemptId",
+    "requestId",
     "logPath",
 ]
 
 
 def _load_log(path: Path, whitelist: Iterable[str]) -> list[dict[str, object]]:
-    records: list[dict[str, object]] = []
-    whitelist_set = set(whitelist)
     if not path.exists():
         raise FileNotFoundError(f"Log file not found: {path}")
+    whitelist_set = set(whitelist)
+    records: list[dict[str, object]] = []
     for line in path.read_text(encoding="utf-8").splitlines():
         if not line.strip():
             continue
-        payload = json.loads(line)
-        metadata = dict(payload.get("metadata", {}))
+        record = json.loads(line)
+        metadata = dict(record.get("metadata", {}))
         for field in whitelist_set:
-            payload.pop(field, None)
+            record.pop(field, None)
             metadata.pop(field, None)
-        payload["metadata"] = metadata
-        records.append(payload)
+        record["metadata"] = metadata
+        records.append(record)
     return records
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Diff core tool logs using DeepDiff")
-    parser.add_argument(
-        "--new",
-        dest="new_log",
-        default=str(DEFAULT_NEW),
-        help="Path to the newly generated log",
-    )
-    parser.add_argument(
-        "--golden",
-        dest="golden_log",
-        default=str(DEFAULT_GOLDEN),
-        help="Path to the golden fixture",
-    )
-    parser.add_argument(
-        "--whitelist",
-        nargs="*",
-        default=DEFAULT_WHITELIST,
-        help="Fields to ignore during comparison",
-    )
+    parser = argparse.ArgumentParser(description="Diff MCP server logs against golden fixture")
+    parser.add_argument("--new", dest="new_log", default=str(DEFAULT_NEW))
+    parser.add_argument("--golden", dest="golden_log", default=str(DEFAULT_GOLDEN))
+    parser.add_argument("--whitelist", nargs="*", default=DEFAULT_WHITELIST)
     args = parser.parse_args(argv)
 
     new_log = Path(args.new_log)
@@ -76,5 +61,5 @@ def main(argv: list[str] | None = None) -> int:
     return 0
 
 
-if __name__ == "__main__":  # pragma: no cover - CLI entrypoint
+if __name__ == "__main__":  # pragma: no cover
     raise SystemExit(main())

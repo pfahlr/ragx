@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+from __future__ import annotations
+
 import json
 import os
-from dataclasses import asdict, dataclass, field
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -11,7 +13,7 @@ from uuid import uuid4
 __all__ = ["JsonLogWriter", "McpLogEvent"]
 
 
-@dataclass
+@dataclass(slots=True)
 class McpLogEvent:
     """Structured event emitted for tool invocations."""
 
@@ -21,7 +23,7 @@ class McpLogEvent:
     step_id: int
     trace_id: str
     span_id: str
-    tool_id: str
+    tool_id: str | None
     event: str
     status: str
     duration_ms: float
@@ -32,9 +34,25 @@ class McpLogEvent:
     error: dict[str, Any] | None = None
 
     def to_serialisable(self) -> dict[str, Any]:
-        payload = asdict(self)
-        payload["ts"] = self.ts.astimezone(UTC).isoformat().replace("+00:00", "Z")
-        return payload
+        """Return a spec-compliant dictionary for JSON serialisation."""
+
+        return {
+            "ts": self.ts.astimezone(UTC).isoformat().replace("+00:00", "Z"),
+            "agentId": self.agent_id,
+            "taskId": self.task_id,
+            "stepId": self.step_id,
+            "traceId": self.trace_id,
+            "spanId": self.span_id,
+            "toolId": self.tool_id,
+            "event": self.event,
+            "status": self.status,
+            "durationMs": self.duration_ms,
+            "attempt": self.attempt,
+            "inputBytes": self.input_bytes,
+            "outputBytes": self.output_bytes,
+            "metadata": dict(self.metadata),
+            "error": self.error,
+        }
 
 
 class JsonLogWriter:
@@ -119,17 +137,17 @@ class JsonLogWriter:
         metadata = dict(record.get("metadata", {}))
         metadata.update(
             {
-                "run_id": self._run_id,
-                "attempt_id": attempt_id,
-                "schema_version": self._schema_version,
+                "runId": self._run_id,
+                "attemptId": attempt_id,
+                "schemaVersion": self._schema_version,
                 "deterministic": self._deterministic,
-                "log_path": self._relative_log_path(),
+                "logPath": self._relative_log_path(),
             }
         )
         record["metadata"] = metadata
         record.setdefault("error", None)
-        record.setdefault("agent_id", self._agent_id)
-        record.setdefault("task_id", self._task_id)
+        record.setdefault("agentId", self._agent_id)
+        record.setdefault("taskId", self._task_id)
         self._file.write(json.dumps(record, sort_keys=True) + "\n")
         self._file.flush()
 

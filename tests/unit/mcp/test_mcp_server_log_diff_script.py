@@ -9,16 +9,21 @@ import pytest
 
 pytest.importorskip("deepdiff")
 
-SCRIPT = Path("scripts/diff_core_tool_logs.py")
-GOLDEN = Path("tests/fixtures/mcp/core_tools/minimal_golden.jsonl")
+SCRIPT = Path("scripts/diff_mcp_server_logs.py")
+GOLDEN = Path("tests/fixtures/mcp/server/bootstrap_golden.jsonl")
 
 
 @pytest.mark.parametrize("whitelisted", [True, False])
-def test_diff_script_behaviour(tmp_path: Path, whitelisted: bool) -> None:
+def test_server_log_diff(tmp_path: Path, whitelisted: bool) -> None:
+    if not GOLDEN.exists():
+        pytest.fail(f"Golden log missing: {GOLDEN}")
+
     new_log = tmp_path / "run.jsonl"
     new_log.write_text(GOLDEN.read_text(encoding="utf-8"), encoding="utf-8")
 
-    records = [json.loads(line) for line in new_log.read_text(encoding="utf-8").splitlines()]
+    records = [json.loads(line) for line in new_log.read_text(encoding="utf-8").splitlines() if line.strip()]
+    assert records, "expected at least one log record"
+
     if whitelisted:
         records[0]["ts"] = "1999-01-01T00:00:00Z"
     else:
@@ -35,10 +40,11 @@ def test_diff_script_behaviour(tmp_path: Path, whitelisted: bool) -> None:
         "--whitelist",
         "ts",
         "durationMs",
-        "runId",
         "traceId",
         "spanId",
+        "runId",
         "attemptId",
+        "requestId",
         "logPath",
     ]
     result = subprocess.run(args, capture_output=True, text=True)
