@@ -28,6 +28,8 @@ dependencies = [
     "numpy",
     "packaging",
     "pyyaml",
+    "fastapi",
+    "uvicorn",
 ]
 
 [project.optional-dependencies]
@@ -38,4 +40,5 @@ dev = [
     "pytest-cov",
     "ruff",
     "yamllint",
+    "httpx",
 ]

@@ -1,0 +1,34 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://ragx.dev/schemas/mcp/envelope.json",
+  "title": "RAGX MCP Envelope",
+  "type": "object",
+  "required": ["ok", "data", "meta", "errors"],
+  "properties": {
+    "ok": {"type": "boolean"},
+    "data": {"type": "object"},
+    "meta": {
+      "type": "object",
+      "required": ["tool", "version", "durationMs", "traceId", "warnings"],
+      "properties": {
+        "tool": {"type": "string"},
+        "version": {"type": "string"},
+        "durationMs": {"type": "integer", "minimum": 0},
+        "traceId": {"type": "string"},
+        "warnings": {
+          "type": "array",
+          "items": {"type": "string"}
+        }
+      },
+      "additionalProperties": false
+    },
+    "errors": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": true
+      }
+    }
+  },
+  "additionalProperties": false
+}
