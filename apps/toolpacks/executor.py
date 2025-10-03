@@ -19,6 +19,10 @@ __all__ = ["Executor", "ToolpackExecutionError"]
 class ToolpackExecutionError(Exception):
     """Raised when executing a Toolpack fails."""
 
+    def __init__(self, message: str, *, code: str = "INTERNAL") -> None:
+        super().__init__(message)
+        self.code = code
+
 
 class Executor:
     """Execute Toolpack definitions for supported execution kinds."""
@@ -32,7 +36,8 @@ class Executor:
         execution_kind = toolpack.execution.get("kind")
         if execution_kind != "python":
             raise ToolpackExecutionError(
-                f"Unsupported execution kind '{execution_kind}' for toolpack {toolpack.id}"
+                f"Unsupported execution kind '{execution_kind}' for toolpack {toolpack.id}",
+                code="UNSUPPORTED",
             )
 
         input_payload = _ensure_mapping(payload, stage="input", toolpack=toolpack)
@@ -56,7 +61,8 @@ class Executor:
                 result = asyncio.run(result)
         except Exception as exc:  # pragma: no cover - execution failure path
             raise ToolpackExecutionError(
-                f"Toolpack {toolpack.id} execution failed: {exc}"
+                f"Toolpack {toolpack.id} execution failed: {exc}",
+                code="INTERNAL",
             ) from exc
 
         output_payload = _ensure_mapping(result, stage="output", toolpack=toolpack)
@@ -81,31 +87,35 @@ class Executor:
                 f"Toolpack {toolpack.id} python execution requires module entrypoint "
                 "'pkg.mod:func'"
             )
-            raise ToolpackExecutionError(message)
+            raise ToolpackExecutionError(message, code="INTERNAL")
 
         module_name, sep, attr_name = entrypoint.partition(":")
         if not sep or not module_name or not attr_name:
             raise ToolpackExecutionError(
-                f"Toolpack {toolpack.id} python module entrypoint must use 'module:callable'"
+                f"Toolpack {toolpack.id} python module entrypoint must use 'module:callable'",
+                code="INTERNAL",
             )
 
         try:
             module = importlib.import_module(module_name)
         except Exception as exc:  # pragma: no cover - import errors rely on Python
             raise ToolpackExecutionError(
-                f"Toolpack {toolpack.id} failed to import module '{module_name}': {exc}"
+                f"Toolpack {toolpack.id} failed to import module '{module_name}': {exc}",
+                code="INTERNAL",
             ) from exc
 
         try:
             func = getattr(module, attr_name)
         except AttributeError as exc:
             raise ToolpackExecutionError(
-                f"Toolpack {toolpack.id} module '{module_name}' has no attribute '{attr_name}'"
+                f"Toolpack {toolpack.id} module '{module_name}' has no attribute '{attr_name}'",
+                code="INTERNAL",
             ) from exc
 
         if not callable(func):
             raise ToolpackExecutionError(
-                f"Toolpack {toolpack.id} attribute '{attr_name}' is not callable"
+                f"Toolpack {toolpack.id} attribute '{attr_name}' is not callable",
+                code="INTERNAL",
             )
 
         return func
@@ -120,7 +130,8 @@ class Executor:
             serialised = json.dumps(envelope, sort_keys=True, separators=(",", ":"))
         except TypeError as exc:
             raise ToolpackExecutionError(
-                f"Toolpack {toolpack.id} input is not JSON serialisable for caching"
+                f"Toolpack {toolpack.id} input is not JSON serialisable for caching",
+                code="INVALID_INPUT",
             ) from exc
         return hashlib.sha256(serialised.encode("utf-8")).hexdigest()
 
@@ -128,7 +139,8 @@ class Executor:
 def _ensure_mapping(value: Any, *, stage: str, toolpack: Toolpack) -> dict[str, Any]:
     if not isinstance(value, Mapping):
         raise ToolpackExecutionError(
-            f"Toolpack {toolpack.id} {stage} payload must be a mapping"
+            f"Toolpack {toolpack.id} {stage} payload must be a mapping",
+            code="INVALID_INPUT" if stage == "input" else "INTERNAL",
         )
     return dict(value)
 
@@ -151,5 +163,6 @@ def _validate_instance(
         ) from exc
     except ValidationError as exc:
         raise ToolpackExecutionError(
-            f"Toolpack {toolpack.id} {stage} failed JSON schema validation: {exc.message}"
+            f"Toolpack {toolpack.id} {stage} failed JSON schema validation: {exc.message}",
+            code="INVALID_INPUT" if stage == "input" else "INTERNAL",
         ) from exc
