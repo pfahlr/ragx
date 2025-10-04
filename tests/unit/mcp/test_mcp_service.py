@@ -6,11 +6,11 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from jsonschema import Draft202012Validator
+from jsonschema import Draft202012Validator, ValidationError
 
 pytest.importorskip("pydantic")
 
-from apps.mcp_server.service.mcp_service import McpService, RequestContext
+from apps.mcp_server.service.mcp_service import McpService, RequestContext, ValidationMode
 
 SCHEMA_DIR = Path("apps/mcp_server/schemas/mcp")
 TOOLPACKS_DIR = Path("apps/mcp_server/toolpacks")
@@ -121,5 +121,36 @@ def test_invoke_tool_invalid_payload_returns_error(service: McpService) -> None:
     )
     payload = envelope.model_dump(by_alias=True)
     assert payload["ok"] is False
-    assert payload["error"]["code"] == "MCP_VALIDATION_ERROR"
+    assert payload["error"]["code"] == "INVALID_INPUT"
     assert "path" in payload["error"]["message"].lower()
+
+
+def test_enforce_validation_mode_raises_on_invalid_envelope(
+    service: McpService,
+) -> None:
+    """Enforce mode should raise when envelope validation fails."""
+
+    class _FailingValidator:
+        def __init__(self) -> None:
+            self.calls = 0
+
+        def validate(self, instance: Any) -> None:  # pragma: no cover - invoked in test
+            self.calls += 1
+            raise ValidationError("envelope invalid")
+
+    failing_validator = _FailingValidator()
+
+    class _RegistryStub:
+        def load_envelope(self) -> _FailingValidator:  # pragma: no cover - invoked in test
+            return failing_validator
+
+        def load_tool_io(self, tool_id: str) -> Any:  # pragma: no cover - defensive
+            raise AssertionError("tool validators should not be requested")
+
+    service._validation_mode = ValidationMode.ENFORCE
+    service._validation_registry = _RegistryStub()
+
+    with pytest.raises(ValidationError):
+        service.discover(_context("discover"))
+
+    assert failing_validator.calls == 1

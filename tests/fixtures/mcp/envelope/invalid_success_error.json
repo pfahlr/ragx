@@ -1,0 +1,27 @@
+{
+  "ok": true,
+  "data": {
+    "status": "ok"
+  },
+  "error": {
+    "code": "INVALID_STATE",
+    "message": "error should be null when ok"
+  },
+  "meta": {
+    "requestId": "req-123",
+    "traceId": "trace-123",
+    "spanId": "span-123",
+    "schemaVersion": "0.1.0",
+    "deterministic": true,
+    "transport": "http",
+    "route": "discover",
+    "method": "mcp.discover",
+    "durationMs": 1.23,
+    "status": "ok",
+    "attempt": 0,
+    "inputBytes": 0,
+    "outputBytes": 42,
+    "toolId": null,
+    "promptId": null
+  }
+}

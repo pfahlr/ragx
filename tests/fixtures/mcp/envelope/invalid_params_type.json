@@ -1,6 +1,0 @@
-{
-  "id": "req-det-0002",
-  "jsonrpc": "2.0",
-  "method": "mcp.tool.invoke",
-  "params": "this-should-be-an-object"
-}

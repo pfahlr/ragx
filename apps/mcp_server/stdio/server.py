@@ -5,6 +5,7 @@ import json
 from collections.abc import Mapping
 from typing import Any
 
+from apps.mcp_server.service.errors import CanonicalError
 from apps.mcp_server.service.mcp_service import McpService, RequestContext
 
 __all__ = ["JsonRpcStdioServer"]
@@ -52,8 +53,7 @@ class JsonRpcStdioServer:
                 deterministic_ids=self._deterministic_ids,
             )
             envelope = self._service.discover(context)
-            result = envelope.model_dump(by_alias=True)
-            response: dict[str, Any] = {"jsonrpc": "2.0", "result": result}
+            response = self._build_response(envelope)
         elif method == "mcp.prompt.get":
             prompt_id_value = params.get("promptId")
             if prompt_id_value is not None and not isinstance(prompt_id_value, str):
@@ -105,15 +105,14 @@ class JsonRpcStdioServer:
                 deterministic_ids=self._deterministic_ids,
             )
             envelope = self._service.get_prompt(prompt_id, context)
-            result = envelope.model_dump(by_alias=True)
-            response = {"jsonrpc": "2.0", "result": result}
+            response = self._build_response(envelope)
         elif method == "mcp.tool.invoke":
             tool_id = str(params.get("toolId", ""))
             arguments_value = params.get("arguments")
             if arguments_value is None:
-                arguments = {}
+                arguments: dict[str, Any] = {}
             elif isinstance(arguments_value, Mapping):
-                arguments = arguments_value
+                arguments = dict(arguments_value)
             else:
                 return self._error_response(
                     code=-32602,
@@ -131,8 +130,7 @@ class JsonRpcStdioServer:
                 arguments=arguments,
                 context=context,
             )
-            result = envelope.model_dump(by_alias=True)
-            response = {"jsonrpc": "2.0", "result": result}
+            response = self._build_response(envelope)
         else:
             response = {
                 "jsonrpc": "2.0",
@@ -140,6 +138,28 @@ class JsonRpcStdioServer:
             }
         if request_id is not None:
             response["id"] = request_id
+        return response
+
+    def _build_response(self, envelope) -> dict[str, Any]:
+        payload = envelope.model_dump(by_alias=True)
+        response: dict[str, Any]
+        if envelope.error is not None:
+            try:
+                error_payload = CanonicalError.to_jsonrpc_error(envelope.error.code)
+            except KeyError:
+                error_payload = {
+                    "code": -32000,
+                    "message": envelope.error.message,
+                    "data": {"canonical": envelope.error.code},
+                }
+            data_section = error_payload.setdefault("data", {})
+            if isinstance(data_section, dict):
+                data_section["envelope"] = payload
+            else:  # pragma: no cover - defensive fallback
+                error_payload["data"] = {"envelope": payload, "canonical": envelope.error.code}
+            response = {"jsonrpc": "2.0", "error": error_payload}
+        else:
+            response = {"jsonrpc": "2.0", "result": payload}
         return response
 
     async def handle_notification(self, message: Mapping[str, Any]) -> None:
