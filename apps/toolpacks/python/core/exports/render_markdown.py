@@ -14,7 +14,7 @@ def _render_template(template: str, context: Mapping[str, Any]) -> str:
     def replacer(match: re.Match[str]) -> str:
         key = match.group(1)
         value = context.get(key)
-        if isinstance(value, str | int | float):
+        if isinstance(value, (str, int, float)):
             return str(value)
         if value is None:
             return ""
@@ -39,7 +39,7 @@ def run(payload: Mapping[str, Any]) -> dict[str, Any]:
     front_matter = _front_matter(payload)
     context: dict[str, Any] = {"title": title, "body": body}
     for key, value in front_matter.items():
-        if isinstance(value, str | int | float):
+        if isinstance(value, (str, int, float)):
             context.setdefault(key, value)
     rendered = _render_template(template, context)
 

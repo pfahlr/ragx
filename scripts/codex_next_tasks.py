@@ -47,7 +47,7 @@ def _coerce_title(raw: object, fallback: str) -> str:
 
 
 def _coerce_component_ids(raw: object) -> tuple[str, ...]:
-    if isinstance(raw, Iterable) and not isinstance(raw, str | bytes):
+    if isinstance(raw, Iterable) and not isinstance(raw, (str, bytes)):
         return tuple(str(item) for item in raw)
     return ()
 
