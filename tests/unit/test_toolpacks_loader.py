@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import tempfile
 from pathlib import Path
 
 import pytest
@@ -1809,38 +1810,38 @@ if hypothesis_given is not None:  # pragma: no branch - definition guarded at im
             }
         )
     )
-    def test_toolpack_loader_property_invalid_schema_types(
-        invalid_type: str, tmp_path: Path
-    ) -> None:
-        schemas_dir = tmp_path / "schemas"
-        invalid_schema = {
-            "$schema": "https://json-schema.org/draft/2020-12/schema",
-            "type": invalid_type,
-        }
-        valid_schema = {
-            "$schema": "https://json-schema.org/draft/2020-12/schema",
-            "type": "object",
-        }
-        invalid_path = schemas_dir / "invalid.schema.json"
-        valid_path = schemas_dir / "valid.schema.json"
-        _write_json(invalid_path, invalid_schema)
-        _write_json(valid_path, valid_schema)
+    def test_toolpack_loader_property_invalid_schema_types(invalid_type: str) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp_path = Path(tmpdir)
+            schemas_dir = tmp_path / "schemas"
+            invalid_schema = {
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "type": invalid_type,
+            }
+            valid_schema = {
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "type": "object",
+            }
+            invalid_path = schemas_dir / "invalid.schema.json"
+            valid_path = schemas_dir / "valid.schema.json"
+            _write_json(invalid_path, invalid_schema)
+            _write_json(valid_path, valid_schema)
 
-        toolpacks_dir = tmp_path / "toolpacks"
-        _write_yaml(
-            toolpacks_dir / "property.tool.yaml",
-            yaml.safe_dump(
-                _spec_compliant_toolpack(
-                    input_ref=os.path.relpath(invalid_path, toolpacks_dir),
-                    output_ref=os.path.relpath(valid_path, toolpacks_dir),
+            toolpacks_dir = tmp_path / "toolpacks"
+            _write_yaml(
+                toolpacks_dir / "property.tool.yaml",
+                yaml.safe_dump(
+                    _spec_compliant_toolpack(
+                        input_ref=os.path.relpath(invalid_path, toolpacks_dir),
+                        output_ref=os.path.relpath(valid_path, toolpacks_dir),
+                    ),
+                    sort_keys=False,
                 ),
-                sort_keys=False,
-            ),
-        )
+            )
 
-        loader = ToolpackLoader()
-        with pytest.raises(ToolpackValidationError):
-            loader.load_dir(toolpacks_dir)
+            loader = ToolpackLoader()
+            with pytest.raises(ToolpackValidationError):
+                loader.load_dir(toolpacks_dir)
 
 else:
 
