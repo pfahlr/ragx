@@ -1,0 +1,11 @@
+{
+  "id": "req-123",
+  "jsonrpc": "2.0",
+  "params": {
+    "tool": "mcp.tool:vector.query.search",
+    "input": {
+      "query": "multimodal embeddings",
+      "topK": 5
+    }
+  }
+}

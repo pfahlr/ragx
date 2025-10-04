@@ -1,0 +1,6 @@
+{
+  "id": "req-456",
+  "jsonrpc": "2.0",
+  "method": "mcp.tool.invoke",
+  "params": "this-should-have-been-an-object"
+}

@@ -12,6 +12,13 @@ from collections.abc import Callable, Iterable, Sequence
 
 import pytest
 
+try:  # pragma: no cover - optional integration
+    import hypothesis.extra.pytestplugin  # noqa: F401
+except ModuleNotFoundError:  # pragma: no cover - hypothesis optional
+    pass
+else:
+    pytest_plugins = ("hypothesis.extra.pytestplugin",)
+
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[1]
 EVAL_DIR = REPO_ROOT / "eval" / "verification"
 

@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ragx.dev/specs/mcp/tool_io.schema.json",
+  "title": "MCP Tool I/O Descriptor",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["tool", "input"],
+  "properties": {
+    "tool": {
+      "type": "string",
+      "pattern": "^[a-z0-9_.]+$",
+      "description": "Canonical tool slug (without mcp.tool prefix)"
+    },
+    "input": {
+      "type": "object",
+      "description": "JSON Schema describing tool input",
+      "additionalProperties": true
+    },
+    "output": {
+      "type": "object",
+      "description": "JSON Schema describing tool output",
+      "additionalProperties": true
+    }
+  }
+}

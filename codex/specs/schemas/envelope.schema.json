@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ragx.dev/specs/mcp/envelope.request.schema.json",
+  "title": "MCP Request Envelope",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "jsonrpc", "method", "params"],
+  "properties": {
+    "id": {
+      "oneOf": [
+        {"type": "string", "minLength": 1},
+        {"type": "integer"}
+      ],
+      "description": "JSON-RPC identifier (string or integer)"
+    },
+    "jsonrpc": {
+      "type": "string",
+      "const": "2.0",
+      "description": "JSON-RPC protocol version"
+    },
+    "method": {
+      "type": "string",
+      "minLength": 1,
+      "description": "JSON-RPC method name"
+    },
+    "params": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["tool", "input"],
+      "properties": {
+        "tool": {
+          "type": "string",
+          "pattern": "^mcp\\.tool:[a-z0-9_.]+$",
+          "description": "Canonical MCP tool identifier"
+        },
+        "input": {
+          "type": "object",
+          "description": "Tool-specific input payload",
+          "additionalProperties": true
+        },
+        "context": {
+          "type": "object",
+          "description": "Optional contextual metadata",
+          "additionalProperties": true
+        }
+      }
+    }
+  }
+}
