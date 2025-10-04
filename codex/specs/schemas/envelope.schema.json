@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ragx.specs/mcp/envelope.schema.json",
+  "title": "MCP Envelope",
+  "type": "object",
+  "required": ["id", "jsonrpc", "method", "params"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "Opaque identifier for the request/response pair"
+    },
+    "jsonrpc": {
+      "type": "string",
+      "const": "2.0",
+      "description": "JSON-RPC protocol version"
+    },
+    "method": {
+      "type": "string",
+      "minLength": 1,
+      "description": "RPC method name"
+    },
+    "params": {
+      "type": "object",
+      "description": "Method arguments payload"
+    },
+    "idempotencyKey": {
+      "type": "string",
+      "description": "Optional key for idempotent retries"
+    }
+  },
+  "additionalProperties": true
+}

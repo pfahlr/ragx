@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ragx.specs/mcp/tool_io.schema.json",
+  "title": "MCP Tool IO Contract",
+  "type": "object",
+  "required": ["tool", "input"],
+  "properties": {
+    "tool": {
+      "type": "string",
+      "description": "Fully qualified tool identifier",
+      "const": "{{tool_id}}"
+    },
+    "input": {
+      "type": "object",
+      "description": "Tool invocation input payload"
+    },
+    "output": {
+      "type": "object",
+      "description": "Tool response payload"
+    }
+  },
+  "additionalProperties": true
+}
