@@ -5,6 +5,7 @@ from importlib import import_module
 from typing import TYPE_CHECKING
 
 __all__ = [
+    "CanonicalError",
     "Envelope",
     "EnvelopeError",
     "EnvelopeMeta",
@@ -14,6 +15,7 @@ __all__ = [
 ]
 
 _EXPORT_MAP = {
+    "CanonicalError": "apps.mcp_server.service.errors",
     "Envelope": "apps.mcp_server.service.envelope",
     "EnvelopeError": "apps.mcp_server.service.envelope",
     "EnvelopeMeta": "apps.mcp_server.service.envelope",
@@ -24,6 +26,7 @@ _EXPORT_MAP = {
 
 if TYPE_CHECKING:  # pragma: no cover - import for typing only
     from .envelope import Envelope, EnvelopeError, EnvelopeMeta
+    from .errors import CanonicalError
     from .mcp_service import McpService, RequestContext, ServerLogManager
 
 

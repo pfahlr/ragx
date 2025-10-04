@@ -9,13 +9,14 @@ Implementation work is deferred to a follow-up task.
 
 ## Envelope Schema
 
-* Schema path: `codex/specs/schemas/envelope.schema.json`
+* Schema path: `apps/mcp_server/schemas/envelope.schema.json`
 * Draft: 2020-12
-* Required fields: `id`, `jsonrpc`, `method`, `params`
-* Optional fields: `meta`, `idempotencyKey`
-* `jsonrpc` is constrained to the literal `"2.0"`
-* Additional properties are currently disallowed to ensure a tight
-  contract. Future extensions should update the schema and tests.
+* Required fields: `ok`, `data`, `error`, `meta`
+* The `meta` object must include deterministic identifiers,
+  transport/method context, duration, attempt count, and IO byte sizes.
+* Success envelopes (`ok: true`) must set `error` to `null`; error
+  envelopes require a structured `error` payload and `data: null`.
+* Additional properties remain disallowed to ensure a tight contract.
 
 ## Tool IO Schema
 
@@ -26,38 +27,57 @@ Implementation work is deferred to a follow-up task.
 * Tool identifiers must be non-empty strings using the canonical
   `mcp.tool:*` format.
 
-## Schema Registry Stub
+## Schema Registry Runtime
 
-* Module: `apps.mcp_server.validation.schema_registry_stub`
+* Module: `apps.mcp_server.validation.schema_registry`
 * Exposes `SchemaRegistry` with `load_envelope()` and
-  `load_tool_io(tool_id)`.
-* Returns placeholder validators that currently raise
-  `NotImplementedError`. Tests mark future expectations with
-  `pytest.mark.xfail(strict=True)`.
-* Future implementation must replace placeholders with jsonschema
-  validators and honour caching keyed by schema fingerprints.
+  `load_tool_io(tool_id)` returning compiled validators.
+* Validators are cached by schema fingerprint (SHA256) so repeated calls
+  reuse compiled state even across different tools that share the same
+  schema definition.
+* `ToolIOValidators` enforce canonical tool identifiers and validate
+  both shared envelope structure and tool-specific payloads. Output
+  validation skips the shared `input` requirement while still applying
+  the tool schema.
+* Default roots: `codex/specs/schemas` and
+  `apps/mcp_server/schemas/tools`.
 
 ## Canonical Errors
 
-* Module: `apps.mcp_server.service.errors_stub`
-* Enumerates canonical codes aligning with the master spec.
-* HTTP status and JSON-RPC mapping helpers intentionally raise until the
-  follow-up implementation populates lookup tables.
-* Tests exercise the desired mapping contract and enforce strict xfail
-  expectations to catch regressions once implemented.
+* Module: `apps.mcp_server.service.errors`
+* Enumerates canonical codes aligning with the master spec
+  (`INVALID_INPUT`, `INVALID_OUTPUT`, `NOT_FOUND`, `UNAUTHORIZED`,
+  `INTERNAL_ERROR`).
+* `CanonicalError.to_http_status()` maps canonical codes to deterministic
+  HTTP status codes.
+* `CanonicalError.to_jsonrpc_error()` produces JSON-RPC error payloads
+  containing the canonical code, HTTP status, human-readable message,
+  and retryability metadata.
+* HTTP and STDIO transports use these helpers to keep error surfaces in
+  lock-step.
 
 ## Structured Logging Golden
 
 * Fixture: `tests/fixtures/mcp/envelope_validation_golden.jsonl`
-* Provides reference log entries for envelope validation failures across
-  HTTP and STDIO transports.
+* Provides reference log entries for envelope validation in shadow mode
+  across the HTTP transport.
 * Integration tests assert required fields, metadata payload, and parity
-  of canonical error surfaces.
+  of canonical error surfaces using
+  `scripts/diff_envelope_validation_logs.py`.
 
-## Next Steps
+## Runbooks
 
-* Implement jsonschema-backed validators and caching in the schema
-  registry.
-* Populate canonical error mappings for HTTP and JSON-RPC.
-* Wire the MCP service transports to use the new registry and emit
-  parity-checked error envelopes.
+### Refreshing the Validator Cache
+
+* Schema validators are cached in memory. Restart the MCP server after
+  modifying schema files to rebuild the cache.
+
+### Investigating Golden Diff Failures
+
+1. Re-run the CLI once mode:
+   `python -m apps.mcp_server.cli --once --deterministic-ids --log-dir runs`
+2. Compare the latest log to the golden fixture:
+   `python scripts/diff_envelope_validation_logs.py --new runs/mcp_server/envelope_validation.latest.jsonl --golden tests/fixtures/mcp/envelope_validation_golden.jsonl`
+3. If the diff reflects an intentional change, update the golden and
+   include the rationale in the changelog.
+
