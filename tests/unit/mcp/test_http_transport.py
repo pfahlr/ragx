@@ -38,6 +38,12 @@ def client(service: McpService) -> TestClient:
     return TestClient(app)
 
 
+@pytest.fixture
+def deterministic_client(service: McpService) -> TestClient:
+    app = create_app(service, deterministic_ids=True)
+    return TestClient(app)
+
+
 def test_http_discover_endpoint(client: TestClient) -> None:
     response = client.get("/mcp/discover")
     assert response.status_code == 200
@@ -69,3 +75,19 @@ def test_http_health_endpoint(client: TestClient) -> None:
     response = client.get("/healthz")
     assert response.status_code == 200
     assert response.json() == {"status": "ok"}
+
+
+def test_http_deterministic_ids(deterministic_client: TestClient) -> None:
+    first = deterministic_client.get("/mcp/discover")
+    second = deterministic_client.get("/mcp/discover")
+
+    assert first.status_code == 200
+    assert second.status_code == 200
+
+    first_meta = first.json()["meta"]
+    second_meta = second.json()["meta"]
+
+    assert first_meta["deterministic"] is True
+    assert first_meta["requestId"] == second_meta["requestId"]
+    assert first_meta["traceId"] == second_meta["traceId"]
+    assert first_meta["spanId"] == second_meta["spanId"]

@@ -118,9 +118,11 @@ async def _run_server(args: argparse.Namespace) -> None:
         args.http = True
 
     tasks: list[asyncio.Task[Any]] = []
+    http_server: uvicorn.Server | None = None
+    http_task: asyncio.Task[Any] | None = None
     if args.http:
         config = uvicorn.Config(
-            create_app(service),
+            create_app(service, deterministic_ids=args.deterministic_ids),
             host=args.host,
             port=args.port,
             log_level=_UVICORN_LOG_LEVELS[args.log_level],
@@ -128,8 +130,12 @@ async def _run_server(args: argparse.Namespace) -> None:
             limit_concurrency=args.max_connections,
             timeout_graceful_shutdown=args.shutdown_grace,
         )
-        server = uvicorn.Server(config)
-        tasks.append(asyncio.create_task(server.serve()))
+        http_server = uvicorn.Server(config)
+        if not args.stdio:
+            await http_server.serve()
+            return
+        http_task = asyncio.create_task(http_server.serve())
+        tasks.append(http_task)
 
     if args.stdio:
         stdio_server = JsonRpcStdioServer(service, deterministic_ids=args.deterministic_ids)
@@ -140,6 +146,8 @@ async def _run_server(args: argparse.Namespace) -> None:
             await asyncio.wait(tasks, return_when=asyncio.FIRST_EXCEPTION)
         finally:
             for task in tasks:
+                if task is http_task and http_server is not None:
+                    http_server.should_exit = True
                 if not task.done():
                     task.cancel()
                 with contextlib.suppress(asyncio.CancelledError):
