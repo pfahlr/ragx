@@ -32,6 +32,30 @@ class _Document:
         )
 
 
+@dataclass(frozen=True)
+class _ScoredHit:
+    document: _Document
+    score: float
+    tie_breaker: float
+
+    def sort_key(self) -> tuple[float, float]:
+        return (-self.score, self.tie_breaker)
+
+    def to_hit(self, rank: int) -> dict[str, Any]:
+        snippet = self.document.content.splitlines()[1:] or [self.document.content]
+        snippet_text = " ".join(snippet)[:240].strip()
+        return {
+            "id": self.document.doc_id,
+            "score": self.score,
+            "rank": rank,
+            "document": {
+                "title": self.document.title,
+                "snippet": snippet_text,
+                "sourcePath": self.document.source_path,
+            },
+        }
+
+
 def _tokenise(text: str) -> list[str]:
     return re.findall(r"[a-z0-9]+", text.lower())
 
@@ -71,28 +95,20 @@ def run(payload: dict[str, Any]) -> dict[str, Any]:
     top_k = int(payload.get("topK", 5))
     top_k = max(1, min(top_k, len(_DOCUMENTS)))
 
-    scored = []
-    for document in _DOCUMENTS:
-        score = _score(query, document)
-        scored.append((score, _tie_breaker(document.doc_id), document))
-
-    scored.sort(key=lambda item: (-item[0], item[1]))
-    hits = []
-    for rank, (score, _, document) in enumerate(scored[:top_k], start=1):
-        snippet = document.content.splitlines()[1:] or [document.content]
-        snippet_text = " ".join(snippet)[:240].strip()
-        hits.append(
-            {
-                "id": document.doc_id,
-                "score": score,
-                "rank": rank,
-                "document": {
-                    "title": document.title,
-                    "snippet": snippet_text,
-                    "sourcePath": document.source_path,
-                },
-            }
+    scored_hits = [
+        _ScoredHit(
+            document=document,
+            score=_score(query, document),
+            tie_breaker=_tie_breaker(document.doc_id),
         )
+        for document in _DOCUMENTS
+    ]
+    scored_hits.sort(key=lambda hit: hit.sort_key())
+
+    hits = [
+        scored_hit.to_hit(rank)
+        for rank, scored_hit in enumerate(scored_hits[:top_k], start=1)
+    ]
 
     return {
         "query": query,
