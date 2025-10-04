@@ -1,0 +1,10 @@
+{
+  "jsonrpc": "2.0",
+  "id": "missing-method-123",
+  "params": {
+    "tool": "mcp.tool:docs.load.fetch",
+    "input": {
+      "path": "tests/fixtures/mcp/docs/sample_article.md"
+    }
+  }
+}

@@ -58,7 +58,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     )
     parser.add_argument(
         "--deterministic-ids",
-        action="store_true",
+        action=argparse.BooleanOptionalAction,
+        default=True,
         help="Use deterministic UUID5 request identifiers",
     )
     parser.add_argument(

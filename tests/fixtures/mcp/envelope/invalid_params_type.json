@@ -1,0 +1,6 @@
+{
+  "jsonrpc": "2.0",
+  "id": "invalid-params-123",
+  "method": "mcp.tool.invoke",
+  "params": "this should have been an object"
+}
