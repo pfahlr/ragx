@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://spec.ragx.ai/mcp/tool_io.schema.json",
+  "title": "RAGX MCP Tool IO Envelope",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["tool", "input"],
+  "properties": {
+    "tool": {
+      "description": "Fully qualified tool identifier (e.g. mcp.tool:web.search.query).",
+      "type": "string",
+      "minLength": 1
+    },
+    "input": {
+      "description": "Tool-specific input payload validated by the tool schema.",
+      "type": "object"
+    },
+    "version": {
+      "description": "Optional semantic version descriptor for the tool schema.",
+      "type": "object",
+      "properties": {
+        "major": {"type": "integer", "minimum": 0},
+        "minor": {"type": "integer", "minimum": 0},
+        "patch": {"type": "integer", "minimum": 0}
+      },
+      "required": ["major"],
+      "additionalProperties": false
+    },
+    "metadata": {
+      "description": "Additional metadata forwarded to the tool runtime.",
+      "type": "object",
+      "additionalProperties": true
+    }
+  }
+}

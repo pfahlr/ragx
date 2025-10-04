@@ -1,0 +1,37 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://spec.ragx.ai/mcp/envelope.schema.json",
+  "title": "RAGX MCP Envelope",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "jsonrpc", "method", "params"],
+  "properties": {
+    "id": {
+      "description": "Deterministic request identifier (UUID or stable string).",
+      "type": ["string", "integer"]
+    },
+    "jsonrpc": {
+      "description": "JSON-RPC protocol version indicator.",
+      "type": "string",
+      "const": "2.0"
+    },
+    "method": {
+      "description": "Fully qualified method invoked via MCP transport.",
+      "type": "string",
+      "minLength": 1
+    },
+    "params": {
+      "description": "Transport-specific payload validated against per-tool schemas.",
+      "type": "object"
+    },
+    "meta": {
+      "description": "Optional metadata emitted in envelopes.",
+      "type": "object",
+      "additionalProperties": true
+    },
+    "idempotencyKey": {
+      "description": "Optional idempotency token to deduplicate requests.",
+      "type": "string"
+    }
+  }
+}
