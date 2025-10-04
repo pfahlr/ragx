@@ -1,0 +1,186 @@
+version: 1
+id: 06cV2B_mcp_envelope_and_schema_validation_B
+title: MCP Envelope & Schema Validation (Part B — Implementation & Enhancements)
+
+depends_on:
+  - 06c_mcp_envelope_and_schema_validation_A_tests_first
+
+summary: >
+  Implement production validators, error mapping, and transport integration to satisfy Part A specs.
+  Add deterministic logging, optional metrics/tracing, and rollout controls.
+
+description: >
+  Replace stubs with a cached SchemaRegistry, integrate ingress/egress validation into HTTP and STDIO,
+  emit canonical errors with transport-specific mapping, and guarantee deterministic IDs and structured logging.
+  Provide shadow→enforce rollout and runbooks.
+
+component_ids: ["mcp_server", "toolpacks_runtime", "observability"]
+arg_spec: ["mcp_server", "task_runner"]
+
+"x-volatile-fields":
+  - ts
+  - durationMs
+  - runId
+  - traceId
+  - spanId
+  - attemptId
+  - requestId
+
+"x-log-event-fields":
+  - [ts, agentId, taskId, stepId]
+  - [transport, route, method]
+  - [requestId, traceId, spanId]
+  - [status, durationMs, attempt]
+  - [inputBytes, outputBytes, error, metadata]
+
+server_contract:
+  transports:
+    http:
+      framework: fastapi
+      endpoints:
+        - { method: GET,  path: /mcp/discover,          response: envelope }
+        - { method: GET,  path: /mcp/prompt/{promptId}, response: envelope }
+        - { method: POST, path: /mcp/tool/{toolId},     response: envelope }
+        - { method: GET,  path: /healthz,               response: { status: ok } }
+      shutdown: graceful (await tasks, flush logs)
+    stdio:
+      protocol: "json-rpc 2.0 (newline-delimited)"
+      lifecycle:
+        - read → validate → dispatch → write → flush
+      control: ["cancel", "graceful_shutdown"]
+  shared_service:
+    class: McpService
+    methods: ["discover", "get_prompt", "invoke_tool", "health"]
+    behavior:
+      - Validate envelope + tool I/O on ingress; validate tool output on egress.
+      - Raise stage-aware exceptions mapped to canonical codes.
+  cli:
+    command: mcp-server
+    flags: ["--http", "--stdio", "--host", "--port", "--once", "--deterministic-ids", "--log-level"]
+
+classes_contract:
+  language: python
+  classes:
+    - name: SchemaRegistry
+      responsibilities:
+        - Load & cache Draft 2020-12 schemas; expose compiled validators.
+      methods:
+        - signature: def load_envelope(self) -> "Validator"
+        - signature: def load_tool_io(self, tool_id: str) -> "ToolIOValidators"
+      invariants:
+        - "Cache keyed by schema fingerprint (SHA256)."
+    - name: CanonicalError
+      responsibilities:
+        - Enum of codes; mapping helpers.
+      methods:
+        - signature: @staticmethod def to_http_status(code: str) -> int
+        - signature: @staticmethod def to_jsonrpc_error(code: str) -> dict
+      invariants:
+        - "Allowed codes: INVALID_INPUT, INVALID_OUTPUT, NOT_FOUND, UNAUTHORIZED, INTERNAL_ERROR."
+
+schema_contract:
+  draft: 2020-12
+  files:
+    - path: codex/specs/schemas/envelope.schema.json
+      kind: input
+    - path: codex/specs/schemas/tool_io.schema.json
+      kind: input
+
+structured_logging_contract:
+  format: jsonl
+  storage_path_prefix: runs/mcp_server/envelope_validation
+  latest_symlink: runs/mcp_server/envelope_validation.latest.jsonl
+  retention: keep-last-5
+  event_fields:
+    - ts
+    - requestId
+    - traceId
+    - spanId
+    - transport
+    - route
+    - method
+    - status
+    - durationMs
+    - attempt
+    - error
+    - metadata
+  metadata_fields: ["schemaVersion", "deterministic", "toolId", "promptId"]
+  volatile_fields: ["ts", "traceId", "spanId", "durationMs", "requestId"]
+
+metrics_contract:
+  counters:
+    - { name: envelope_validation_success_total, labels: [transport, toolId] }
+    - { name: envelope_validation_failure_total, labels: [transport, toolId, reason] }
+  histograms:
+    - { name: envelope_validation_latency_ms, labels: [transport], buckets: [5,10,25,50,100,250] }
+
+tracing_contract:
+  spans:
+    - { name: mcp.envelope.validate, attributes: [schemaVersion, transport, toolId] }
+    - { name: mcp.tool.invoke,       attributes: [toolId, validationOutcome] }
+  propagation: ["w3c-trace-context"]
+
+security_privacy:
+  authn: ["bearer_http"]
+  pii_redaction:
+    denylist_keys: ["authorization", "apiKey", "password", "token"]
+    policy: strip-before-serialize
+
+log_diff_strategy:
+  tool: deepdiff.DeepDiff
+  baseline_path: tests/fixtures/mcp/envelope_validation_golden.jsonl
+  whitelist_fields: ["ts", "traceId", "spanId", "durationMs", "requestId"]
+
+artifacts:
+  code:
+    - apps/mcp_server/validation/schema_registry.py
+    - apps/mcp_server/service/errors.py
+    - apps/mcp_server/http/validation_middleware.py
+    - apps/mcp_server/stdio/validation_filter.py
+  scripts:
+    - scripts/diff_envelope_validation_logs.py
+  docs:
+    - docs/mcp/envelope_validation.md
+  structured_logs:
+    - runs/mcp_server/envelope_validation.latest.jsonl
+
+test_plan:
+  unit:
+    - tests/unit/test_envelope_schema_validation.py
+    - tests/unit/test_canonical_error_mapping.py
+  integration:
+    - tests/integration/test_transport_parity_http_stdio.py
+  e2e:
+    - tests/e2e/test_mcp_envelope_validation.py
+  property_based:
+    - tests/property/test_envelope_fuzz.py
+
+ci:
+  matrix:
+    python: ["3.11", "3.12"]
+    os: ["ubuntu-latest"]
+  gates: ["lint", "typecheck", "unit", "integration", "e2e", "acceptance"]
+
+actions:
+  - stage: implementation
+    summary: Replace stubs with real logic and validators.
+    tasks:
+      - Implement SchemaRegistry with caching & fingerprints; compile validators once.
+      - Insert ingress/egress validators in HTTP/STDIO; short-circuit on INVALID_INPUT.
+      - Map canonical codes to HTTP statuses and JSON-RPC error(code/message/data).
+  - stage: observability
+    summary: Logging + metrics + tracing per contract.
+    tasks:
+      - Emit JSONL logs (camelCase), keep-last-5, latest symlink; diff vs golden.
+      - Expose counters/histograms; propagate trace context through requests.
+  - stage: rollout
+    summary: Shadow→enforce with feature flag; runbooks.
+    tasks:
+      - Ship shadow mode (validate + log only); flip to enforce when SLOs stable.
+      - Provide runbooks for validator cache clear and golden failures.
+
+acceptance:
+  - All Part A tests pass (no xfail remain).
+  - HTTP uses canonical status codes; STDIO mirrors JSON-RPC error payloads.
+  - Structured logs validate against contract; DeepDiff passes (whitelist).
+  - Shadow→enforce rollout completed with stable metrics and no regression spikes.

@@ -1,0 +1,190 @@
+version: 1
+id: 06cV2A_mcp_envelope_and_schema_validation_A
+title: MCP Envelope & Schema Validation (Part A — Tests First)
+
+metadata:
+  owners: ["pfahlr@gmail.com"]
+  priority: P1
+  last_updated: "2025-10-03"
+  labels: ["tests-first", "spec", "scaffold"]
+
+summary: >
+  Author executable specs, fixtures, and stubs for envelope + per-tool schema validation,
+  canonical error mapping, and transport parity. No production logic yet.
+
+description: >
+  Establish failing/xfail tests and fixtures that define the contract: envelope validation,
+  per-tool input/output schemas, canonical error enumeration and mapping, deterministic IDs,
+  and structured logging shape. Provide minimal stubs and a schema loader interface only.
+
+scope:
+  goals:
+    - Define JSON Schema contracts (envelope + tool I/O) and validation entry points.
+    - Codify canonical error codes and mapping to HTTP and JSON-RPC/STDIO.
+    - Assert transport parity and deterministic logging shapes via fixtures.
+  non_goals:
+    - Implementing the validators or transport integration (deferred to Part B).
+
+assumptions:
+  - Draft 2020-12 is used for all schemas.
+constraints:
+  - On-disk log fields use camelCase; volatile identifiers are whitelisted in diffs.
+
+component_ids: ["mcp_server", "toolpacks_runtime", "observability"]
+depends_on: ["06b_mcp_server_bootstrap", "06a_core_tools_minimal_subset"]
+arg_spec: ["mcp_server", "task_runner"]
+
+config_flags:
+  - { name: "--once", type: bool, default: false, desc: "Deterministic single-run for goldens" }
+  - { name: "--deterministic-ids", type: bool, default: true, desc: "UUID5/seeded requestId" }
+
+"x-volatile-fields":
+  - ts
+  - durationMs
+  - runId
+  - traceId
+  - spanId
+  - attemptId
+  - requestId
+
+"x-log-event-fields":
+  - [ts, agentId, taskId, stepId]
+  - [transport, route, method]
+  - [requestId, traceId, spanId]
+  - [status, durationMs, attempt]
+  - [inputBytes, outputBytes, error, metadata]
+
+server_contract:
+  transports:
+    http:
+      framework: fastapi
+      endpoints:
+        - { method: GET,  path: /mcp/discover,          response: envelope }
+        - { method: GET,  path: /mcp/prompt/{promptId}, response: envelope }
+        - { method: POST, path: /mcp/tool/{toolId},     response: envelope }
+        - { method: GET,  path: /healthz,               response: { status: ok } }
+      shutdown: graceful
+    stdio:
+      protocol: "json-rpc 2.0 (newline-delimited)"
+      lifecycle:
+        - read JSON line
+        - validate envelope
+        - dispatch to stub service
+        - write JSON line and flush
+      control: ["cancel", "graceful_shutdown"]
+  shared_service:
+    class: McpService
+    methods: ["discover", "get_prompt", "invoke_tool", "health"]
+    behavior:
+      - "Inputs and outputs MUST be validated against schemas (asserted by tests)."
+      - "Deterministic IDs when --deterministic-ids is enabled."
+
+classes_contract:
+  language: python
+  classes:
+    - name: SchemaRegistry
+      responsibilities:
+        - "Expose load_envelope(), load_tool_io(tool_id) returning compiled validators (stubbed)."
+      methods:
+        - signature: def load_envelope(self) -> "Validator"
+        - signature: def load_tool_io(self, tool_id: str) -> "ToolIOValidators"
+          invariants: ["cached per schema fingerprint"]
+    - name: CanonicalError
+      responsibilities:
+        - "Enum of canonical codes; helpers for HTTP/JSON-RPC mapping."
+      methods:
+        - signature: @staticmethod def to_http_status(code: str) -> int
+        - signature: @staticmethod def to_jsonrpc_error(code: str) -> dict
+
+schema_contract:
+  draft: 2020-12
+  files:
+    - path: codex/specs/schemas/envelope.schema.json
+      kind: input
+      required_fields: ["id", "jsonrpc", "method", "params"]
+    - path: codex/specs/schemas/tool_io.schema.json
+      kind: input
+      required_fields: ["tool", "input"]
+
+structured_logging_contract:
+  format: jsonl
+  storage_path_prefix: runs/mcp_server/envelope_validation
+  latest_symlink: runs/mcp_server/envelope_validation.latest.jsonl
+  retention: keep-last-5
+  event_fields:
+    - ts
+    - requestId
+    - traceId
+    - spanId
+    - transport
+    - route
+    - method
+    - status
+    - durationMs
+    - error
+  metadata_fields: ["schemaVersion", "deterministic", "toolId", "promptId"]
+  volatile_fields: ["ts", "traceId", "spanId", "durationMs", "requestId]
+
+log_diff_strategy:
+  tool: deepdiff.DeepDiff
+  baseline_path: tests/fixtures/mcp/envelope_validation_golden.jsonl
+  whitelist_fields: ["ts", "traceId", "spanId", "durationMs", "requestId"]
+  notes: >
+    Diff ignores volatile identifiers; structure and event order must match.
+
+artifacts:
+  tests:
+    unit:
+      - tests/unit/test_envelope_schema_validation.py
+      - tests/unit/test_canonical_error_mapping.py
+    integration:
+      - tests/integration/test_transport_parity_http_stdio.py
+    property_based:
+      - tests/property/test_envelope_fuzz.py
+  fixtures:
+    - tests/fixtures/mcp/envelope/invalid_missing_method.json
+    - tests/fixtures/mcp/envelope/invalid_params_type.json
+    - tests/fixtures/mcp/envelope_validation_golden.jsonl
+  stubs:
+    - apps/mcp_server/validation/schema_registry_stub.py
+    - apps/mcp_server/service/errors_stub.py
+  schemas:
+    - codex/specs/schemas/envelope.schema.json
+    - codex/specs/schemas/tool_io.schema.json
+  docs:
+    - docs/mcp/envelope_validation_spec.md
+
+test_plan:
+  unit:
+    - tests/unit/test_envelope_schema_validation.py
+    - tests/unit/test_canonical_error_mapping.py
+  integration:
+    - tests/integration/test_transport_parity_http_stdio.py
+  property_based:
+    - tests/property/test_envelope_fuzz.py
+  fixtures:
+    - tests/fixtures/mcp/envelope_validation_golden.jsonl
+
+ci:
+  xfail_marker: "spec_xfail"
+  matrix:
+    python: ["3.11"]
+    os: ["ubuntu-latest"]
+  gates: ["lint", "typecheck", "unit", "integration"]
+
+actions:
+  - stage: tests
+    summary: Author executable specs and fixtures; wire xfail where needed.
+    tasks:
+      - Add failing tests for envelope and tool I/O validation and canonical error mapping.
+      - Provide invalid payload fixtures and golden logging fixture.
+  - stage: scaffold
+    summary: Create stubs, schemas, and CLI skeletons used by tests.
+    tasks:
+      - Add SchemaRegistry + CanonicalError stubs raising NotImplementedError.
+      - Add CLI flag plumbing (--deterministic-ids/--once) placeholder only.
+
+acceptance:
+  - All new tests collected and xfail(strict=true) or pass against stubs.
+  - Golden fixture exists and validates logging shape.
+  - Lint/typecheck gates pass.
