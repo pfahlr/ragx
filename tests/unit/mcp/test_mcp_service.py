@@ -11,6 +11,7 @@ from jsonschema import Draft202012Validator, ValidationError
 pytest.importorskip("pydantic")
 
 from apps.mcp_server.service.mcp_service import McpService, RequestContext, ValidationMode
+from apps.toolpacks.executor import ToolpackExecutionError
 
 SCHEMA_DIR = Path("apps/mcp_server/schemas/mcp")
 TOOLPACKS_DIR = Path("apps/mcp_server/toolpacks")
@@ -97,6 +98,15 @@ def test_get_prompt_returns_prompt_payload(service: McpService) -> None:
     assert payload["data"]["messages"], "expected prompt to contain messages"
 
 
+def test_get_prompt_unknown_returns_not_found(service: McpService) -> None:
+    context = _context("prompt")
+    envelope = service.get_prompt("missing.prompt@1", context)
+    payload = envelope.model_dump(by_alias=True)
+    assert payload["ok"] is False
+    assert payload["error"]["code"] == "NOT_FOUND"
+    assert "not" in payload["error"]["message"].lower()
+
+
 def test_invoke_tool_executes_and_validates(service: McpService, tmp_path: Path) -> None:
     fixture_path = Path("tests/fixtures/mcp/docs/sample_article.md")
     assert fixture_path.exists(), "fixture missing"
@@ -123,6 +133,38 @@ def test_invoke_tool_invalid_payload_returns_error(service: McpService) -> None:
     assert payload["ok"] is False
     assert payload["error"]["code"] == "INVALID_INPUT"
     assert "path" in payload["error"]["message"].lower()
+
+
+def test_invoke_tool_unknown_returns_not_found(service: McpService) -> None:
+    context = _context("tool")
+    envelope = service.invoke_tool(
+        tool_id="mcp.tool:missing.tool", arguments={}, context=context
+    )
+    payload = envelope.model_dump(by_alias=True)
+    assert payload["ok"] is False
+    assert payload["error"]["code"] == "NOT_FOUND"
+    assert "tool" in payload["error"]["message"].lower()
+
+
+def test_invoke_tool_execution_error_returns_internal_error(
+    service: McpService, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    context = _context("tool")
+
+    def _raise(*_: Any, **__: Any) -> None:
+        raise ToolpackExecutionError("boom")
+
+    monkeypatch.setattr(service._executor, "run_toolpack", _raise)
+    fixture_path = Path("tests/fixtures/mcp/docs/sample_article.md")
+    envelope = service.invoke_tool(
+        tool_id="mcp.tool:docs.load.fetch",
+        arguments={"path": str(fixture_path)},
+        context=context,
+    )
+    payload = envelope.model_dump(by_alias=True)
+    assert payload["ok"] is False
+    assert payload["error"]["code"] == "INTERNAL_ERROR"
+    assert "boom" in payload["error"]["message"].lower()
 
 
 def test_enforce_validation_mode_raises_on_invalid_envelope(

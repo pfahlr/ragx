@@ -324,7 +324,7 @@ class McpService:
             prompt = self._prompts.get(prompt_id)
         except KeyError:
             return self._error_response(
-                code="MCP_UNKNOWN_PROMPT",
+                code="NOT_FOUND",
                 message=f"Prompt '{prompt_id}' not found",
                 context=ctx,
                 payload=payload,
@@ -345,7 +345,7 @@ class McpService:
         ctx = self._normalise_context(context, "tool", "mcp.tool.invoke", payload)
         if tool_id not in self._toolpacks:
             return self._error_response(
-                code="MCP_UNKNOWN_TOOL",
+                code="NOT_FOUND",
                 message=f"Tool '{tool_id}' not found",
                 context=ctx,
                 payload=payload,
@@ -375,7 +375,7 @@ class McpService:
             result = self._executor.run_toolpack(toolpack, arguments)
         except ToolpackExecutionError as exc:
             return self._error_response(
-                code="MCP_VALIDATION_ERROR",
+                code="INTERNAL_ERROR",
                 message=str(exc),
                 context=ctx,
                 payload=payload,

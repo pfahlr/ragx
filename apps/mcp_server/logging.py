@@ -111,7 +111,18 @@ class JsonLogWriter:
             key=lambda item: (item.stat().st_mtime, item.name),
         )
         excess = len(files) - self._retention
-        for path in files[:max(excess, 0)]:
+        if excess <= 0:
+            return
+
+        deletions: list[Path] = []
+        for path in files:
+            if path == self._path:
+                continue
+            deletions.append(path)
+            if len(deletions) >= excess:
+                break
+
+        for path in deletions:
             try:
                 path.unlink()
             except OSError:
