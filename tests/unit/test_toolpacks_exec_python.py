@@ -54,7 +54,7 @@ def test_exec_python_toolpack_runs_callable(monkeypatch: pytest.MonkeyPatch) -> 
     def run(payload: dict[str, object]) -> dict[str, object]:
         captured.append(payload)
         value = payload["value"]
-        assert isinstance(value, (int, float))
+        assert isinstance(value, int | float)
         return {"result": value * 2}
 
     module_name = "toolpacks_tests.runtime"
