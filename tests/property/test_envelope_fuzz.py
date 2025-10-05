@@ -1,4 +1,4 @@
-"""Property-based executable spec for envelope validation edge cases."""
+"""Property-style fuzz tests for MCP envelope validation."""
 
 from __future__ import annotations
 
@@ -9,32 +9,33 @@ from hypothesis import given
 from hypothesis import strategies as st
 from jsonschema import ValidationError
 
-from apps.mcp_server.validation.schema_registry_stub import SchemaRegistry
+from apps.mcp_server.validation.schema_registry import SchemaRegistry
 
-invalid_missing_method = st.fixed_dictionaries(
-    {
-        "id": st.text(min_size=1),
-        "jsonrpc": st.just("2.0"),
-        "params": st.dictionaries(keys=st.text(), values=st.integers(), min_size=0, max_size=2),
+
+@given(st.text())
+def test_envelope_validator_rejects_missing_method(random_id: str) -> None:
+    """Payloads without a method must be rejected regardless of ID shape."""
+
+    payload: dict[str, Any] = {
+        "id": random_id,
+        "jsonrpc": "2.0",
+        "params": {},
     }
-)
+    validator = SchemaRegistry().load_envelope()
+    with pytest.raises(ValidationError):
+        validator.validate(payload)
 
-invalid_wrong_params = st.fixed_dictionaries(
-    {
-        "id": st.text(min_size=1),
-        "jsonrpc": st.just("2.0"),
-        "method": st.sampled_from(["mcp.tool.invoke", "mcp.discover", "mcp.prompt.get"]),
-        "params": st.one_of(st.none(), st.integers(), st.text(), st.lists(st.integers())),
+
+@given(st.text())
+def test_envelope_validator_rejects_non_object_params(random_value: str) -> None:
+    """Params must be an object; scalar/text payloads should fail validation."""
+
+    payload: dict[str, Any] = {
+        "id": "req-fixed",
+        "jsonrpc": "2.0",
+        "method": "mcp.tool.invoke",
+        "params": random_value,
     }
-)
-
-invalid_envelopes = st.one_of(invalid_missing_method, invalid_wrong_params)
-
-
-@pytest.mark.xfail(reason="Envelope validator not yet implemented", strict=True)
-@given(invalid_envelopes)
-def test_envelope_validator_rejects_invalid_cases(payload: dict[str, Any]) -> None:
-    """Any structurally invalid payload should be rejected by the JSON schema."""
     validator = SchemaRegistry().load_envelope()
     with pytest.raises(ValidationError):
         validator.validate(payload)

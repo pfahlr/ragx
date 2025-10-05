@@ -14,7 +14,7 @@ from pathlib import Path
 import pytest
 from jsonschema import ValidationError
 
-from apps.mcp_server.validation.schema_registry_stub import SchemaRegistry
+from apps.mcp_server.validation.schema_registry import SchemaRegistry
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCHEMA_ROOT = REPO_ROOT / "codex" / "specs" / "schemas"
@@ -48,7 +48,6 @@ def test_tool_io_schema_declares_required_fields() -> None:
     assert {"tool", "input"}.issubset(required)
 
 
-@pytest.mark.xfail(reason="Envelope validator not yet wired", strict=True)
 def test_envelope_validator_rejects_missing_method(schema_registry: SchemaRegistry) -> None:
     """Invalid envelopes missing the method field should fail validation."""
     invalid_payload = _load_json(FIXTURES_ROOT / "invalid_missing_method.json")
@@ -57,7 +56,6 @@ def test_envelope_validator_rejects_missing_method(schema_registry: SchemaRegist
         validator.validate(invalid_payload)
 
 
-@pytest.mark.xfail(reason="Envelope validator not yet wired", strict=True)
 def test_envelope_validator_rejects_invalid_params_type(schema_registry: SchemaRegistry) -> None:
     """The params field must be an object according to the schema contract."""
     invalid_payload = _load_json(FIXTURES_ROOT / "invalid_params_type.json")
@@ -66,7 +64,6 @@ def test_envelope_validator_rejects_invalid_params_type(schema_registry: SchemaR
         validator.validate(invalid_payload)
 
 
-@pytest.mark.xfail(reason="Tool IO validators not loaded", strict=True)
 def test_tool_io_registry_returns_named_validators(schema_registry: SchemaRegistry) -> None:
     """Per-tool validator objects must expose validate() for input/output payloads."""
     validators = schema_registry.load_tool_io("mcp.tool:web.search.query")
@@ -75,3 +72,20 @@ def test_tool_io_registry_returns_named_validators(schema_registry: SchemaRegist
     # Once implemented these validations should raise when required fields are missing.
     with pytest.raises(ValidationError):
         validators.input.validate({})
+
+
+def test_tool_io_registry_caches_validators(schema_registry: SchemaRegistry) -> None:
+    """Loading the same validator twice should return the cached instance."""
+
+    first = schema_registry.load_envelope()
+    second = schema_registry.load_envelope()
+    assert first is second, "Envelope validator must be cached by schema fingerprint"
+
+    validators_first = schema_registry.load_tool_io("mcp.tool:web.search.query")
+    validators_second = schema_registry.load_tool_io("mcp.tool:web.search.query")
+    assert (
+        validators_first.input is validators_second.input
+    ), "Tool input validator should be cached per schema"
+    assert (
+        validators_first.output is validators_second.output
+    ), "Tool output validator should be cached per schema"

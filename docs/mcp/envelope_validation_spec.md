@@ -28,23 +28,19 @@ Implementation work is deferred to a follow-up task.
 
 ## Schema Registry Stub
 
-* Module: `apps.mcp_server.validation.schema_registry_stub`
+* Module: `apps.mcp_server.validation.schema_registry`
 * Exposes `SchemaRegistry` with `load_envelope()` and
-  `load_tool_io(tool_id)`.
-* Returns placeholder validators that currently raise
-  `NotImplementedError`. Tests mark future expectations with
-  `pytest.mark.xfail(strict=True)`.
-* Future implementation must replace placeholders with jsonschema
-  validators and honour caching keyed by schema fingerprints.
+  `load_tool_io(tool_id)` returning compiled jsonschema validators.
+* Implementation caches validators keyed by schema fingerprint (SHA256)
+  to avoid redundant compilation work.
 
 ## Canonical Errors
 
-* Module: `apps.mcp_server.service.errors_stub`
+* Module: `apps.mcp_server.service.errors`
 * Enumerates canonical codes aligning with the master spec.
-* HTTP status and JSON-RPC mapping helpers intentionally raise until the
-  follow-up implementation populates lookup tables.
-* Tests exercise the desired mapping contract and enforce strict xfail
-  expectations to catch regressions once implemented.
+* HTTP status and JSON-RPC mapping helpers return deterministic
+  translations for each canonical error.
+* Tests exercise the mapping contract to guard against regressions.
 
 ## Structured Logging Golden
 

@@ -111,9 +111,9 @@ class JsonRpcStdioServer:
             tool_id = str(params.get("toolId", ""))
             arguments_value = params.get("arguments")
             if arguments_value is None:
-                arguments = {}
+                arguments: dict[str, Any] = {}
             elif isinstance(arguments_value, Mapping):
-                arguments = arguments_value
+                arguments = dict(arguments_value)
             else:
                 return self._error_response(
                     code=-32602,
