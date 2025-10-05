@@ -66,13 +66,6 @@ class SchemaRegistry:
     _DEFAULT_TOOL_IO_SCHEMA = Path("codex/specs/schemas/tool_io.schema.json")
     _DEFAULT_TOOL_SCHEMA_ROOT = Path("apps/mcp_server/schemas/tools")
 
-    _TOOL_ID_TO_STEM = {
-        "mcp.tool:exports.render.markdown": "exports_render_markdown",
-        "mcp.tool:vector.query.search": "vector_query_search",
-        "mcp.tool:docs.load.fetch": "docs_load_fetch",
-        "mcp.tool:web.search.query": "web_search_query",
-    }
-
     def __init__(
         self,
         *,
@@ -90,6 +83,7 @@ class SchemaRegistry:
         self._fingerprint_cache: dict[str, Draft202012Validator] = {}
         self._path_fingerprints: dict[Path, str] = {}
         self._tool_cache: dict[str, ToolIOValidators] = {}
+        self._tool_schema_index: dict[str, str] = self._build_tool_schema_index()
 
     def load_envelope(self) -> Draft202012Validator:
         """Return a cached validator for the canonical envelope schema."""
@@ -155,6 +149,20 @@ class SchemaRegistry:
         return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
     def _tool_schema_stem(self, tool_id: str) -> str:
-        if tool_id not in self._TOOL_ID_TO_STEM:
+        if tool_id in self._tool_schema_index:
+            return self._tool_schema_index[tool_id]
+        # Rebuild the index to pick up newly-added schemas during runtime.
+        self._tool_schema_index = self._build_tool_schema_index()
+        if tool_id not in self._tool_schema_index:
             raise KeyError(f"Unknown tool identifier: {tool_id}")
-        return self._TOOL_ID_TO_STEM[tool_id]
+        return self._tool_schema_index[tool_id]
+
+    def _build_tool_schema_index(self) -> dict[str, str]:
+        mapping: dict[str, str] = {}
+        if not self._tool_schema_root.exists():
+            return mapping
+        for path in sorted(self._tool_schema_root.glob("*.input.schema.json")):
+            stem = path.name[: -len(".input.schema.json")]
+            tool_id = f"mcp.tool:{stem.replace('_', '.')}"
+            mapping[tool_id] = stem
+        return mapping

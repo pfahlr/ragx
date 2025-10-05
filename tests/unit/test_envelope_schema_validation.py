@@ -108,3 +108,22 @@ def test_tool_io_registry_reuses_cached_validators(schema_registry: SchemaRegist
     second = schema_registry.load_tool_io("mcp.tool:exports.render.markdown")
     assert first.input is second.input
     assert first.output is second.output
+
+
+def test_registry_indexes_all_tool_schemas(schema_registry: SchemaRegistry) -> None:
+    """Every tool schema in the directory should be discoverable via the registry."""
+    schema_root = Path("apps/mcp_server/schemas/tools")
+    for path in sorted(schema_root.glob("*.input.schema.json")):
+        stem = path.name[: -len(".input.schema.json")]
+        tool_id = f"mcp.tool:{stem.replace('_', '.')}"
+        validators = schema_registry.load_tool_io(tool_id)
+        with pytest.raises(ValidationError):
+            validators.input.validate({})
+        with pytest.raises(ValidationError):
+            validators.output.validate({})
+
+
+def test_registry_raises_for_unknown_tool(schema_registry: SchemaRegistry) -> None:
+    """Unknown tools should raise a clear error to surface missing schemas."""
+    with pytest.raises(KeyError):
+        schema_registry.load_tool_io("mcp.tool:unknown.tool")
