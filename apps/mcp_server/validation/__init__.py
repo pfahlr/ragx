@@ -1,5 +1,5 @@
-"""Validation stubs for MCP server envelope handling."""
+"""Public validation helpers for MCP server envelope handling."""
 
-from .schema_registry_stub import SchemaRegistry, ToolIOValidators
+from .schema_registry import SchemaRegistry, ToolIOValidators
 
 __all__ = ["SchemaRegistry", "ToolIOValidators"]

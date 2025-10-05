@@ -4,9 +4,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-import pytest
-
-from apps.mcp_server.service.errors_stub import CanonicalError
+from apps.mcp_server.service.errors import CanonicalError
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 GOLDEN_LOG = REPO_ROOT / "tests" / "fixtures" / "mcp" / "envelope_validation_golden.jsonl"
@@ -46,10 +44,9 @@ def test_golden_log_events_include_expected_fields() -> None:
         assert {"schemaVersion", "deterministic"}.issubset(event["metadata"])
 
 
-@pytest.mark.xfail(reason="HTTP/STDIO parity not yet enforced", strict=True)
 def test_http_and_stdio_error_payloads_share_canonical_surface() -> None:
     """Both transports must emit the same canonical code and message in errors."""
-    code = "INVALID_ARGUMENT"
+    code = "INVALID_INPUT"
     http_status = CanonicalError.to_http_status(code)
     jsonrpc_payload = CanonicalError.to_jsonrpc_error(code)
     assert jsonrpc_payload["data"]["canonical"] == code

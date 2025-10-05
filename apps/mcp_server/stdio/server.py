@@ -7,6 +7,8 @@ from typing import Any
 
 from apps.mcp_server.service.mcp_service import McpService, RequestContext
 
+from .validation_filter import ValidationFilter
+
 __all__ = ["JsonRpcStdioServer"]
 
 
@@ -16,6 +18,10 @@ class JsonRpcStdioServer:
     def __init__(self, service: McpService, *, deterministic_ids: bool = False) -> None:
         self._service = service
         self._deterministic_ids = deterministic_ids
+        self._validation = ValidationFilter(
+            schema_registry=service.schema_registry,
+            mode="shadow",
+        )
 
     def _error_response(
         self, *, code: int, message: str, request_id: Any | None
@@ -33,6 +39,14 @@ class JsonRpcStdioServer:
 
         method = str(message.get("method", ""))
         request_id = message.get("id")
+        valid, error_payload = self._validation.check_request(message)
+        if not valid:
+            error_response = {
+                "jsonrpc": "2.0",
+                "error": error_payload,
+                "id": request_id if request_id is not None else None,
+            }
+            return error_response
         raw_params = message.get("params")
         if raw_params is None:
             params: Mapping[str, Any] = {}
@@ -53,6 +67,7 @@ class JsonRpcStdioServer:
             )
             envelope = self._service.discover(context)
             result = envelope.model_dump(by_alias=True)
+            self._validation.check_response(result)
             response: dict[str, Any] = {"jsonrpc": "2.0", "result": result}
         elif method == "mcp.prompt.get":
             prompt_id_value = params.get("promptId")
@@ -106,14 +121,15 @@ class JsonRpcStdioServer:
             )
             envelope = self._service.get_prompt(prompt_id, context)
             result = envelope.model_dump(by_alias=True)
+            self._validation.check_response(result)
             response = {"jsonrpc": "2.0", "result": result}
         elif method == "mcp.tool.invoke":
             tool_id = str(params.get("toolId", ""))
             arguments_value = params.get("arguments")
             if arguments_value is None:
-                arguments = {}
+                arguments: dict[str, Any] = {}
             elif isinstance(arguments_value, Mapping):
-                arguments = arguments_value
+                arguments = dict(arguments_value)
             else:
                 return self._error_response(
                     code=-32602,
@@ -132,6 +148,7 @@ class JsonRpcStdioServer:
                 context=context,
             )
             result = envelope.model_dump(by_alias=True)
+            self._validation.check_response(result)
             response = {"jsonrpc": "2.0", "result": result}
         else:
             response = {

@@ -9,9 +9,11 @@ from pathlib import Path
 from typing import Any
 from uuid import UUID, uuid4, uuid5
 
-from jsonschema import Draft202012Validator, validators
+from jsonschema import Draft202012Validator, ValidationError, validators
 
 from apps.mcp_server.logging import JsonLogWriter
+from apps.mcp_server.service.errors import CanonicalError
+from apps.mcp_server.validation import SchemaRegistry
 from apps.toolpacks.executor import Executor, ToolpackExecutionError
 from apps.toolpacks.loader import Toolpack, ToolpackLoader
 
@@ -219,6 +221,7 @@ class McpService:
         executor: Executor,
         prompts: PromptRepository,
         schema_store: SchemaStore,
+        schema_registry: SchemaRegistry,
         log_manager: ServerLogManager,
         schema_version: str,
     ) -> None:
@@ -226,12 +229,17 @@ class McpService:
         self._executor = executor
         self._prompts = prompts
         self._schemas = schema_store
+        self._schema_registry = schema_registry
         self._log_manager = log_manager
         self._schema_version = schema_version
 
     @property
     def log_manager(self) -> ServerLogManager:
         return self._log_manager
+
+    @property
+    def schema_registry(self) -> SchemaRegistry:
+        return self._schema_registry
 
     @classmethod
     def create(
@@ -251,6 +259,7 @@ class McpService:
         executor = Executor()
         prompts = PromptRepository(prompts_dir)
         schema_store = SchemaStore(schema_dir)
+        schema_registry = SchemaRegistry()
         log_manager = logger or ServerLogManager(
             log_dir=log_dir,
             schema_version=schema_version,
@@ -261,6 +270,7 @@ class McpService:
             executor=executor,
             prompts=prompts,
             schema_store=schema_store,
+            schema_registry=schema_registry,
             log_manager=log_manager,
             schema_version=schema_version,
         )
@@ -281,8 +291,8 @@ class McpService:
         try:
             prompt = self._prompts.get(prompt_id)
         except KeyError:
-            return self._error_response(
-                code="MCP_UNKNOWN_PROMPT",
+            return self._canonical_error_response(
+                canonical_code="NOT_FOUND",
                 message=f"Prompt '{prompt_id}' not found",
                 context=ctx,
                 payload=payload,
@@ -301,24 +311,47 @@ class McpService:
     ) -> Envelope:
         payload = {"toolId": tool_id, "arguments": dict(arguments)}
         ctx = self._normalise_context(context, "tool", "mcp.tool.invoke", payload)
-        if tool_id not in self._toolpacks:
-            return self._error_response(
-                code="MCP_UNKNOWN_TOOL",
+        validators = self._schema_registry.load_tool_io(tool_id)
+        toolpack = self._toolpacks.get(tool_id)
+        if toolpack is None:
+            return self._canonical_error_response(
+                canonical_code="NOT_FOUND",
                 message=f"Tool '{tool_id}' not found",
                 context=ctx,
                 payload=payload,
                 tool_id=tool_id,
             )
-        toolpack = self._toolpacks[tool_id]
+        try:
+            validators.input.validate({"tool": tool_id, "input": dict(arguments)})
+        except ValidationError as exc:
+            return self._validation_failure(
+                canonical_code="INVALID_INPUT",
+                message=f"Tool '{tool_id}' input failed validation",
+                context=ctx,
+                payload=payload,
+                tool_id=tool_id,
+                error=exc,
+            )
         try:
             result = self._executor.run_toolpack(toolpack, arguments)
         except ToolpackExecutionError as exc:
-            return self._error_response(
-                code="MCP_VALIDATION_ERROR",
+            return self._canonical_error_response(
+                canonical_code="INVALID_OUTPUT",
                 message=str(exc),
                 context=ctx,
                 payload=payload,
                 tool_id=tool_id,
+            )
+        try:
+            validators.output.validate({"tool": tool_id, "output": dict(result)})
+        except ValidationError as exc:
+            return self._validation_failure(
+                canonical_code="INVALID_OUTPUT",
+                message=f"Tool '{tool_id}' output failed validation",
+                context=ctx,
+                payload=payload,
+                tool_id=tool_id,
+                error=exc,
             )
         data = {
             "toolId": tool_id,
@@ -370,7 +403,7 @@ class McpService:
             prompt_id=prompt_id,
         )
         envelope = Envelope.success(data=dict(data), meta=meta)
-        self._schemas.validator("envelope.schema.json").validate(
+        self._schema_registry.load_envelope().validate(
             envelope.model_dump(by_alias=True)
         )
         self._log_manager.emit(
@@ -398,16 +431,18 @@ class McpService:
         )
         return envelope
 
-    def _error_response(
+    def _canonical_error_response(
         self,
         *,
-        code: str,
+        canonical_code: str,
         message: str,
         context: RequestContext,
         payload: Mapping[str, Any],
         tool_id: str | None = None,
         prompt_id: str | None = None,
+        details: Mapping[str, Any] | None = None,
     ) -> Envelope:
+        http_status = CanonicalError.to_http_status(canonical_code)
         ids = self._request_ids(context)
         step_id = self._log_manager.next_step_id()
         duration_ms = _duration_ms(context.start_time)
@@ -428,8 +463,13 @@ class McpService:
             tool_id=tool_id,
             prompt_id=prompt_id,
         )
-        envelope = Envelope.failure(error=EnvelopeError(code=code, message=message), meta=meta)
-        self._schemas.validator("envelope.schema.json").validate(
+        error_payload = EnvelopeError(
+            code=canonical_code,
+            message=message,
+            details=dict(details) if details is not None else None,
+        )
+        envelope = Envelope.failure(error=error_payload, meta=meta)
+        self._schema_registry.load_envelope().validate(
             envelope.model_dump(by_alias=True)
         )
         self._log_manager.emit(
@@ -446,7 +486,12 @@ class McpService:
                 attempt=context.attempt,
                 input_bytes=ids["input_bytes"],
                 output_bytes=0,
-                error={"code": code, "message": message},
+                error={
+                    "canonical": canonical_code,
+                    "httpStatus": http_status,
+                    "message": message,
+                    "details": dict(details) if details is not None else None,
+                },
                 metadata={
                     "toolId": tool_id,
                     "promptId": prompt_id,
@@ -457,6 +502,33 @@ class McpService:
             )
         )
         return envelope
+
+    def _validation_failure(
+        self,
+        *,
+        canonical_code: str,
+        message: str,
+        context: RequestContext,
+        payload: Mapping[str, Any],
+        error: ValidationError,
+        tool_id: str | None = None,
+        prompt_id: str | None = None,
+    ) -> Envelope:
+        details = {
+            "schemaPath": [str(part) for part in error.schema_path],
+            "instancePath": [str(part) for part in error.absolute_path],
+            "message": error.message,
+        }
+        full_message = f"{message}: {error.message}"
+        return self._canonical_error_response(
+            canonical_code=canonical_code,
+            message=full_message,
+            context=context,
+            payload=payload,
+            tool_id=tool_id,
+            prompt_id=prompt_id,
+            details=details,
+        )
 
     def _normalise_context(
         self,
