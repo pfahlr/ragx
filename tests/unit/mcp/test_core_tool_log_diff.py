@@ -20,14 +20,25 @@ WHITELIST = {
     "ts",
     "traceId",
     "spanId",
-    "durationMs",
-    "runId",
-    "attemptId",
-    "logPath",
+    "execution.durationMs",
+    "metadata.runId",
+    "metadata.attemptId",
+    "metadata.logPath",
     "schemaVersion",
-    "inputBytes",
-    "outputBytes",
 }
+
+
+def _pop_nested(record: dict[str, object], path: str) -> None:
+    parts = path.split(".")
+    target: object = record
+    for key in parts[:-1]:
+        if not isinstance(target, dict):
+            return
+        target = target.get(key)
+        if target is None:
+            return
+    if isinstance(target, dict):
+        target.pop(parts[-1], None)
 
 
 def _normalise_log(path: Path) -> list[dict[str, object]]:
@@ -35,8 +46,7 @@ def _normalise_log(path: Path) -> list[dict[str, object]]:
     for line in path.read_text(encoding="utf-8").splitlines():
         record = json.loads(line)
         for field in WHITELIST:
-            record.pop(field, None)
-            record.get("metadata", {}).pop(field, None)
+            _pop_nested(record, field)
         events.append(record)
     return sorted(events, key=lambda evt: (evt["stepId"], evt["attempt"]))
 

@@ -62,6 +62,9 @@ def test_stdio_tool_invoke(server: JsonRpcStdioServer) -> None:
     )
     assert response["result"]["ok"] is True
     assert response["result"]["data"]["result"]["document"]["path"].endswith("sample_article.md")
+    assert response["result"]["meta"]["execution"]["inputBytes"] > 0
+    assert response["result"]["meta"]["execution"]["outputBytes"] > 0
+    assert response["result"]["meta"]["idempotency"]["cacheHit"] is False
 
 
 def test_stdio_prompt_get_accepts_string_major(server: JsonRpcStdioServer) -> None:

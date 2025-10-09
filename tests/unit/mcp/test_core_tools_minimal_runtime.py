@@ -86,7 +86,9 @@ def test_exports_render_markdown_is_deterministic(
     assert invoke["event"] == "tool.invoke"
     assert success["event"] == "tool.ok"
     assert success["status"] == "ok"
-    assert success["outputBytes"] >= len(expected_markdown.encode("utf-8"))
+    assert success["execution"]["outputBytes"] >= len(
+        expected_markdown.encode("utf-8")
+    )
 
 
 def test_vector_query_search_returns_sorted_hits(

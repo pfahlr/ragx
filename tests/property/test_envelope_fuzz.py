@@ -11,6 +11,8 @@ from jsonschema import ValidationError
 
 from apps.mcp_server.validation.schema_registry import SchemaRegistry
 
+_ENVELOPE_VALIDATOR = SchemaRegistry().load_envelope()
+
 
 def _meta_strategy() -> st.SearchStrategy[dict[str, Any]]:
     required_fields = {
@@ -22,11 +24,18 @@ def _meta_strategy() -> st.SearchStrategy[dict[str, Any]]:
         "transport": st.sampled_from(["http", "stdio"]),
         "route": st.text(min_size=1),
         "method": st.text(min_size=1),
-        "durationMs": st.floats(min_value=0, allow_nan=False, allow_infinity=False),
         "status": st.sampled_from(["ok", "error"]),
         "attempt": st.integers(min_value=0, max_value=3),
-        "inputBytes": st.integers(min_value=0, max_value=2048),
-        "outputBytes": st.integers(min_value=0, max_value=2048),
+        "execution": st.fixed_dictionaries(
+            {
+                "durationMs": st.floats(
+                    min_value=0, allow_nan=False, allow_infinity=False
+                ),
+                "inputBytes": st.integers(min_value=0, max_value=2048),
+                "outputBytes": st.integers(min_value=0, max_value=2048),
+            }
+        ),
+        "idempotency": st.fixed_dictionaries({"cacheHit": st.booleans()}),
     }
     optional_fields = {
         "toolId": st.one_of(st.none(), st.text()),
@@ -58,6 +67,5 @@ invalid_envelopes = st.one_of(invalid_missing_meta, invalid_success_with_error)
 @given(invalid_envelopes)
 def test_envelope_validator_rejects_invalid_cases(payload: dict[str, Any]) -> None:
     """Any structurally invalid payload should be rejected by the JSON schema."""
-    validator = SchemaRegistry().load_envelope()
     with pytest.raises(ValidationError):
-        validator.validate(payload)
+        _ENVELOPE_VALIDATOR.validate(payload)

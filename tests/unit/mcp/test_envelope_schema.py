@@ -8,7 +8,13 @@ from jsonschema import Draft202012Validator
 
 pytest.importorskip("pydantic")
 
-from apps.mcp_server.service.envelope import Envelope, EnvelopeError, EnvelopeMeta
+from apps.mcp_server.service.envelope import (
+    Envelope,
+    EnvelopeError,
+    EnvelopeExecutionMeta,
+    EnvelopeIdempotencyMeta,
+    EnvelopeMeta,
+)
 
 SCHEMA_PATH = Path("apps/mcp_server/schemas/mcp/envelope.schema.json")
 
@@ -40,10 +46,13 @@ def test_envelope_success_matches_schema() -> None:
             route="discover",
             method="mcp.discover",
             status="ok",
-            duration_ms=12.5,
             attempt=0,
-            input_bytes=0,
-            output_bytes=0,
+            execution=EnvelopeExecutionMeta(
+                duration_ms=12.5,
+                input_bytes=0,
+                output_bytes=0,
+            ),
+            idempotency=EnvelopeIdempotencyMeta(cache_hit=False),
         ),
     )
     payload = envelope.model_dump(by_alias=True)
@@ -66,10 +75,13 @@ def test_envelope_error_includes_details() -> None:
             route="tool",
             method="mcp.tool.invoke",
             status="error",
-            duration_ms=3.4,
             attempt=0,
-            input_bytes=0,
-            output_bytes=0,
+            execution=EnvelopeExecutionMeta(
+                duration_ms=3.4,
+                input_bytes=0,
+                output_bytes=0,
+            ),
+            idempotency=EnvelopeIdempotencyMeta(cache_hit=False),
         ),
     )
     payload = envelope.model_dump(by_alias=True)
@@ -93,10 +105,13 @@ def test_envelope_serialises_optional_metadata() -> None:
             route="prompt",
             method="mcp.prompt.get",
             status="ok",
-            duration_ms=1.23,
             attempt=0,
-            input_bytes=0,
-            output_bytes=0,
+            execution=EnvelopeExecutionMeta(
+                duration_ms=1.23,
+                input_bytes=0,
+                output_bytes=0,
+            ),
+            idempotency=EnvelopeIdempotencyMeta(cache_hit=False),
             prompt_id="core.generic.welcome@1",
         ),
     )

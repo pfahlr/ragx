@@ -1,11 +1,18 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import Any
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
-__all__ = ["Envelope", "EnvelopeMeta", "EnvelopeError"]
+__all__ = [
+    "Envelope",
+    "EnvelopeError",
+    "EnvelopeExecutionMeta",
+    "EnvelopeIdempotencyMeta",
+    "EnvelopeMeta",
+]
 
 
 class EnvelopeError(BaseModel):
@@ -21,6 +28,24 @@ class EnvelopeError(BaseModel):
     )
 
 
+class EnvelopeExecutionMeta(BaseModel):
+    """Execution metrics attached to an envelope."""
+
+    model_config = ConfigDict(frozen=True, populate_by_name=True, extra="forbid")
+
+    duration_ms: float = Field(..., alias="durationMs")
+    input_bytes: int = Field(0, alias="inputBytes")
+    output_bytes: int = Field(0, alias="outputBytes")
+
+
+class EnvelopeIdempotencyMeta(BaseModel):
+    """Idempotency metadata indicating cache utilisation."""
+
+    model_config = ConfigDict(frozen=True, populate_by_name=True, extra="forbid")
+
+    cache_hit: bool = Field(..., alias="cacheHit")
+
+
 class EnvelopeMeta(BaseModel):
     """Structured metadata attached to every envelope."""
 
@@ -34,11 +59,10 @@ class EnvelopeMeta(BaseModel):
     transport: str
     route: str
     method: str
-    duration_ms: float = Field(..., alias="durationMs")
     status: str
     attempt: int = 0
-    input_bytes: int = Field(0, alias="inputBytes")
-    output_bytes: int = Field(0, alias="outputBytes")
+    execution: EnvelopeExecutionMeta
+    idempotency: EnvelopeIdempotencyMeta
     tool_id: str | None = Field(default=None, alias="toolId")
     prompt_id: str | None = Field(default=None, alias="promptId")
 
@@ -54,14 +78,27 @@ class EnvelopeMeta(BaseModel):
         transport: str,
         route: str,
         method: str,
-        duration_ms: float,
         status: str,
         attempt: int = 0,
-        input_bytes: int = 0,
-        output_bytes: int = 0,
+        execution: EnvelopeExecutionMeta | Mapping[str, Any] | None = None,
+        idempotency: EnvelopeIdempotencyMeta | Mapping[str, Any] | None = None,
         tool_id: str | None = None,
         prompt_id: str | None = None,
     ) -> EnvelopeMeta:
+        execution_meta = (
+            execution
+            if isinstance(execution, EnvelopeExecutionMeta)
+            else EnvelopeExecutionMeta.model_validate(
+                execution or {"durationMs": 0.0, "inputBytes": 0, "outputBytes": 0}
+            )
+        )
+        idempotency_meta = (
+            idempotency
+            if isinstance(idempotency, EnvelopeIdempotencyMeta)
+            else EnvelopeIdempotencyMeta.model_validate(
+                idempotency or {"cacheHit": False}
+            )
+        )
         return cls(
             requestId=str(request_id),
             traceId=str(trace_id),
@@ -71,11 +108,10 @@ class EnvelopeMeta(BaseModel):
             transport=transport,
             route=route,
             method=method,
-            durationMs=duration_ms,
             status=status,
             attempt=attempt,
-            inputBytes=input_bytes,
-            outputBytes=output_bytes,
+            execution=execution_meta,
+            idempotency=idempotency_meta,
             toolId=tool_id,
             promptId=prompt_id,
         )

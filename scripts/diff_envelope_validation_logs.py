@@ -11,12 +11,25 @@ DEFAULT_WHITELIST = [
     "ts",
     "traceId",
     "spanId",
-    "durationMs",
     "requestId",
-    "runId",
-    "attemptId",
-    "logPath",
+    "execution.durationMs",
+    "metadata.runId",
+    "metadata.attemptId",
+    "metadata.logPath",
 ]
+
+
+def _pop_nested(record: dict[str, object], path: str) -> None:
+    parts = path.split(".")
+    target: object = record
+    for key in parts[:-1]:
+        if not isinstance(target, dict):
+            return
+        target = target.get(key)
+        if target is None:
+            return
+    if isinstance(target, dict):
+        target.pop(parts[-1], None)
 
 
 def _load_log(path: Path, whitelist: Iterable[str]) -> list[dict[str, object]]:
@@ -28,11 +41,8 @@ def _load_log(path: Path, whitelist: Iterable[str]) -> list[dict[str, object]]:
         if not line.strip():
             continue
         record = json.loads(line)
-        metadata = dict(record.get("metadata", {}))
         for field in whitelist_set:
-            record.pop(field, None)
-            metadata.pop(field, None)
-        record["metadata"] = metadata
+            _pop_nested(record, field)
         records.append(record)
     return records
 
