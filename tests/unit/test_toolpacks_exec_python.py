@@ -64,7 +64,7 @@ def test_exec_python_toolpack_runs_callable(monkeypatch: pytest.MonkeyPatch) -> 
     executor = Executor()
     result = executor.run_toolpack(toolpack, {"value": 4})
 
-    assert result == {"result": 8}
+    assert dict(result) == {"result": 8}
     assert captured == [{"value": 4}]
 
 
@@ -116,11 +116,12 @@ def test_exec_python_toolpack_idempotent_cache(monkeypatch: pytest.MonkeyPatch) 
     second = executor.run_toolpack(toolpack, {"value": 3})
 
     assert calls == [1]
-    assert first == second == {"result": 3}
+    assert dict(first) == dict(second) == {"result": 3}
 
-    first["result"] = 0
+    mutated = dict(first)
+    mutated["result"] = 0
     cached = executor.run_toolpack(toolpack, {"value": 3})
-    assert cached == {"result": 3}
+    assert dict(cached) == {"result": 3}
 
 
 def test_exec_python_toolpack_skips_cache_for_non_deterministic(
@@ -198,4 +199,4 @@ def test_exec_toolpack_supports_async_callable(monkeypatch: pytest.MonkeyPatch) 
 
     result = executor.run_toolpack(toolpack, {"value": 2})
 
-    assert result == {"result": 4}
+    assert dict(result) == {"result": 4}

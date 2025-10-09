@@ -17,7 +17,7 @@ executor = Executor()
 
 pack = loader.get("tool.echo")
 result = executor.run_toolpack(pack, {"text": "hello"})
-print(result["text"])
+print(result["text"], result.cache_hit)  # -> hello False
 ```
 
 ## Behaviour
@@ -29,7 +29,8 @@ print(result["text"])
   `Toolpack.output_schema` before returning.
 - Deterministic toolpacks (`deterministic: true`) are cached by a SHA-256 hash
   of `id`, `version`, and the normalised input payload. Each cache hit returns a
-  fresh deep copy, keeping results immutable to the caller.
+  `ToolpackResult` with `cache_hit=True` and a fresh deep copy, keeping results
+  immutable to the caller.
 - Non-deterministic toolpacks bypass the cache entirely.
 - Handlers are resolved via the `execution.module` field using the
   `module:callable` convention. Invalid formats, missing modules, missing

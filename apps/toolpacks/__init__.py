@@ -1,6 +1,6 @@
 """Toolpacks runtime utilities."""
 
-from .executor import Executor, ToolpackExecutionError
+from .executor import Executor, ToolpackExecutionError, ToolpackResult
 from .loader import Toolpack, ToolpackLoader, ToolpackValidationError
 
 __all__ = [
@@ -9,4 +9,5 @@ __all__ = [
     "Executor",
     "ToolpackExecutionError",
     "ToolpackValidationError",
+    "ToolpackResult",
 ]

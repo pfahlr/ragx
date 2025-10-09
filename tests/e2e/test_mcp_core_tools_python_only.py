@@ -67,9 +67,10 @@ def run(payload):
     result_one = executor.run_toolpack(toolpack, {"value": 7})
     result_two = executor.run_toolpack(toolpack, {"value": 7})
 
-    assert result_one == result_two == {"result": 21}
-    result_one["result"] = 0
-    assert executor.run_toolpack(toolpack, {"value": 7}) == {"result": 21}
+    assert dict(result_one) == dict(result_two) == {"result": 21}
+    mutated = dict(result_one)
+    mutated["result"] = 0
+    assert dict(executor.run_toolpack(toolpack, {"value": 7})) == {"result": 21}
 
     with pytest.raises(ToolpackExecutionError):
         executor.run_toolpack(toolpack, {"value": -1})

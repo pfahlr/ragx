@@ -5,7 +5,7 @@ import copy
 import hashlib
 import importlib
 import json
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Iterator, Mapping
 from typing import Any
 
 from jsonschema import validators
@@ -13,11 +13,34 @@ from jsonschema.exceptions import SchemaError, ValidationError
 
 from apps.toolpacks.loader import Toolpack, ToolpackValidationError
 
-__all__ = ["Executor", "ToolpackExecutionError"]
+__all__ = ["Executor", "ToolpackExecutionError", "ToolpackResult"]
 
 
 class ToolpackExecutionError(Exception):
     """Raised when executing a Toolpack fails."""
+
+
+class ToolpackResult(Mapping[str, Any]):
+    """Mapping wrapper for toolpack execution results with cache metadata."""
+
+    __slots__ = ("_data", "cache_hit")
+
+    def __init__(self, data: Mapping[str, Any], *, cache_hit: bool) -> None:
+        self._data = copy.deepcopy(dict(data))
+        self.cache_hit = cache_hit
+
+    def __getitem__(self, key: str) -> Any:
+        return self._data[key]
+
+    def __iter__(self) -> Iterator[str]:
+        return iter(self._data)
+
+    def __len__(self) -> int:
+        return len(self._data)
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return a deep copy of the result payload."""
+        return copy.deepcopy(self._data)
 
 
 class Executor:
@@ -26,7 +49,7 @@ class Executor:
     def __init__(self) -> None:
         self._cache: dict[str, dict[str, Any]] = {}
 
-    def run_toolpack(self, toolpack: Toolpack, payload: Mapping[str, Any]) -> dict[str, Any]:
+    def run_toolpack(self, toolpack: Toolpack, payload: Mapping[str, Any]) -> ToolpackResult:
         """Execute ``toolpack`` with ``payload`` and return the validated output."""
 
         execution_kind = toolpack.execution.get("kind")
@@ -47,7 +70,7 @@ class Executor:
         if toolpack.deterministic:
             cached = self._cache.get(cache_key)
             if cached is not None:
-                return copy.deepcopy(cached)
+                return ToolpackResult(cached, cache_hit=True)
 
         runner = self._resolve_python_callable(toolpack)
         try:
@@ -70,8 +93,7 @@ class Executor:
         materialised = copy.deepcopy(output_payload)
         if toolpack.deterministic:
             self._cache[cache_key] = copy.deepcopy(materialised)
-            return copy.deepcopy(materialised)
-        return materialised
+        return ToolpackResult(materialised, cache_hit=False)
 
     def _resolve_python_callable(self, toolpack: Toolpack) -> Callable[[Mapping[str, Any]], Any]:
         execution = toolpack.execution

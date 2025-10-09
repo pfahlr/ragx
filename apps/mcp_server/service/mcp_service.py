@@ -372,7 +372,7 @@ class McpService:
                         tool_id=tool_id,
                     )
         try:
-            result = self._executor.run_toolpack(toolpack, arguments)
+            execution = self._executor.run_toolpack(toolpack, arguments)
         except ToolpackExecutionError as exc:
             return self._error_response(
                 code="INTERNAL_ERROR",
@@ -381,10 +381,11 @@ class McpService:
                 payload=payload,
                 tool_id=tool_id,
             )
+        result_payload = dict(execution)
         if self._validation_mode is not ValidationMode.OFF and validators_bundle is not None:
             try:
                 validators_bundle.output.validate(
-                    {"tool": tool_id, "output": dict(result)}
+                    {"tool": tool_id, "output": result_payload}
                 )
             except ValidationError as exc:
                 return self._error_response(
@@ -396,7 +397,7 @@ class McpService:
                 )
         data = {
             "toolId": tool_id,
-            "result": dict(result),
+            "result": result_payload,
             "metadata": {
                 "toolpack": {
                     "id": toolpack.id,
@@ -407,7 +408,8 @@ class McpService:
             },
         }
         self._schemas.validator("tool.response.schema.json").validate(data)
-        return self._finalise_envelope(data, ctx, tool_id=tool_id)
+        extra_metadata = {"idempotencyCacheHit": execution.cache_hit}
+        return self._finalise_envelope(data, ctx, tool_id=tool_id, extra_metadata=extra_metadata)
 
     def health(self, context: RequestContext | None = None) -> dict[str, Any]:
         _ = self._normalise_context(context, "health", "mcp.health", {})
@@ -422,6 +424,7 @@ class McpService:
         *,
         tool_id: str | None = None,
         prompt_id: str | None = None,
+        extra_metadata: Mapping[str, Any] | None = None,
     ) -> Envelope:
         duration_ms = _duration_ms(context.start_time)
         ids = self._request_ids(context)
@@ -446,6 +449,16 @@ class McpService:
         )
         envelope = Envelope.success(data=dict(data), meta=meta)
         envelope_dict = envelope.model_dump(by_alias=True)
+        log_metadata = {
+            "toolId": tool_id,
+            "promptId": prompt_id,
+            "schemaVersion": self._schema_version,
+            "deterministic": context.deterministic_ids,
+        }
+        if extra_metadata:
+            for key, value in extra_metadata.items():
+                if value is not None:
+                    log_metadata[key] = value
         self._log_manager.emit(
             ServerLogEvent(
                 ts=datetime.now(UTC),
@@ -460,12 +473,7 @@ class McpService:
                 attempt=context.attempt,
                 input_bytes=ids["input_bytes"],
                 output_bytes=output_bytes,
-                metadata={
-                    "toolId": tool_id,
-                    "promptId": prompt_id,
-                    "schemaVersion": self._schema_version,
-                    "deterministic": context.deterministic_ids,
-                },
+                metadata=log_metadata,
                 step_id=step_id,
             )
         )
