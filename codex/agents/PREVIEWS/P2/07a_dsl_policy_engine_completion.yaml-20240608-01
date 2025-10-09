@@ -1,0 +1,19 @@
+run_id: 20240608-01
+plan_preview:
+  reuse:
+    - Leverage the base branch’s PolicyDefinition normalization, tool-set expansion safeguards, and `policy_resolved` trace schema to anchor stack behaviour.
+    - Adopt reclz1’s `ToolDescriptor` model and stack cloning helpers so branch/loop linting can evaluate multiple contexts without mutating the primary stack.
+    - Incorporate 81p0id’s candidate-aware denial diagnostics and decision-branch linting patterns to enrich observability and coverage.
+    - Carry over yp01n0’s enforcement surface (`PolicyViolationError`, event sink, fallback reporting) for runtime guardrails.
+  conflicts:
+    - 81p0id and yp01n0 iterate frames oldest-first and mutate global state; we must replace that with LIFO evaluation while still emitting their richer diagnostics.
+    - reclz1 drops registry ownership, so we need to merge its descriptors without losing base-branch validation and cycle detection.
+    - Event naming diverges (`policy_allowlist` vs `policy_resolved`) and trace payload shapes differ; consolidate into one contract without breaking observability requirements.
+  redesign:
+    - Rework allowlist evaluation into a pure, non-mutating pass that processes frames in reverse order, producing both aggregate snapshots and per-candidate decisions.
+    - Refactor linting into a modular analyzer that can enumerate contexts (graph, loop, decision, fallback) and reuse a shared policy evaluation helper.
+    - Simplify enforcement so `effective_allowlist` can power both snapshotting and `enforce()` without recomputing expensive registry scans each call.
+  open_questions:
+    - How should violation events encode combined deny reasons when multiple scopes contribute (e.g., deny_tags plus implicit allowlist exclusions)?
+    - Do we need to support partial tool registries per subgraph (as reclz1 assumes) or enforce a single canonical registry throughout execution?
+    - Should linter diagnostics report first failure only or aggregate all failing branches/fallback candidates for the same node?
