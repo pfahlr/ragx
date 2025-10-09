@@ -4,6 +4,7 @@ import asyncio
 import copy
 import hashlib
 import importlib
+import inspect
 import json
 import time
 from collections.abc import Callable, Mapping
@@ -50,6 +51,16 @@ class Executor:
         result, _ = self.run_toolpack_with_stats(toolpack, payload)
         return result
 
+    async def run_toolpack_async(
+        self,
+        toolpack: Toolpack,
+        payload: Mapping[str, Any],
+    ) -> dict[str, Any]:
+        """Async counterpart to :meth:`run_toolpack`."""
+
+        result, _ = await self.run_toolpack_with_stats_async(toolpack, payload)
+        return result
+
     def run_toolpack_with_stats(
         self,
         toolpack: Toolpack,
@@ -58,6 +69,25 @@ class Executor:
         use_cache: bool = True,
     ) -> tuple[dict[str, Any], ExecutionStats]:
         """Execute ``toolpack`` with ``payload`` and return result + metrics."""
+
+        if _running_event_loop():
+            raise RuntimeError(
+                "Executor.run_toolpack_with_stats() cannot be called while an event loop is "
+                "running; use run_toolpack_with_stats_async() instead."
+            )
+
+        return asyncio.run(
+            self.run_toolpack_with_stats_async(toolpack, payload, use_cache=use_cache)
+        )
+
+    async def run_toolpack_with_stats_async(
+        self,
+        toolpack: Toolpack,
+        payload: Mapping[str, Any],
+        *,
+        use_cache: bool = True,
+    ) -> tuple[dict[str, Any], ExecutionStats]:
+        """Async variant of :meth:`run_toolpack_with_stats`."""
 
         start_time = time.perf_counter()
         execution_kind = toolpack.execution.get("kind")
@@ -94,8 +124,8 @@ class Executor:
         runner = self._resolve_python_callable(toolpack)
         try:
             result = runner(copy.deepcopy(input_payload))
-            if asyncio.iscoroutine(result):
-                result = asyncio.run(result)
+            if inspect.isawaitable(result):
+                result = await result
         except Exception as exc:  # pragma: no cover - execution failure path
             raise ToolpackExecutionError(
                 f"Toolpack {toolpack.id} execution failed: {exc}"
@@ -183,6 +213,14 @@ def _ensure_mapping(value: Any, *, stage: str, toolpack: Toolpack) -> dict[str, 
             f"Toolpack {toolpack.id} {stage} payload must be a mapping"
         )
     return dict(value)
+
+
+def _running_event_loop() -> bool:
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        return False
+    return True
 
 
 def _validate_instance(

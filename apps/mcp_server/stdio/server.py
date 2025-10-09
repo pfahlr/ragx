@@ -125,7 +125,7 @@ class JsonRpcStdioServer:
                 method="mcp.tool.invoke",
                 deterministic_ids=self._deterministic_ids,
             )
-            envelope = self._service.invoke_tool(
+            envelope = await self._service.invoke_tool_async(
                 tool_id=tool_id,
                 arguments=arguments,
                 context=context,

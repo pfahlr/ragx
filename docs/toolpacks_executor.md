@@ -20,6 +20,14 @@ result = executor.run_toolpack(pack, {"text": "hello"})
 print(result["text"])
 ```
 
+Async transports can await toolpacks directly using the asynchronous helpers:
+
+```python
+async def invoke():
+    result = await executor.run_toolpack_async(pack, {"text": "hello"})
+    print(result["text"])
+```
+
 To capture execution metrics alongside the payload, use
 `run_toolpack_with_stats`:
 
@@ -53,7 +61,9 @@ be retrieved via `executor.last_run_stats()`.
 - Handlers are resolved via the `execution.module` field using the
   `module:callable` convention. Invalid formats, missing modules, missing
   callables, or non-callable attributes raise `ToolpackExecutionError`.
-- Async handlers (`async def`) are awaited automatically via `asyncio.run`.
+- Async handlers (`async def`) are awaited automatically. Use the `run_toolpack_async`
+  or `run_toolpack_with_stats_async` helpers when invoking toolpacks from within an
+  active event loop.
 - Schema-level problems raised by the loader (invalid `$ref` targets or schema
   definitions) surface as `ToolpackValidationError`, while runtime or validation
   problems surface as `ToolpackExecutionError`.

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import sys
 import types
 from pathlib import Path
@@ -199,3 +200,27 @@ def test_exec_toolpack_supports_async_callable(monkeypatch: pytest.MonkeyPatch) 
     result = executor.run_toolpack(toolpack, {"value": 2})
 
     assert result == {"result": 4}
+
+
+def test_exec_toolpack_async_callable_inside_running_loop(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def run(payload: dict[str, object]) -> dict[str, object]:
+        await asyncio.sleep(0)
+        return {"result": payload["value"] * 3}
+
+    module_name = "toolpacks_tests.async_loop_mod"
+    module = types.ModuleType(module_name)
+    module.run = run  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, module_name, module)
+
+    toolpack = _make_toolpack(module=f"{module_name}:run")
+    executor = Executor()
+
+    async def invoke():
+        return await executor.run_toolpack_with_stats_async(toolpack, {"value": 3})
+
+    result, stats = asyncio.run(invoke())
+
+    assert result == {"result": 9}
+    assert stats.cache_hit is False

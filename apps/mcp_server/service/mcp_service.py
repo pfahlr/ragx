@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 import time
@@ -382,6 +383,34 @@ class McpService:
         arguments: Mapping[str, Any],
         context: RequestContext | None = None,
     ) -> Envelope:
+        return asyncio.run(
+            self._invoke_tool_impl(
+                tool_id=tool_id,
+                arguments=arguments,
+                context=context,
+            )
+        )
+
+    async def invoke_tool_async(
+        self,
+        *,
+        tool_id: str,
+        arguments: Mapping[str, Any],
+        context: RequestContext | None = None,
+    ) -> Envelope:
+        return await self._invoke_tool_impl(
+            tool_id=tool_id,
+            arguments=arguments,
+            context=context,
+        )
+
+    async def _invoke_tool_impl(
+        self,
+        *,
+        tool_id: str,
+        arguments: Mapping[str, Any],
+        context: RequestContext | None,
+    ) -> Envelope:
         payload = {"toolId": tool_id, "arguments": dict(arguments)}
         ctx = self._normalise_context(context, "tool", "mcp.tool.invoke", payload)
         ids = self._request_ids(ctx)
@@ -427,7 +456,7 @@ class McpService:
                     )
         use_cache = ctx.transport != "stdio"
         try:
-            result, stats = self._executor.run_toolpack_with_stats(
+            result, stats = await self._executor.run_toolpack_with_stats_async(
                 toolpack,
                 arguments,
                 use_cache=use_cache,
