@@ -25,6 +25,7 @@ class Executor:
 
     def __init__(self) -> None:
         self._cache: dict[str, dict[str, Any]] = {}
+        self._last_cache_hit: bool = False
 
     def run_toolpack(self, toolpack: Toolpack, payload: Mapping[str, Any]) -> dict[str, Any]:
         """Execute ``toolpack`` with ``payload`` and return the validated output."""
@@ -35,6 +36,7 @@ class Executor:
                 f"Unsupported execution kind '{execution_kind}' for toolpack {toolpack.id}"
             )
 
+        self._last_cache_hit = False
         input_payload = _ensure_mapping(payload, stage="input", toolpack=toolpack)
         _validate_instance(
             schema=toolpack.input_schema,
@@ -47,6 +49,7 @@ class Executor:
         if toolpack.deterministic:
             cached = self._cache.get(cache_key)
             if cached is not None:
+                self._last_cache_hit = True
                 return copy.deepcopy(cached)
 
         runner = self._resolve_python_callable(toolpack)
@@ -72,6 +75,12 @@ class Executor:
             self._cache[cache_key] = copy.deepcopy(materialised)
             return copy.deepcopy(materialised)
         return materialised
+
+    @property
+    def last_cache_hit(self) -> bool:
+        """Return ``True`` if the previous invocation was served from cache."""
+
+        return self._last_cache_hit
 
     def _resolve_python_callable(self, toolpack: Toolpack) -> Callable[[Mapping[str, Any]], Any]:
         execution = toolpack.execution

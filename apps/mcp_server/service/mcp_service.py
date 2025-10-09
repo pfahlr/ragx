@@ -381,6 +381,10 @@ class McpService:
                 payload=payload,
                 tool_id=tool_id,
             )
+        cache_hit = bool(toolpack.deterministic and self._executor.last_cache_hit)
+        cache_state = None
+        if toolpack.deterministic:
+            cache_state = "hit" if cache_hit else "miss"
         if self._validation_mode is not ValidationMode.OFF and validators_bundle is not None:
             try:
                 validators_bundle.output.validate(
@@ -407,7 +411,12 @@ class McpService:
             },
         }
         self._schemas.validator("tool.response.schema.json").validate(data)
-        return self._finalise_envelope(data, ctx, tool_id=tool_id)
+        return self._finalise_envelope(
+            data,
+            ctx,
+            tool_id=tool_id,
+            cache_state=cache_state,
+        )
 
     def health(self, context: RequestContext | None = None) -> dict[str, Any]:
         _ = self._normalise_context(context, "health", "mcp.health", {})
@@ -422,6 +431,7 @@ class McpService:
         *,
         tool_id: str | None = None,
         prompt_id: str | None = None,
+        cache_state: str | None = None,
     ) -> Envelope:
         duration_ms = _duration_ms(context.start_time)
         ids = self._request_ids(context)
@@ -446,6 +456,14 @@ class McpService:
         )
         envelope = Envelope.success(data=dict(data), meta=meta)
         envelope_dict = envelope.model_dump(by_alias=True)
+        metadata = {
+            "toolId": tool_id,
+            "promptId": prompt_id,
+            "schemaVersion": self._schema_version,
+            "deterministic": context.deterministic_ids,
+        }
+        if cache_state is not None:
+            metadata["idempotencyCache"] = cache_state
         self._log_manager.emit(
             ServerLogEvent(
                 ts=datetime.now(UTC),
@@ -460,12 +478,7 @@ class McpService:
                 attempt=context.attempt,
                 input_bytes=ids["input_bytes"],
                 output_bytes=output_bytes,
-                metadata={
-                    "toolId": tool_id,
-                    "promptId": prompt_id,
-                    "schemaVersion": self._schema_version,
-                    "deterministic": context.deterministic_ids,
-                },
+                metadata=metadata,
                 step_id=step_id,
             )
         )
