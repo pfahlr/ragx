@@ -7,7 +7,7 @@ import pytest
 
 pytest.importorskip("pydantic")
 
-from apps.mcp_server.service.mcp_service import McpService
+from apps.mcp_server.service.mcp_service import McpService, RequestContext
 from apps.mcp_server.stdio.server import JsonRpcStdioServer
 
 SCHEMA_DIR = Path("apps/mcp_server/schemas/mcp")
@@ -110,3 +110,43 @@ def test_stdio_prompt_get_rejects_non_integer_major(server: JsonRpcStdioServer) 
     )
     assert response["error"]["code"] == -32602
     assert response["id"] == "req-1"
+
+
+def test_stdio_invocation_preserves_http_executor_cache(
+    service: McpService, server: JsonRpcStdioServer
+) -> None:
+    fixture_path = Path("tests/fixtures/mcp/docs/sample_article.md")
+    http_context = RequestContext(
+        transport="http",
+        route="tool",
+        method="mcp.tool.invoke",
+    )
+
+    first = service.invoke_tool(
+        tool_id="mcp.tool:docs.load.fetch",
+        arguments={"path": str(fixture_path)},
+        context=http_context,
+    )
+    first_payload = first.model_dump(by_alias=True)
+    assert first_payload["meta"]["idempotency"]["cacheHit"] is False
+
+    stdio_response = asyncio.run(
+        server.handle_request(
+            _request(
+                "mcp.tool.invoke",
+                params={
+                    "toolId": "mcp.tool:docs.load.fetch",
+                    "arguments": {"path": str(fixture_path)},
+                },
+            )
+        )
+    )
+    assert stdio_response["result"]["meta"]["idempotency"]["cacheHit"] is False
+
+    second = service.invoke_tool(
+        tool_id="mcp.tool:docs.load.fetch",
+        arguments={"path": str(fixture_path)},
+        context=http_context,
+    )
+    second_payload = second.model_dump(by_alias=True)
+    assert second_payload["meta"]["idempotency"]["cacheHit"] is True

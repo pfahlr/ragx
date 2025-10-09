@@ -84,3 +84,39 @@ def test_executor_reports_cache_hit_on_deterministic_toolpack(sample_toolpack: T
     assert second_stats.input_bytes == first_stats.input_bytes
     assert second_stats.output_bytes == first_stats.output_bytes
     assert second_stats.duration_ms >= 0
+
+
+def test_executor_exposes_last_run_stats(sample_toolpack: Toolpack) -> None:
+    executor = Executor()
+    payload = {"text": "stats"}
+
+    assert executor.last_run_stats() is None
+
+    _, first_stats = executor.run_toolpack_with_stats(sample_toolpack, payload)
+    recorded = executor.last_run_stats()
+    assert recorded is first_stats
+    assert recorded.cache_hit is False
+
+    _, second_stats = executor.run_toolpack_with_stats(sample_toolpack, payload)
+    assert executor.last_run_stats() is second_stats
+    assert second_stats.cache_hit is True
+
+
+def test_executor_can_disable_cache_without_flushing_existing_entries(
+    sample_toolpack: Toolpack,
+) -> None:
+    executor = Executor()
+    payload = {"text": "control"}
+
+    _, miss_stats = executor.run_toolpack_with_stats(sample_toolpack, payload)
+    assert miss_stats.cache_hit is False
+
+    _, no_cache_stats = executor.run_toolpack_with_stats(
+        sample_toolpack,
+        payload,
+        use_cache=False,
+    )
+    assert no_cache_stats.cache_hit is False
+
+    _, hit_stats = executor.run_toolpack_with_stats(sample_toolpack, payload)
+    assert hit_stats.cache_hit is True

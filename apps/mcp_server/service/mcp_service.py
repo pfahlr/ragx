@@ -425,8 +425,13 @@ class McpService:
                         payload=payload,
                         tool_id=tool_id,
                     )
+        use_cache = ctx.transport != "stdio"
         try:
-            result, stats = self._executor.run_toolpack_with_stats(toolpack, arguments)
+            result, stats = self._executor.run_toolpack_with_stats(
+                toolpack,
+                arguments,
+                use_cache=use_cache,
+            )
         except ToolpackExecutionError as exc:
             return self._error_response(
                 code="INTERNAL_ERROR",
