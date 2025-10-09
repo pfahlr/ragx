@@ -2,6 +2,7 @@ import argparse
 import json
 from collections.abc import Iterable
 from pathlib import Path
+from typing import Any
 
 from deepdiff import DeepDiff
 
@@ -11,12 +12,26 @@ DEFAULT_WHITELIST = [
     "ts",
     "traceId",
     "spanId",
-    "durationMs",
+    "execution.durationMs",
     "requestId",
-    "runId",
-    "attemptId",
-    "logPath",
+    "metadata.runId",
+    "metadata.attemptId",
+    "metadata.logPath",
 ]
+
+
+def _remove_path(container: dict[str, Any], dotted: str) -> None:
+    parts = dotted.split(".")
+    target = container
+    for key in parts[:-1]:
+        if not isinstance(target, dict) or key not in target:
+            return
+        next_value = target[key]
+        if not isinstance(next_value, dict):
+            return
+        target = next_value
+    if isinstance(target, dict):
+        target.pop(parts[-1], None)
 
 
 def _load_log(path: Path, whitelist: Iterable[str]) -> list[dict[str, object]]:
@@ -28,10 +43,11 @@ def _load_log(path: Path, whitelist: Iterable[str]) -> list[dict[str, object]]:
         if not line.strip():
             continue
         record = json.loads(line)
-        metadata = dict(record.get("metadata", {}))
         for field in whitelist_set:
-            record.pop(field, None)
-            metadata.pop(field, None)
+            _remove_path(record, field)
+            if "." not in field:
+                _remove_path(record, f"metadata.{field}")
+        metadata = dict(record.get("metadata", {}))
         record["metadata"] = metadata
         records.append(record)
     return records

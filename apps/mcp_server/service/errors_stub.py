@@ -24,6 +24,7 @@ class CanonicalError:
         _CanonicalErrorSpec("PERMISSION_DENIED", "Operation not permitted"),
         _CanonicalErrorSpec("UNAUTHENTICATED", "Authentication required"),
         _CanonicalErrorSpec("DEADLINE_EXCEEDED", "Deadline exceeded"),
+        _CanonicalErrorSpec("TIMEOUT", "Tool execution exceeded timeout"),
         _CanonicalErrorSpec("RESOURCE_EXHAUSTED", "Rate or quota exceeded"),
         _CanonicalErrorSpec("INTERNAL", "Internal server error"),
         _CanonicalErrorSpec("UNAVAILABLE", "Service unavailable"),

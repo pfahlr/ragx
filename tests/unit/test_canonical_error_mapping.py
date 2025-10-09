@@ -8,6 +8,7 @@ from apps.mcp_server.service.errors import CanonicalError
 EXPECTED_CODES = [
     "INVALID_INPUT",
     "INVALID_OUTPUT",
+    "TIMEOUT",
     "NOT_FOUND",
     "UNAUTHORIZED",
     "INTERNAL_ERROR",
@@ -16,6 +17,7 @@ EXPECTED_CODES = [
 HTTP_STATUS_EXPECTATIONS = {
     "INVALID_INPUT": 400,
     "INVALID_OUTPUT": 502,
+    "TIMEOUT": 504,
     "NOT_FOUND": 404,
     "UNAUTHORIZED": 401,
     "INTERNAL_ERROR": 500,
@@ -24,6 +26,7 @@ HTTP_STATUS_EXPECTATIONS = {
 JSONRPC_EXPECTATIONS = {
     "INVALID_INPUT": (-32602, "invalid input"),
     "INVALID_OUTPUT": (-32002, "invalid output"),
+    "TIMEOUT": (-32005, "timed out"),
     "NOT_FOUND": (-32004, "not found"),
     "UNAUTHORIZED": (-32001, "unauthorized"),
     "INTERNAL_ERROR": (-32603, "internal server error"),

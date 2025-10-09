@@ -22,11 +22,18 @@ def _meta_strategy() -> st.SearchStrategy[dict[str, Any]]:
         "transport": st.sampled_from(["http", "stdio"]),
         "route": st.text(min_size=1),
         "method": st.text(min_size=1),
-        "durationMs": st.floats(min_value=0, allow_nan=False, allow_infinity=False),
         "status": st.sampled_from(["ok", "error"]),
         "attempt": st.integers(min_value=0, max_value=3),
-        "inputBytes": st.integers(min_value=0, max_value=2048),
-        "outputBytes": st.integers(min_value=0, max_value=2048),
+        "execution": st.fixed_dictionaries(
+            {
+                "durationMs": st.floats(
+                    min_value=0, allow_nan=False, allow_infinity=False
+                ),
+                "inputBytes": st.integers(min_value=0, max_value=2048),
+                "outputBytes": st.integers(min_value=0, max_value=2048),
+            }
+        ),
+        "idempotency": st.fixed_dictionaries({"cacheHit": st.booleans()}),
     }
     optional_fields = {
         "toolId": st.one_of(st.none(), st.text()),

@@ -60,6 +60,14 @@ class CanonicalError:
             "Invalid output payload",
         ),
         _CanonicalSpec(
+            "TIMEOUT",
+            "Tool execution exceeded configured timeout",
+            True,
+            504,
+            -32005,
+            "Execution timed out",
+        ),
+        _CanonicalSpec(
             "NOT_FOUND",
             "Requested resource was not found",
             False,

@@ -5,7 +5,9 @@ import copy
 import hashlib
 import importlib
 import json
+import time
 from collections.abc import Callable, Mapping
+from dataclasses import dataclass
 from typing import Any
 
 from jsonschema import validators
@@ -13,7 +15,17 @@ from jsonschema.exceptions import SchemaError, ValidationError
 
 from apps.toolpacks.loader import Toolpack, ToolpackValidationError
 
-__all__ = ["Executor", "ToolpackExecutionError"]
+__all__ = ["Executor", "ExecutionStats", "ToolpackExecutionError"]
+
+
+@dataclass(frozen=True, slots=True)
+class ExecutionStats:
+    """Immutable snapshot of the most recent tool invocation."""
+
+    duration_ms: float
+    input_bytes: int
+    output_bytes: int
+    cache_hit: bool
 
 
 class ToolpackExecutionError(Exception):
@@ -25,6 +37,7 @@ class Executor:
 
     def __init__(self) -> None:
         self._cache: dict[str, dict[str, Any]] = {}
+        self._last_stats: ExecutionStats | None = None
 
     def run_toolpack(self, toolpack: Toolpack, payload: Mapping[str, Any]) -> dict[str, Any]:
         """Execute ``toolpack`` with ``payload`` and return the validated output."""
@@ -36,6 +49,8 @@ class Executor:
             )
 
         input_payload = _ensure_mapping(payload, stage="input", toolpack=toolpack)
+        cache_key = self._cache_key(toolpack, input_payload)
+        input_bytes = _canonical_size(input_payload)
         _validate_instance(
             schema=toolpack.input_schema,
             instance=input_payload,
@@ -43,13 +58,20 @@ class Executor:
             toolpack=toolpack,
         )
 
-        cache_key = self._cache_key(toolpack, input_payload)
         if toolpack.deterministic:
             cached = self._cache.get(cache_key)
             if cached is not None:
+                output_bytes = _canonical_size(cached)
+                self._last_stats = ExecutionStats(
+                    duration_ms=0.0,
+                    input_bytes=input_bytes,
+                    output_bytes=output_bytes,
+                    cache_hit=True,
+                )
                 return copy.deepcopy(cached)
 
         runner = self._resolve_python_callable(toolpack)
+        start = time.perf_counter()
         try:
             result = runner(copy.deepcopy(input_payload))
             if asyncio.iscoroutine(result):
@@ -66,12 +88,27 @@ class Executor:
             stage="output",
             toolpack=toolpack,
         )
-
+        duration_ms = (time.perf_counter() - start) * 1000.0
         materialised = copy.deepcopy(output_payload)
+        output_bytes = _canonical_size(materialised)
+
+        stats = ExecutionStats(
+            duration_ms=duration_ms,
+            input_bytes=input_bytes,
+            output_bytes=output_bytes,
+            cache_hit=False,
+        )
+        self._last_stats = stats
+
         if toolpack.deterministic:
             self._cache[cache_key] = copy.deepcopy(materialised)
             return copy.deepcopy(materialised)
         return materialised
+
+    def last_run_stats(self) -> ExecutionStats | None:
+        """Return metrics from the most recent invocation, if any."""
+
+        return self._last_stats
 
     def _resolve_python_callable(self, toolpack: Toolpack) -> Callable[[Mapping[str, Any]], Any]:
         execution = toolpack.execution
@@ -131,6 +168,14 @@ def _ensure_mapping(value: Any, *, stage: str, toolpack: Toolpack) -> dict[str, 
             f"Toolpack {toolpack.id} {stage} payload must be a mapping"
         )
     return dict(value)
+
+
+def _canonical_size(payload: Mapping[str, Any]) -> int:
+    try:
+        serialised = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    except TypeError as exc:  # pragma: no cover - payload already validated
+        raise ToolpackExecutionError("Payload is not JSON serialisable") from exc
+    return len(serialised)
 
 
 def _validate_instance(

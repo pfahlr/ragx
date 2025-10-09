@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from apps.mcp_server.logging import JsonLogWriter
+from apps.toolpacks.executor import ExecutionStats
 
 __all__ = ["EnvelopeValidationEvent", "EnvelopeValidationLogManager"]
 
@@ -22,10 +23,8 @@ class EnvelopeValidationEvent:
     route: str
     method: str
     status: str
-    duration_ms: float
     attempt: int
-    input_bytes: int
-    output_bytes: int
+    execution: ExecutionStats
     metadata: dict[str, Any]
     step_id: int
     error: dict[str, Any] | None = None
@@ -40,10 +39,13 @@ class EnvelopeValidationEvent:
             "route": self.route,
             "method": self.method,
             "status": self.status,
-            "durationMs": self.duration_ms,
             "attempt": self.attempt,
-            "inputBytes": self.input_bytes,
-            "outputBytes": self.output_bytes,
+            "execution": {
+                "durationMs": self.execution.duration_ms,
+                "inputBytes": self.execution.input_bytes,
+                "outputBytes": self.execution.output_bytes,
+            },
+            "idempotency": {"cacheHit": self.execution.cache_hit},
             "requestId": self.request_id,
             "traceId": self.trace_id,
             "spanId": self.span_id,

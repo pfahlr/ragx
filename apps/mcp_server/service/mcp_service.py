@@ -19,7 +19,7 @@ from apps.mcp_server.validation.logging import (
     EnvelopeValidationEvent,
     EnvelopeValidationLogManager,
 )
-from apps.toolpacks.executor import Executor, ToolpackExecutionError
+from apps.toolpacks.executor import ExecutionStats, Executor, ToolpackExecutionError
 from apps.toolpacks.loader import Toolpack, ToolpackLoader
 
 from .envelope import Envelope, EnvelopeError, EnvelopeMeta
@@ -162,10 +162,8 @@ class ServerLogEvent:
     route: str
     method: str
     status: str
-    duration_ms: float
     attempt: int
-    input_bytes: int
-    output_bytes: int
+    execution: ExecutionStats
     metadata: dict[str, Any]
     step_id: int
     error: dict[str, Any] | None = None
@@ -183,10 +181,13 @@ class ServerLogEvent:
             "spanId": self.span_id,
             "requestId": self.request_id,
             "status": self.status,
-            "durationMs": self.duration_ms,
             "attempt": self.attempt,
-            "inputBytes": self.input_bytes,
-            "outputBytes": self.output_bytes,
+            "execution": {
+                "durationMs": self.execution.duration_ms,
+                "inputBytes": self.execution.input_bytes,
+                "outputBytes": self.execution.output_bytes,
+            },
+            "idempotency": {"cacheHit": self.execution.cache_hit},
             "metadata": dict(self.metadata),
             "error": self.error,
         }
@@ -248,6 +249,9 @@ class McpService:
         validation_registry: SchemaRegistry,
         validation_log: EnvelopeValidationLogManager,
         validation_mode: ValidationMode,
+        max_input_bytes: int,
+        max_output_bytes: int,
+        timeout_ms: int,
     ) -> None:
         self._toolpacks = toolpacks
         self._executor = executor
@@ -258,10 +262,17 @@ class McpService:
         self._validation_registry = validation_registry
         self._validation_log = validation_log
         self._validation_mode = validation_mode
+        self._max_input_bytes = int(max_input_bytes)
+        self._max_output_bytes = int(max_output_bytes)
+        self._timeout_ms = int(timeout_ms)
 
     @property
     def log_manager(self) -> ServerLogManager:
         return self._log_manager
+
+    @property
+    def timeout_ms(self) -> int:
+        return self._timeout_ms
 
     @classmethod
     def create(
@@ -274,6 +285,9 @@ class McpService:
         schema_version: str = _SCHEMA_VERSION_DEFAULT,
         deterministic_logs: bool = True,
         logger: ServerLogManager | None = None,
+        max_input_bytes: int = 1_048_576,
+        max_output_bytes: int = 2_097_152,
+        timeout_ms: int = 15_000,
     ) -> McpService:
         loader = ToolpackLoader()
         loader.load_dir(toolpacks_dir)
@@ -305,6 +319,9 @@ class McpService:
             validation_registry=validation_registry,
             validation_log=validation_log,
             validation_mode=validation_mode,
+            max_input_bytes=max_input_bytes,
+            max_output_bytes=max_output_bytes,
+            timeout_ms=timeout_ms,
         )
 
     def discover(self, context: RequestContext | None = None) -> Envelope:
@@ -314,7 +331,19 @@ class McpService:
         prompts = [prompt.to_discovery_dict() for prompt in self._prompts.list()]
         data = {"tools": tools, "prompts": prompts}
         self._schemas.validator("discover.response.schema.json").validate(data)
-        envelope = self._finalise_envelope(data, ctx, tool_id=None, prompt_id=None)
+        execution = ExecutionStats(
+            duration_ms=_duration_ms(ctx.start_time),
+            input_bytes=_payload_size(payload),
+            output_bytes=_payload_size(data),
+            cache_hit=False,
+        )
+        envelope = self._finalise_envelope(
+            data,
+            ctx,
+            execution=execution,
+            tool_id=None,
+            prompt_id=None,
+        )
         return envelope
 
     def get_prompt(self, prompt_id: str, context: RequestContext | None = None) -> Envelope:
@@ -323,16 +352,34 @@ class McpService:
         try:
             prompt = self._prompts.get(prompt_id)
         except KeyError:
+            execution = ExecutionStats(
+                duration_ms=_duration_ms(ctx.start_time),
+                input_bytes=_payload_size(payload),
+                output_bytes=0,
+                cache_hit=False,
+            )
             return self._error_response(
                 code="NOT_FOUND",
                 message=f"Prompt '{prompt_id}' not found",
                 context=ctx,
                 payload=payload,
+                execution=execution,
                 prompt_id=prompt_id,
             )
         data = prompt.to_payload()
         self._schemas.validator("prompt.response.schema.json").validate(data)
-        return self._finalise_envelope(data, ctx, prompt_id=prompt_id)
+        execution = ExecutionStats(
+            duration_ms=_duration_ms(ctx.start_time),
+            input_bytes=_payload_size(payload),
+            output_bytes=_payload_size(data),
+            cache_hit=False,
+        )
+        return self._finalise_envelope(
+            data,
+            ctx,
+            execution=execution,
+            prompt_id=prompt_id,
+        )
 
     def invoke_tool(
         self,
@@ -341,17 +388,48 @@ class McpService:
         arguments: Mapping[str, Any],
         context: RequestContext | None = None,
     ) -> Envelope:
-        payload = {"toolId": tool_id, "arguments": dict(arguments)}
+        arguments_map = dict(arguments)
+        payload = {"toolId": tool_id, "arguments": arguments_map}
         ctx = self._normalise_context(context, "tool", "mcp.tool.invoke", payload)
+        argument_size = _payload_size(arguments_map)
         if tool_id not in self._toolpacks:
+            execution = ExecutionStats(
+                duration_ms=_duration_ms(ctx.start_time),
+                input_bytes=argument_size,
+                output_bytes=0,
+                cache_hit=False,
+            )
             return self._error_response(
                 code="NOT_FOUND",
                 message=f"Tool '{tool_id}' not found",
                 context=ctx,
                 payload=payload,
+                execution=execution,
                 tool_id=tool_id,
             )
         toolpack = self._toolpacks[tool_id]
+        input_limit = min(
+            self._max_input_bytes,
+            int(toolpack.limits.get("maxInputBytes", self._max_input_bytes)),
+        )
+        if argument_size > input_limit:
+            execution = ExecutionStats(
+                duration_ms=_duration_ms(ctx.start_time),
+                input_bytes=argument_size,
+                output_bytes=0,
+                cache_hit=False,
+            )
+            message = (
+                f"Input payload size {argument_size} exceeds limit of {input_limit} bytes"
+            )
+            return self._error_response(
+                code="INVALID_INPUT",
+                message=message,
+                context=ctx,
+                payload=payload,
+                execution=execution,
+                tool_id=tool_id,
+            )
         validators_bundle = None
         if self._validation_mode is not ValidationMode.OFF:
             try:
@@ -361,30 +439,53 @@ class McpService:
             if validators_bundle is not None:
                 try:
                     validators_bundle.input.validate(
-                        {"tool": tool_id, "input": dict(arguments)}
+                        {"tool": tool_id, "input": arguments_map}
                     )
                 except ValidationError as exc:
+                    execution = ExecutionStats(
+                        duration_ms=_duration_ms(ctx.start_time),
+                        input_bytes=argument_size,
+                        output_bytes=0,
+                        cache_hit=False,
+                    )
                     return self._error_response(
                         code="INVALID_INPUT",
                         message=str(exc).splitlines()[0],
                         context=ctx,
                         payload=payload,
+                        execution=execution,
                         tool_id=tool_id,
                     )
         try:
-            result = self._executor.run_toolpack(toolpack, arguments)
+            result = self._executor.run_toolpack(toolpack, arguments_map)
         except ToolpackExecutionError as exc:
+            execution = ExecutionStats(
+                duration_ms=_duration_ms(ctx.start_time),
+                input_bytes=argument_size,
+                output_bytes=0,
+                cache_hit=False,
+            )
             return self._error_response(
                 code="INTERNAL_ERROR",
                 message=str(exc),
                 context=ctx,
                 payload=payload,
+                execution=execution,
                 tool_id=tool_id,
+            )
+        result_mapping = dict(result)
+        stats = self._executor.last_run_stats()
+        if stats is None:
+            stats = ExecutionStats(
+                duration_ms=_duration_ms(ctx.start_time),
+                input_bytes=argument_size,
+                output_bytes=_payload_size(result_mapping),
+                cache_hit=False,
             )
         if self._validation_mode is not ValidationMode.OFF and validators_bundle is not None:
             try:
                 validators_bundle.output.validate(
-                    {"tool": tool_id, "output": dict(result)}
+                    {"tool": tool_id, "output": result_mapping}
                 )
             except ValidationError as exc:
                 return self._error_response(
@@ -392,11 +493,39 @@ class McpService:
                     message=str(exc).splitlines()[0],
                     context=ctx,
                     payload=payload,
+                    execution=stats,
                     tool_id=tool_id,
                 )
+        effective_timeout = min(self._timeout_ms, toolpack.timeout_ms)
+        if stats.duration_ms > effective_timeout:
+            message = f"Execution exceeded timeout of {effective_timeout} ms"
+            return self._error_response(
+                code="TIMEOUT",
+                message=message,
+                context=ctx,
+                payload=payload,
+                execution=stats,
+                tool_id=tool_id,
+            )
+        output_limit = min(
+            self._max_output_bytes,
+            int(toolpack.limits.get("maxOutputBytes", self._max_output_bytes)),
+        )
+        if stats.output_bytes > output_limit:
+            message = (
+                f"Output payload size {stats.output_bytes} exceeds limit of {output_limit} bytes"
+            )
+            return self._error_response(
+                code="INVALID_OUTPUT",
+                message=message,
+                context=ctx,
+                payload=payload,
+                execution=stats,
+                tool_id=tool_id,
+            )
         data = {
             "toolId": tool_id,
-            "result": dict(result),
+            "result": result_mapping,
             "metadata": {
                 "toolpack": {
                     "id": toolpack.id,
@@ -407,7 +536,7 @@ class McpService:
             },
         }
         self._schemas.validator("tool.response.schema.json").validate(data)
-        return self._finalise_envelope(data, ctx, tool_id=tool_id)
+        return self._finalise_envelope(data, ctx, execution=stats, tool_id=tool_id)
 
     def health(self, context: RequestContext | None = None) -> dict[str, Any]:
         _ = self._normalise_context(context, "health", "mcp.health", {})
@@ -420,13 +549,12 @@ class McpService:
         data: Mapping[str, Any],
         context: RequestContext,
         *,
+        execution: ExecutionStats,
         tool_id: str | None = None,
         prompt_id: str | None = None,
     ) -> Envelope:
-        duration_ms = _duration_ms(context.start_time)
         ids = self._request_ids(context)
         step_id = self._log_manager.next_step_id()
-        output_bytes = _payload_size(data)
         meta = EnvelopeMeta.from_ids(
             request_id=ids["request_id"],
             trace_id=ids["trace_id"],
@@ -436,11 +564,12 @@ class McpService:
             transport=context.transport,
             route=context.route,
             method=context.method,
-            duration_ms=duration_ms,
+            duration_ms=execution.duration_ms,
             status="ok",
             attempt=context.attempt,
-            input_bytes=ids["input_bytes"],
-            output_bytes=output_bytes,
+            input_bytes=execution.input_bytes,
+            output_bytes=execution.output_bytes,
+            cache_hit=execution.cache_hit,
             tool_id=tool_id,
             prompt_id=prompt_id,
         )
@@ -456,10 +585,8 @@ class McpService:
                 route=context.route,
                 method=context.method,
                 status="ok",
-                duration_ms=duration_ms,
                 attempt=context.attempt,
-                input_bytes=ids["input_bytes"],
-                output_bytes=output_bytes,
+                execution=execution,
                 metadata={
                     "toolId": tool_id,
                     "promptId": prompt_id,
@@ -475,7 +602,7 @@ class McpService:
             ids=ids,
             tool_id=tool_id,
             prompt_id=prompt_id,
-            duration_ms=duration_ms,
+            execution=execution,
             status="ok",
             error=None,
         )
@@ -488,12 +615,12 @@ class McpService:
         message: str,
         context: RequestContext,
         payload: Mapping[str, Any],
+        execution: ExecutionStats,
         tool_id: str | None = None,
         prompt_id: str | None = None,
     ) -> Envelope:
         ids = self._request_ids(context)
         step_id = self._log_manager.next_step_id()
-        duration_ms = _duration_ms(context.start_time)
         meta = EnvelopeMeta.from_ids(
             request_id=ids["request_id"],
             trace_id=ids["trace_id"],
@@ -503,11 +630,12 @@ class McpService:
             transport=context.transport,
             route=context.route,
             method=context.method,
-            duration_ms=duration_ms,
+            duration_ms=execution.duration_ms,
             status="error",
             attempt=context.attempt,
-            input_bytes=ids["input_bytes"],
-            output_bytes=0,
+            input_bytes=execution.input_bytes,
+            output_bytes=execution.output_bytes,
+            cache_hit=execution.cache_hit,
             tool_id=tool_id,
             prompt_id=prompt_id,
         )
@@ -524,10 +652,8 @@ class McpService:
                 route=context.route,
                 method=context.method,
                 status="error",
-                duration_ms=duration_ms,
                 attempt=context.attempt,
-                input_bytes=ids["input_bytes"],
-                output_bytes=0,
+                execution=execution,
                 error={"code": code, "message": message},
                 metadata={
                     "toolId": tool_id,
@@ -544,7 +670,7 @@ class McpService:
             ids=ids,
             tool_id=tool_id,
             prompt_id=prompt_id,
-            duration_ms=duration_ms,
+            execution=execution,
             status="error",
             error=error_payload,
         )
@@ -574,7 +700,7 @@ class McpService:
         ids: Mapping[str, Any],
         tool_id: str | None,
         prompt_id: str | None,
-        duration_ms: float,
+        execution: ExecutionStats,
         status: str,
         error: dict[str, Any] | None,
     ) -> None:
@@ -593,24 +719,24 @@ class McpService:
                 context=context,
                 ids=ids,
                 status="error",
-                duration_ms=duration_ms,
+                execution=execution,
                 tool_id=tool_id,
                 prompt_id=prompt_id,
-                output_bytes=0,
+                envelope_bytes=0,
                 error=fallback_error,
             )
             if self._validation_mode is ValidationMode.ENFORCE:
                 raise
             return
-        output_bytes = _payload_size(envelope_dict)
+        envelope_bytes = _payload_size(envelope_dict)
         self._log_validation_event(
             context=context,
             ids=ids,
             status=status,
-            duration_ms=duration_ms,
+            execution=execution,
             tool_id=tool_id,
             prompt_id=prompt_id,
-            output_bytes=output_bytes,
+            envelope_bytes=envelope_bytes,
             error=error,
         )
 
@@ -620,10 +746,10 @@ class McpService:
         context: RequestContext,
         ids: Mapping[str, Any],
         status: str,
-        duration_ms: float,
+        execution: ExecutionStats,
         tool_id: str | None,
         prompt_id: str | None,
-        output_bytes: int,
+        envelope_bytes: int,
         error: dict[str, Any] | None,
     ) -> None:
         if self._validation_mode is ValidationMode.OFF:
@@ -636,6 +762,12 @@ class McpService:
             metadata["toolId"] = tool_id
         if prompt_id:
             metadata["promptId"] = prompt_id
+        log_stats = ExecutionStats(
+            duration_ms=execution.duration_ms,
+            input_bytes=execution.input_bytes,
+            output_bytes=envelope_bytes,
+            cache_hit=execution.cache_hit,
+        )
         event = EnvelopeValidationEvent(
             ts=datetime.now(UTC),
             request_id=str(ids["request_id"]),
@@ -645,10 +777,8 @@ class McpService:
             route=context.route,
             method=context.method,
             status=status,
-            duration_ms=duration_ms,
             attempt=context.attempt,
-            input_bytes=int(ids.get("input_bytes", 0)),
-            output_bytes=output_bytes,
+            execution=log_stats,
             metadata=metadata,
             error=error,
             step_id=self._validation_log.next_step_id(),

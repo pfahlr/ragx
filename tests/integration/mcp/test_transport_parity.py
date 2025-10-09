@@ -66,3 +66,13 @@ def test_transport_parity_for_tool_invocation(tmp_path: Path) -> None:
     assert http_envelope["meta"]["spanId"] == stdio_envelope["meta"]["spanId"]
     assert http_envelope["meta"]["deterministic"] is True
     assert stdio_envelope["meta"]["deterministic"] is True
+    assert (
+        http_envelope["meta"]["execution"]["inputBytes"]
+        == stdio_envelope["meta"]["execution"]["inputBytes"]
+    )
+    assert (
+        http_envelope["meta"]["execution"]["outputBytes"]
+        == stdio_envelope["meta"]["execution"]["outputBytes"]
+    )
+    assert http_envelope["meta"]["idempotency"]["cacheHit"] is False
+    assert isinstance(stdio_envelope["meta"]["idempotency"]["cacheHit"], bool)

@@ -1,0 +1,42 @@
+id: tests.deterministic.sum
+version: "1.0.0"
+deterministic: true
+timeoutMs: 2000
+limits:
+  maxInputBytes: 2048
+  maxOutputBytes: 2048
+inputSchema:
+  $schema: "https://json-schema.org/draft/2020-12/schema"
+  type: object
+  additionalProperties: false
+  required: [values]
+  properties:
+    values:
+      type: array
+      minItems: 1
+      items:
+        type: number
+    delayMs:
+      type: integer
+      minimum: 0
+    text:
+      type: string
+    outputSize:
+      type: integer
+      minimum: 0
+outputSchema:
+  $schema: "https://json-schema.org/draft/2020-12/schema"
+  type: object
+  additionalProperties: false
+  required: [sum]
+  properties:
+    sum:
+      type: number
+    text:
+      type: string
+execution:
+  kind: python
+  module: tests.toolpacks_runtime.deterministic_sum:run
+caps: {}
+env: {}
+templating: {}

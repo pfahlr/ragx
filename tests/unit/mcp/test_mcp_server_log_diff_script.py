@@ -43,13 +43,13 @@ def test_server_log_diff(tmp_path: Path, whitelisted: bool) -> None:
         str(GOLDEN),
         "--whitelist",
         "ts",
-        "durationMs",
+        "execution.durationMs",
         "traceId",
         "spanId",
-        "runId",
-        "attemptId",
+        "metadata.runId",
+        "metadata.attemptId",
         "requestId",
-        "logPath",
+        "metadata.logPath",
     ]
     result = subprocess.run(args, capture_output=True, text=True)
 

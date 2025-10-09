@@ -60,6 +60,9 @@ def test_server_logging_creates_latest_symlink(service: McpService) -> None:
     assert first["transport"] in {"http", "stdio"}
     assert first["route"] in {"discover", "tool", "prompt", "health"}
     assert first["metadata"]["deterministic"] is True
+    assert "execution" in first and "idempotency" in first
+    assert first["execution"]["inputBytes"] >= 0
+    assert isinstance(first["idempotency"]["cacheHit"], bool)
 
     # Ensure retention policy keeps at most 5 files
     paths = sorted(

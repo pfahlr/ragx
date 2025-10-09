@@ -30,7 +30,7 @@ def _validator() -> Draft202012Validator:
 def test_envelope_success_matches_schema() -> None:
     envelope = Envelope.success(
         data={"status": "ok"},
-        meta=EnvelopeMeta(
+        meta=EnvelopeMeta.from_ids(
             request_id="req-123",
             trace_id="trace-456",
             span_id="span-789",
@@ -44,6 +44,7 @@ def test_envelope_success_matches_schema() -> None:
             attempt=0,
             input_bytes=0,
             output_bytes=0,
+            cache_hit=False,
         ),
     )
     payload = envelope.model_dump(by_alias=True)
@@ -56,7 +57,7 @@ def test_envelope_success_matches_schema() -> None:
 def test_envelope_error_includes_details() -> None:
     envelope = Envelope.failure(
         error=EnvelopeError(code="MCP_TOOL_ERROR", message="boom"),
-        meta=EnvelopeMeta(
+        meta=EnvelopeMeta.from_ids(
             request_id="req-1",
             trace_id="trace-1",
             span_id="span-1",
@@ -70,6 +71,7 @@ def test_envelope_error_includes_details() -> None:
             attempt=0,
             input_bytes=0,
             output_bytes=0,
+            cache_hit=False,
         ),
     )
     payload = envelope.model_dump(by_alias=True)
@@ -83,7 +85,7 @@ def test_envelope_error_includes_details() -> None:
 def test_envelope_serialises_optional_metadata() -> None:
     envelope = Envelope.success(
         data={"value": 1},
-        meta=EnvelopeMeta(
+        meta=EnvelopeMeta.from_ids(
             request_id="req-xyz",
             trace_id="trace-xyz",
             span_id="span-xyz",
@@ -97,6 +99,7 @@ def test_envelope_serialises_optional_metadata() -> None:
             attempt=0,
             input_bytes=0,
             output_bytes=0,
+            cache_hit=False,
             prompt_id="core.generic.welcome@1",
         ),
     )

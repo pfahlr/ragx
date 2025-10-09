@@ -16,11 +16,16 @@
     "transport": "http",
     "route": "discover",
     "method": "mcp.discover",
-    "durationMs": 1.23,
     "status": "ok",
     "attempt": 0,
-    "inputBytes": 0,
-    "outputBytes": 42,
+    "execution": {
+      "durationMs": 1.23,
+      "inputBytes": 0,
+      "outputBytes": 42
+    },
+    "idempotency": {
+      "cacheHit": false
+    },
     "toolId": null,
     "promptId": null
   }

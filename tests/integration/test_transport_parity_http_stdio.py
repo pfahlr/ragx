@@ -17,14 +17,13 @@ EXPECTED_EVENT_FIELDS = {
     "route",
     "method",
     "status",
-    "durationMs",
     "attempt",
-    "inputBytes",
-    "outputBytes",
     "requestId",
     "traceId",
     "spanId",
     "metadata",
+    "execution",
+    "idempotency",
     "error",
 }
 
@@ -40,6 +39,8 @@ def test_golden_log_events_include_expected_fields() -> None:
     assert events, "golden log must include at least one event"
     for event in events:
         assert EXPECTED_EVENT_FIELDS.issubset(event)
+        assert set(event["execution"]).issuperset({"durationMs", "inputBytes", "outputBytes"})
+        assert set(event["idempotency"]).issuperset({"cacheHit"})
         assert isinstance(event["metadata"], dict)
         assert {"schemaVersion", "deterministic"}.issubset(event["metadata"])
 
