@@ -22,10 +22,9 @@ class EnvelopeValidationEvent:
     route: str
     method: str
     status: str
-    duration_ms: float
+    execution: dict[str, Any]
+    idempotency: dict[str, Any]
     attempt: int
-    input_bytes: int
-    output_bytes: int
     metadata: dict[str, Any]
     step_id: int
     error: dict[str, Any] | None = None
@@ -40,10 +39,9 @@ class EnvelopeValidationEvent:
             "route": self.route,
             "method": self.method,
             "status": self.status,
-            "durationMs": self.duration_ms,
             "attempt": self.attempt,
-            "inputBytes": self.input_bytes,
-            "outputBytes": self.output_bytes,
+            "execution": dict(self.execution),
+            "idempotency": dict(self.idempotency),
             "requestId": self.request_id,
             "traceId": self.trace_id,
             "spanId": self.span_id,

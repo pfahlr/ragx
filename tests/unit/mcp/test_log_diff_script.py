@@ -34,12 +34,12 @@ def test_diff_script_behaviour(tmp_path: Path, whitelisted: bool) -> None:
         str(GOLDEN),
         "--whitelist",
         "ts",
-        "durationMs",
-        "runId",
+        "execution.durationMs",
+        "metadata.runId",
         "traceId",
         "spanId",
-        "attemptId",
-        "logPath",
+        "metadata.attemptId",
+        "metadata.logPath",
     ]
     result = subprocess.run(args, capture_output=True, text=True)
 

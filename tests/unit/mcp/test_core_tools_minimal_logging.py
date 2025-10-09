@@ -19,10 +19,9 @@ def _event(event: str, status: str, attempt: int) -> McpLogEvent:
         tool_id="mcp.tool:exports.render.markdown",
         event=event,
         status=status,
-        duration_ms=12.5,
         attempt=attempt,
-        input_bytes=42,
-        output_bytes=128,
+        execution={"durationMs": 12.5, "inputBytes": 42, "outputBytes": 128},
+        idempotency={"cacheHit": False},
         metadata={"schemaVersion": "0.1.0"},
         error=None,
     )
@@ -57,10 +56,9 @@ def test_log_writer_serialises_event(tmp_path: Path) -> None:
         "toolId",
         "event",
         "status",
-        "durationMs",
         "attempt",
-        "inputBytes",
-        "outputBytes",
+        "execution",
+        "idempotency",
         "metadata",
     ):
         assert required in record

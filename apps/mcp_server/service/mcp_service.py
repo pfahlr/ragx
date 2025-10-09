@@ -19,12 +19,12 @@ from apps.mcp_server.validation.logging import (
     EnvelopeValidationEvent,
     EnvelopeValidationLogManager,
 )
-from apps.toolpacks.executor import Executor, ToolpackExecutionError
+from apps.toolpacks.executor import ExecutionStats, Executor, ToolpackExecutionError
 from apps.toolpacks.loader import Toolpack, ToolpackLoader
 
 from .envelope import Envelope, EnvelopeError, EnvelopeMeta
 
-__all__ = ["McpService", "RequestContext", "ServerLogManager"]
+__all__ = ["McpService", "RequestContext", "ServerLogManager", "ServiceLimits"]
 
 _AGENT_ID = "mcp_server"
 _TASK_ID = "06b_mcp_server_bootstrap"
@@ -71,6 +71,26 @@ class RequestContext:
             start_time=time.perf_counter(),
             attempt=self.attempt,
         )
+
+
+@dataclass(frozen=True, slots=True)
+class ServiceLimits:
+    """Global guardrail configuration for tool invocations."""
+
+    max_input_bytes: int = 1_048_576
+    max_output_bytes: int = 2_097_152
+    timeout_ms: int = 15_000
+
+    def __post_init__(self) -> None:
+        if self.max_input_bytes <= 0:
+            raise ValueError("max_input_bytes must be a positive integer")
+        if self.max_output_bytes <= 0:
+            raise ValueError("max_output_bytes must be a positive integer")
+        if self.timeout_ms <= 0:
+            raise ValueError("timeout_ms must be a positive integer")
+
+
+_DEFAULT_SERVICE_LIMITS = ServiceLimits()
 
 
 @dataclass(slots=True)
@@ -162,10 +182,9 @@ class ServerLogEvent:
     route: str
     method: str
     status: str
-    duration_ms: float
     attempt: int
-    input_bytes: int
-    output_bytes: int
+    execution: dict[str, Any]
+    idempotency: dict[str, Any]
     metadata: dict[str, Any]
     step_id: int
     error: dict[str, Any] | None = None
@@ -183,10 +202,9 @@ class ServerLogEvent:
             "spanId": self.span_id,
             "requestId": self.request_id,
             "status": self.status,
-            "durationMs": self.duration_ms,
             "attempt": self.attempt,
-            "inputBytes": self.input_bytes,
-            "outputBytes": self.output_bytes,
+            "execution": dict(self.execution),
+            "idempotency": dict(self.idempotency),
             "metadata": dict(self.metadata),
             "error": self.error,
         }
@@ -248,6 +266,7 @@ class McpService:
         validation_registry: SchemaRegistry,
         validation_log: EnvelopeValidationLogManager,
         validation_mode: ValidationMode,
+        limits: ServiceLimits,
     ) -> None:
         self._toolpacks = toolpacks
         self._executor = executor
@@ -258,6 +277,7 @@ class McpService:
         self._validation_registry = validation_registry
         self._validation_log = validation_log
         self._validation_mode = validation_mode
+        self._limits = limits
 
     @property
     def log_manager(self) -> ServerLogManager:
@@ -274,6 +294,9 @@ class McpService:
         schema_version: str = _SCHEMA_VERSION_DEFAULT,
         deterministic_logs: bool = True,
         logger: ServerLogManager | None = None,
+        max_input_bytes: int | None = None,
+        max_output_bytes: int | None = None,
+        timeout_ms: int | None = None,
     ) -> McpService:
         loader = ToolpackLoader()
         loader.load_dir(toolpacks_dir)
@@ -295,6 +318,22 @@ class McpService:
         validation_mode = ValidationMode.from_str(
             os.getenv("RAGX_MCP_ENVELOPE_VALIDATION")
         )
+        base_limits = _DEFAULT_SERVICE_LIMITS
+        limits = ServiceLimits(
+            max_input_bytes=(
+                max_input_bytes
+                if max_input_bytes is not None
+                else base_limits.max_input_bytes
+            ),
+            max_output_bytes=(
+                max_output_bytes
+                if max_output_bytes is not None
+                else base_limits.max_output_bytes
+            ),
+            timeout_ms=(
+                timeout_ms if timeout_ms is not None else base_limits.timeout_ms
+            ),
+        )
         return cls(
             toolpacks=toolpacks,
             executor=executor,
@@ -305,6 +344,7 @@ class McpService:
             validation_registry=validation_registry,
             validation_log=validation_log,
             validation_mode=validation_mode,
+            limits=limits,
         )
 
     def discover(self, context: RequestContext | None = None) -> Envelope:
@@ -343,6 +383,7 @@ class McpService:
     ) -> Envelope:
         payload = {"toolId": tool_id, "arguments": dict(arguments)}
         ctx = self._normalise_context(context, "tool", "mcp.tool.invoke", payload)
+        ids = self._request_ids(ctx)
         if tool_id not in self._toolpacks:
             return self._error_response(
                 code="NOT_FOUND",
@@ -352,6 +393,18 @@ class McpService:
                 tool_id=tool_id,
             )
         toolpack = self._toolpacks[tool_id]
+        tool_input_limit = int(
+            toolpack.limits.get("maxInputBytes", self._limits.max_input_bytes)
+        )
+        effective_input_limit = min(self._limits.max_input_bytes, tool_input_limit)
+        if ids["input_bytes"] > effective_input_limit:
+            return self._error_response(
+                code="INVALID_INPUT",
+                message="Input payload exceeds configured maxInputBytes",
+                context=ctx,
+                payload=payload,
+                tool_id=tool_id,
+            )
         validators_bundle = None
         if self._validation_mode is not ValidationMode.OFF:
             try:
@@ -381,6 +434,38 @@ class McpService:
                 payload=payload,
                 tool_id=tool_id,
             )
+        stats = self._executor.last_run_stats()
+        if stats is None:
+            stats = ExecutionStats(
+                duration_ms=_duration_ms(ctx.start_time),
+                input_bytes=ids["input_bytes"],
+                output_bytes=_payload_size(result),
+                cache_hit=False,
+            )
+        effective_timeout = min(self._limits.timeout_ms, toolpack.timeout_ms)
+        if stats.duration_ms > effective_timeout:
+            return self._error_response(
+                code="TIMEOUT",
+                message=f"Tool execution exceeded timeout of {effective_timeout}ms",
+                context=ctx,
+                payload=payload,
+                tool_id=tool_id,
+                execution_stats=stats,
+            )
+        tool_output_limit = int(
+            toolpack.limits.get("maxOutputBytes", self._limits.max_output_bytes)
+        )
+        effective_output_limit = min(self._limits.max_output_bytes, tool_output_limit)
+        if stats.output_bytes > effective_output_limit:
+            return self._error_response(
+                code="INVALID_OUTPUT",
+                message="Tool output exceeded configured maxOutputBytes",
+                context=ctx,
+                payload=payload,
+                tool_id=tool_id,
+                execution_stats=stats,
+                cache_hit=stats.cache_hit,
+            )
         if self._validation_mode is not ValidationMode.OFF and validators_bundle is not None:
             try:
                 validators_bundle.output.validate(
@@ -393,6 +478,8 @@ class McpService:
                     context=ctx,
                     payload=payload,
                     tool_id=tool_id,
+                    execution_stats=stats,
+                    cache_hit=stats.cache_hit,
                 )
         data = {
             "toolId": tool_id,
@@ -407,13 +494,36 @@ class McpService:
             },
         }
         self._schemas.validator("tool.response.schema.json").validate(data)
-        return self._finalise_envelope(data, ctx, tool_id=tool_id)
+        return self._finalise_envelope(
+            data,
+            ctx,
+            tool_id=tool_id,
+            execution_stats=stats,
+            cache_hit=stats.cache_hit,
+        )
 
     def health(self, context: RequestContext | None = None) -> dict[str, Any]:
         _ = self._normalise_context(context, "health", "mcp.health", {})
         return {"status": "ok"}
 
     # Internal helpers -------------------------------------------------
+
+    def _execution_payload(
+        self,
+        *,
+        duration_ms: float,
+        input_bytes: int,
+        output_bytes: int,
+    ) -> dict[str, Any]:
+        return {
+            "durationMs": max(float(duration_ms), 0.0),
+            "inputBytes": max(int(input_bytes), 0),
+            "outputBytes": max(int(output_bytes), 0),
+        }
+
+    @staticmethod
+    def _idempotency_payload(cache_hit: bool) -> dict[str, Any]:
+        return {"cacheHit": bool(cache_hit)}
 
     def _finalise_envelope(
         self,
@@ -422,11 +532,29 @@ class McpService:
         *,
         tool_id: str | None = None,
         prompt_id: str | None = None,
+        execution_stats: ExecutionStats | None = None,
+        cache_hit: bool | None = None,
     ) -> Envelope:
         duration_ms = _duration_ms(context.start_time)
         ids = self._request_ids(context)
         step_id = self._log_manager.next_step_id()
-        output_bytes = _payload_size(data)
+        payload_output_bytes = _payload_size(data)
+        if execution_stats is not None:
+            exec_duration = execution_stats.duration_ms
+            exec_input_bytes = execution_stats.input_bytes
+            exec_output_bytes = execution_stats.output_bytes
+            cache_flag = execution_stats.cache_hit if cache_hit is None else cache_hit
+        else:
+            exec_duration = duration_ms
+            exec_input_bytes = ids["input_bytes"]
+            exec_output_bytes = payload_output_bytes
+            cache_flag = cache_hit if cache_hit is not None else False
+        execution_payload = self._execution_payload(
+            duration_ms=exec_duration,
+            input_bytes=exec_input_bytes,
+            output_bytes=exec_output_bytes,
+        )
+        idempotency_payload = self._idempotency_payload(cache_flag)
         meta = EnvelopeMeta.from_ids(
             request_id=ids["request_id"],
             trace_id=ids["trace_id"],
@@ -436,11 +564,10 @@ class McpService:
             transport=context.transport,
             route=context.route,
             method=context.method,
-            duration_ms=duration_ms,
             status="ok",
             attempt=context.attempt,
-            input_bytes=ids["input_bytes"],
-            output_bytes=output_bytes,
+            execution=execution_payload,
+            idempotency=idempotency_payload,
             tool_id=tool_id,
             prompt_id=prompt_id,
         )
@@ -456,10 +583,9 @@ class McpService:
                 route=context.route,
                 method=context.method,
                 status="ok",
-                duration_ms=duration_ms,
                 attempt=context.attempt,
-                input_bytes=ids["input_bytes"],
-                output_bytes=output_bytes,
+                execution=execution_payload,
+                idempotency=idempotency_payload,
                 metadata={
                     "toolId": tool_id,
                     "promptId": prompt_id,
@@ -475,7 +601,8 @@ class McpService:
             ids=ids,
             tool_id=tool_id,
             prompt_id=prompt_id,
-            duration_ms=duration_ms,
+            execution=execution_payload,
+            idempotency=idempotency_payload,
             status="ok",
             error=None,
         )
@@ -490,10 +617,28 @@ class McpService:
         payload: Mapping[str, Any],
         tool_id: str | None = None,
         prompt_id: str | None = None,
+        execution_stats: ExecutionStats | None = None,
+        cache_hit: bool | None = None,
     ) -> Envelope:
         ids = self._request_ids(context)
         step_id = self._log_manager.next_step_id()
         duration_ms = _duration_ms(context.start_time)
+        if execution_stats is not None:
+            exec_duration = execution_stats.duration_ms
+            exec_input_bytes = execution_stats.input_bytes
+            exec_output_bytes = execution_stats.output_bytes
+            cache_flag = execution_stats.cache_hit if cache_hit is None else cache_hit
+        else:
+            exec_duration = duration_ms
+            exec_input_bytes = ids["input_bytes"]
+            exec_output_bytes = 0
+            cache_flag = cache_hit if cache_hit is not None else False
+        execution_payload = self._execution_payload(
+            duration_ms=exec_duration,
+            input_bytes=exec_input_bytes,
+            output_bytes=exec_output_bytes,
+        )
+        idempotency_payload = self._idempotency_payload(cache_flag)
         meta = EnvelopeMeta.from_ids(
             request_id=ids["request_id"],
             trace_id=ids["trace_id"],
@@ -503,11 +648,10 @@ class McpService:
             transport=context.transport,
             route=context.route,
             method=context.method,
-            duration_ms=duration_ms,
             status="error",
             attempt=context.attempt,
-            input_bytes=ids["input_bytes"],
-            output_bytes=0,
+            execution=execution_payload,
+            idempotency=idempotency_payload,
             tool_id=tool_id,
             prompt_id=prompt_id,
         )
@@ -524,10 +668,9 @@ class McpService:
                 route=context.route,
                 method=context.method,
                 status="error",
-                duration_ms=duration_ms,
                 attempt=context.attempt,
-                input_bytes=ids["input_bytes"],
-                output_bytes=0,
+                execution=execution_payload,
+                idempotency=idempotency_payload,
                 error={"code": code, "message": message},
                 metadata={
                     "toolId": tool_id,
@@ -544,7 +687,8 @@ class McpService:
             ids=ids,
             tool_id=tool_id,
             prompt_id=prompt_id,
-            duration_ms=duration_ms,
+            execution=execution_payload,
+            idempotency=idempotency_payload,
             status="error",
             error=error_payload,
         )
@@ -574,7 +718,8 @@ class McpService:
         ids: Mapping[str, Any],
         tool_id: str | None,
         prompt_id: str | None,
-        duration_ms: float,
+        execution: Mapping[str, Any],
+        idempotency: Mapping[str, Any],
         status: str,
         error: dict[str, Any] | None,
     ) -> None:
@@ -589,28 +734,43 @@ class McpService:
                 "canonical": canonical_code,
                 "message": str(exc).splitlines()[0],
             }
+            fallback_execution = self._execution_payload(
+                duration_ms=float(execution.get("durationMs", 0.0)),
+                input_bytes=int(execution.get("inputBytes", ids.get("input_bytes", 0))),
+                output_bytes=0,
+            )
             self._log_validation_event(
                 context=context,
                 ids=ids,
                 status="error",
-                duration_ms=duration_ms,
+                execution=fallback_execution,
+                idempotency=self._idempotency_payload(False),
                 tool_id=tool_id,
                 prompt_id=prompt_id,
-                output_bytes=0,
                 error=fallback_error,
             )
             if self._validation_mode is ValidationMode.ENFORCE:
                 raise
             return
         output_bytes = _payload_size(envelope_dict)
+        execution_payload = dict(execution)
+        execution_payload["outputBytes"] = max(int(output_bytes), 0)
+        execution_payload.setdefault(
+            "durationMs", float(execution_payload.get("durationMs", 0.0))
+        )
+        execution_payload.setdefault(
+            "inputBytes", int(execution_payload.get("inputBytes", ids.get("input_bytes", 0)))
+        )
+        idempotency_payload = dict(idempotency)
+        idempotency_payload.setdefault("cacheHit", False)
         self._log_validation_event(
             context=context,
             ids=ids,
             status=status,
-            duration_ms=duration_ms,
+            execution=execution_payload,
+            idempotency=idempotency_payload,
             tool_id=tool_id,
             prompt_id=prompt_id,
-            output_bytes=output_bytes,
             error=error,
         )
 
@@ -620,10 +780,10 @@ class McpService:
         context: RequestContext,
         ids: Mapping[str, Any],
         status: str,
-        duration_ms: float,
+        execution: Mapping[str, Any],
+        idempotency: Mapping[str, Any],
         tool_id: str | None,
         prompt_id: str | None,
-        output_bytes: int,
         error: dict[str, Any] | None,
     ) -> None:
         if self._validation_mode is ValidationMode.OFF:
@@ -645,10 +805,9 @@ class McpService:
             route=context.route,
             method=context.method,
             status=status,
-            duration_ms=duration_ms,
+            execution=dict(execution),
+            idempotency=dict(idempotency),
             attempt=context.attempt,
-            input_bytes=int(ids.get("input_bytes", 0)),
-            output_bytes=output_bytes,
             metadata=metadata,
             error=error,
             step_id=self._validation_log.next_step_id(),

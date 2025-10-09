@@ -30,11 +30,10 @@
         "transport",
         "route",
         "method",
-        "durationMs",
         "status",
         "attempt",
-        "inputBytes",
-        "outputBytes"
+        "execution",
+        "idempotency"
       ],
       "properties": {
         "requestId": {"type": "string"},
@@ -45,11 +44,24 @@
         "transport": {"type": "string"},
         "route": {"type": "string"},
         "method": {"type": "string"},
-        "durationMs": {"type": "number", "minimum": 0},
         "status": {"type": "string", "enum": ["ok", "error"]},
         "attempt": {"type": "integer", "minimum": 0},
-        "inputBytes": {"type": "integer", "minimum": 0},
-        "outputBytes": {"type": "integer", "minimum": 0},
+        "execution": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["durationMs", "inputBytes", "outputBytes"],
+          "properties": {
+            "durationMs": {"type": "number", "minimum": 0},
+            "inputBytes": {"type": "integer", "minimum": 0},
+            "outputBytes": {"type": "integer", "minimum": 0}
+          }
+        },
+        "idempotency": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["cacheHit"],
+          "properties": {"cacheHit": {"type": "boolean"}}
+        },
         "toolId": {"type": ["string", "null"]},
         "promptId": {"type": ["string", "null"]}
       }

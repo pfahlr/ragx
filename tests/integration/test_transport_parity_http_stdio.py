@@ -17,10 +17,9 @@ EXPECTED_EVENT_FIELDS = {
     "route",
     "method",
     "status",
-    "durationMs",
     "attempt",
-    "inputBytes",
-    "outputBytes",
+    "execution",
+    "idempotency",
     "requestId",
     "traceId",
     "spanId",
@@ -42,6 +41,10 @@ def test_golden_log_events_include_expected_fields() -> None:
         assert EXPECTED_EVENT_FIELDS.issubset(event)
         assert isinstance(event["metadata"], dict)
         assert {"schemaVersion", "deterministic"}.issubset(event["metadata"])
+        assert {"durationMs", "inputBytes", "outputBytes"}.issubset(
+            event["execution"].keys()
+        )
+        assert {"cacheHit"}.issubset(event["idempotency"].keys())
 
 
 def test_http_and_stdio_error_payloads_share_canonical_surface() -> None:

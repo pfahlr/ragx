@@ -49,11 +49,10 @@ def test_envelope_schema_declares_required_fields() -> None:
         "transport",
         "route",
         "method",
-        "durationMs",
         "status",
         "attempt",
-        "inputBytes",
-        "outputBytes",
+        "execution",
+        "idempotency",
     }.issubset(meta_required)
 
 

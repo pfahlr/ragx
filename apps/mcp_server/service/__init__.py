@@ -9,8 +9,11 @@ __all__ = [
     "Envelope",
     "EnvelopeError",
     "EnvelopeMeta",
+    "EnvelopeExecutionMeta",
+    "EnvelopeIdempotencyMeta",
     "McpService",
     "RequestContext",
+    "ServiceLimits",
     "ServerLogManager",
 ]
 
@@ -19,15 +22,24 @@ _EXPORT_MAP = {
     "Envelope": "apps.mcp_server.service.envelope",
     "EnvelopeError": "apps.mcp_server.service.envelope",
     "EnvelopeMeta": "apps.mcp_server.service.envelope",
+    "EnvelopeExecutionMeta": "apps.mcp_server.service.envelope",
+    "EnvelopeIdempotencyMeta": "apps.mcp_server.service.envelope",
     "McpService": "apps.mcp_server.service.mcp_service",
     "RequestContext": "apps.mcp_server.service.mcp_service",
+    "ServiceLimits": "apps.mcp_server.service.mcp_service",
     "ServerLogManager": "apps.mcp_server.service.mcp_service",
 }
 
 if TYPE_CHECKING:  # pragma: no cover - import for typing only
-    from .envelope import Envelope, EnvelopeError, EnvelopeMeta
+    from .envelope import (
+        Envelope,
+        EnvelopeError,
+        EnvelopeExecutionMeta,
+        EnvelopeIdempotencyMeta,
+        EnvelopeMeta,
+    )
     from .errors import CanonicalError
-    from .mcp_service import McpService, RequestContext, ServerLogManager
+    from .mcp_service import McpService, RequestContext, ServerLogManager, ServiceLimits
 
 
 def __getattr__(name: str):  # pragma: no cover - thin loader

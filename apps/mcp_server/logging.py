@@ -24,10 +24,9 @@ class McpLogEvent:
     tool_id: str | None
     event: str
     status: str
-    duration_ms: float
     attempt: int
-    input_bytes: int
-    output_bytes: int
+    execution: dict[str, Any]
+    idempotency: dict[str, Any]
     metadata: dict[str, Any] = field(default_factory=dict)
     error: dict[str, Any] | None = None
 
@@ -42,10 +41,9 @@ class McpLogEvent:
             "toolId": self.tool_id,
             "event": self.event,
             "status": self.status,
-            "durationMs": self.duration_ms,
             "attempt": self.attempt,
-            "inputBytes": self.input_bytes,
-            "outputBytes": self.output_bytes,
+            "execution": dict(self.execution),
+            "idempotency": dict(self.idempotency),
             "metadata": dict(self.metadata),
             "error": self.error,
         }

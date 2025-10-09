@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Mapping
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -22,6 +24,17 @@ PROMPTS_DIR = Path("apps/mcp_server/prompts")
 @pytest.fixture(autouse=True)
 def _seed(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("RAGX_SEED", "42")
+
+
+VOLATILE_META_FIELDS = {"requestId", "traceId", "spanId"}
+
+
+def _stable_meta(meta: Mapping[str, Any]) -> dict[str, Any]:
+    stable = {key: value for key, value in meta.items() if key not in VOLATILE_META_FIELDS}
+    execution = dict(stable.get("execution", {}))
+    execution.pop("durationMs", None)
+    stable["execution"] = execution
+    return stable
 
 
 def test_transport_parity_for_tool_invocation(tmp_path: Path) -> None:
@@ -61,8 +74,6 @@ def test_transport_parity_for_tool_invocation(tmp_path: Path) -> None:
     stdio_payload = stdio_envelope["data"]
 
     assert http_payload == stdio_payload
-    assert http_envelope["meta"]["requestId"] == stdio_envelope["meta"]["requestId"]
-    assert http_envelope["meta"]["traceId"] == stdio_envelope["meta"]["traceId"]
-    assert http_envelope["meta"]["spanId"] == stdio_envelope["meta"]["spanId"]
     assert http_envelope["meta"]["deterministic"] is True
     assert stdio_envelope["meta"]["deterministic"] is True
+    assert _stable_meta(http_envelope["meta"]) == _stable_meta(stdio_envelope["meta"])

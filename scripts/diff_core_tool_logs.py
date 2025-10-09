@@ -12,12 +12,12 @@ DEFAULT_NEW = Path("runs/core_tools/minimal.jsonl")
 DEFAULT_GOLDEN = Path("tests/fixtures/mcp/core_tools/minimal_golden.jsonl")
 DEFAULT_WHITELIST = [
     "ts",
-    "durationMs",
-    "runId",
+    "execution.durationMs",
+    "metadata.runId",
     "traceId",
     "spanId",
-    "attemptId",
-    "logPath",
+    "metadata.attemptId",
+    "metadata.logPath",
 ]
 
 
@@ -30,13 +30,23 @@ def _load_log(path: Path, whitelist: Iterable[str]) -> list[dict[str, object]]:
         if not line.strip():
             continue
         payload = json.loads(line)
-        metadata = dict(payload.get("metadata", {}))
         for field in whitelist_set:
-            payload.pop(field, None)
-            metadata.pop(field, None)
-        payload["metadata"] = metadata
+            _pop_nested(payload, field)
         records.append(payload)
     return records
+
+
+def _pop_nested(record: dict[str, object], path: str) -> None:
+    parts = path.split(".")
+    target: object = record
+    for key in parts[:-1]:
+        if not isinstance(target, dict):
+            return
+        target = target.get(key)
+        if target is None:
+            return
+    if isinstance(target, dict):
+        target.pop(parts[-1], None)
 
 
 def main(argv: list[str] | None = None) -> int:

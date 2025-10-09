@@ -15,7 +15,8 @@ DeepDiff = deepdiff.DeepDiff
 
 TOOLPACK_DIR = Path("apps/mcp_server/toolpacks/core")
 GOLDEN_LOG = Path("tests/fixtures/mcp/core_tools/minimal_golden.jsonl")
-WHITELIST = {"ts", "traceId", "spanId", "durationMs", "runId", "attemptId", "logPath"}
+WHITELIST = {"ts", "traceId", "spanId", "runId", "attemptId", "logPath"}
+EXECUTION_WHITELIST = {"durationMs"}
 
 
 def _normalise(path: Path) -> list[dict[str, object]]:
@@ -25,6 +26,10 @@ def _normalise(path: Path) -> list[dict[str, object]]:
         for field in WHITELIST:
             payload["metadata"].pop(field, None)
             payload.pop(field, None)
+        execution = payload.get("execution")
+        if isinstance(execution, dict):
+            for field in EXECUTION_WHITELIST:
+                execution.pop(field, None)
         events.append(payload)
     return sorted(events, key=lambda item: (item["toolId"], item["event"], item["attempt"]))
 

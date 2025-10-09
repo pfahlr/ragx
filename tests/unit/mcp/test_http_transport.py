@@ -76,6 +76,9 @@ def test_http_tool_endpoint(client: TestClient) -> None:
     payload = response.json()
     assert payload["ok"] is True
     assert payload["data"]["result"]["document"]["path"].endswith("sample_article.md")
+    assert payload["meta"]["execution"]["inputBytes"] > 0
+    assert payload["meta"]["execution"]["outputBytes"] > 0
+    assert payload["meta"]["idempotency"]["cacheHit"] is False
 
 
 def test_http_tool_not_found_returns_404(client: TestClient) -> None:
@@ -93,6 +96,9 @@ def test_http_tool_invalid_payload_returns_400(client: TestClient) -> None:
     assert response.status_code == 400
     payload = response.json()
     assert payload["error"]["code"] == "INVALID_INPUT"
+    assert payload["meta"]["execution"]["inputBytes"] > 0
+    assert payload["meta"]["execution"]["outputBytes"] == 0
+    assert payload["meta"]["idempotency"]["cacheHit"] is False
 
 
 def test_http_health_endpoint(client: TestClient) -> None:
@@ -112,6 +118,7 @@ def test_http_deterministic_ids(deterministic_client: TestClient) -> None:
     second_meta = second.json()["meta"]
 
     assert first_meta["deterministic"] is True
+    assert first_meta["execution"]["durationMs"] >= 0
     assert first_meta["requestId"] == second_meta["requestId"]
     assert first_meta["traceId"] == second_meta["traceId"]
     assert first_meta["spanId"] == second_meta["spanId"]

@@ -68,6 +68,14 @@ class CanonicalError:
             "Resource not found",
         ),
         _CanonicalSpec(
+            "TIMEOUT",
+            "Tool invocation exceeded allotted time",
+            True,
+            504,
+            -32003,
+            "Tool execution timed out",
+        ),
+        _CanonicalSpec(
             "UNAUTHORIZED",
             "Authentication or authorization failed",
             False,
