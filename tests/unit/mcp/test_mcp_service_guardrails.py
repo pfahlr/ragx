@@ -77,22 +77,23 @@ class _ServerLogStub:
 class _QueueExecutor:
     def __init__(self) -> None:
         self._queue: list[tuple[dict[str, Any], ExecutionStats]] = []
-        self._last_stats: ExecutionStats | None = None
         self.calls: list[tuple[Toolpack, Mapping[str, Any]]] = []
 
     def queue(self, result: Mapping[str, Any], stats: ExecutionStats) -> None:
         self._queue.append((dict(result), stats))
 
-    def run_toolpack(self, toolpack: Toolpack, payload: Mapping[str, Any]) -> Mapping[str, Any]:
+    def run_toolpack_with_stats(
+        self, toolpack: Toolpack, payload: Mapping[str, Any]
+    ) -> tuple[Mapping[str, Any], ExecutionStats]:
         self.calls.append((toolpack, dict(payload)))
         if not self._queue:
             raise AssertionError("Executor queue exhausted")
         result, stats = self._queue.pop(0)
-        self._last_stats = stats
-        return result
+        return result, stats
 
-    def last_run_stats(self) -> ExecutionStats | None:
-        return self._last_stats
+    def run_toolpack(self, toolpack: Toolpack, payload: Mapping[str, Any]) -> Mapping[str, Any]:
+        result, _ = self.run_toolpack_with_stats(toolpack, payload)
+        return result
 
 
 @pytest.fixture

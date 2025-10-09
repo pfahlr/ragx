@@ -154,7 +154,7 @@ def test_invoke_tool_execution_error_returns_internal_error(
     def _raise(*_: Any, **__: Any) -> None:
         raise ToolpackExecutionError("boom")
 
-    monkeypatch.setattr(service._executor, "run_toolpack", _raise)
+    monkeypatch.setattr(service._executor, "run_toolpack_with_stats", _raise)
     fixture_path = Path("tests/fixtures/mcp/docs/sample_article.md")
     envelope = service.invoke_tool(
         tool_id="mcp.tool:docs.load.fetch",
