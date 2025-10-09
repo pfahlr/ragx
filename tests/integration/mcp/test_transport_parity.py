@@ -45,6 +45,17 @@ def test_transport_parity_for_tool_invocation(tmp_path: Path) -> None:
     assert http_response.status_code == 200
     http_envelope = http_response.json()
     http_payload = http_envelope["data"]
+    http_meta = http_envelope["meta"]
+
+    execution_meta = http_meta.get("execution")
+    assert execution_meta is not None, "HTTP transport must include execution metadata"
+    assert execution_meta["inputBytes"] > 0
+    assert execution_meta["outputBytes"] > 0
+    assert execution_meta["durationMs"] >= 0
+
+    idempotency_meta = http_meta.get("idempotency")
+    assert idempotency_meta is not None, "HTTP transport must include idempotency metadata"
+    assert idempotency_meta["cacheHit"] is False
 
     stdio_response = asyncio.run(
         server.handle_request({
@@ -59,6 +70,7 @@ def test_transport_parity_for_tool_invocation(tmp_path: Path) -> None:
     )
     stdio_envelope = stdio_response["result"]
     stdio_payload = stdio_envelope["data"]
+    stdio_meta = stdio_envelope["meta"]
 
     assert http_payload == stdio_payload
     assert http_envelope["meta"]["requestId"] == stdio_envelope["meta"]["requestId"]
@@ -66,3 +78,27 @@ def test_transport_parity_for_tool_invocation(tmp_path: Path) -> None:
     assert http_envelope["meta"]["spanId"] == stdio_envelope["meta"]["spanId"]
     assert http_envelope["meta"]["deterministic"] is True
     assert stdio_envelope["meta"]["deterministic"] is True
+
+    stdio_execution = stdio_meta.get("execution")
+    assert stdio_execution is not None
+    assert stdio_execution["inputBytes"] == execution_meta["inputBytes"]
+    assert stdio_execution["outputBytes"] == execution_meta["outputBytes"]
+    assert stdio_execution["durationMs"] >= 0
+
+    stdio_idempotency = stdio_meta.get("idempotency")
+    assert stdio_idempotency is not None
+    assert stdio_idempotency["cacheHit"] is True
+
+    assert stdio_idempotency.get("cacheKey") == idempotency_meta.get("cacheKey")
+
+    parity_keys = {
+        "schemaVersion",
+        "toolId",
+        "promptId",
+        "inputBytes",
+        "outputBytes",
+        "status",
+        "attempt",
+    }
+    for key in parity_keys:
+        assert http_meta[key] == stdio_meta[key]

@@ -8,7 +8,13 @@ from jsonschema import Draft202012Validator
 
 pytest.importorskip("pydantic")
 
-from apps.mcp_server.service.envelope import Envelope, EnvelopeError, EnvelopeMeta
+from apps.mcp_server.service.envelope import (
+    Envelope,
+    EnvelopeError,
+    EnvelopeMeta,
+    ExecutionMeta,
+    IdempotencyMeta,
+)
 
 SCHEMA_PATH = Path("apps/mcp_server/schemas/mcp/envelope.schema.json")
 
@@ -44,6 +50,8 @@ def test_envelope_success_matches_schema() -> None:
             attempt=0,
             input_bytes=0,
             output_bytes=0,
+            execution=ExecutionMeta(durationMs=12.5, inputBytes=0, outputBytes=0),
+            idempotency=IdempotencyMeta(cacheHit=False, cacheKey=None),
         ),
     )
     payload = envelope.model_dump(by_alias=True)
@@ -70,6 +78,8 @@ def test_envelope_error_includes_details() -> None:
             attempt=0,
             input_bytes=0,
             output_bytes=0,
+            execution=ExecutionMeta(durationMs=3.4, inputBytes=0, outputBytes=0),
+            idempotency=IdempotencyMeta(cacheHit=False, cacheKey=None),
         ),
     )
     payload = envelope.model_dump(by_alias=True)
@@ -98,6 +108,8 @@ def test_envelope_serialises_optional_metadata() -> None:
             input_bytes=0,
             output_bytes=0,
             prompt_id="core.generic.welcome@1",
+            execution=ExecutionMeta(durationMs=1.23, inputBytes=0, outputBytes=0),
+            idempotency=IdempotencyMeta(cacheHit=False, cacheKey=None),
         ),
     )
     payload = envelope.model_dump(by_alias=True)

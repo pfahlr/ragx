@@ -11,6 +11,7 @@ EXPECTED_CODES = [
     "NOT_FOUND",
     "UNAUTHORIZED",
     "INTERNAL_ERROR",
+    "TIMEOUT",
 ]
 
 HTTP_STATUS_EXPECTATIONS = {
@@ -19,6 +20,7 @@ HTTP_STATUS_EXPECTATIONS = {
     "NOT_FOUND": 404,
     "UNAUTHORIZED": 401,
     "INTERNAL_ERROR": 500,
+    "TIMEOUT": 504,
 }
 
 JSONRPC_EXPECTATIONS = {
@@ -27,6 +29,7 @@ JSONRPC_EXPECTATIONS = {
     "NOT_FOUND": (-32004, "not found"),
     "UNAUTHORIZED": (-32001, "unauthorized"),
     "INTERNAL_ERROR": (-32603, "internal server error"),
+    "TIMEOUT": (-32005, "timeout"),
 }
 
 

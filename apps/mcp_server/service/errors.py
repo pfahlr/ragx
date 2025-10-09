@@ -83,6 +83,14 @@ class CanonicalError:
             -32603,
             "Internal server error",
         ),
+        _CanonicalSpec(
+            "TIMEOUT",
+            "Tool invocation exceeded its allotted time budget",
+            True,
+            504,
+            -32005,
+            "Timeout",
+        ),
     )
 
     _HTTP_STATUS_MAP: dict[str, int] = {spec.code: spec.http_status for spec in _SPECS}

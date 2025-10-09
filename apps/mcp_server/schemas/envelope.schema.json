@@ -34,7 +34,9 @@
         "status",
         "attempt",
         "inputBytes",
-        "outputBytes"
+        "outputBytes",
+        "execution",
+        "idempotency"
       ],
       "properties": {
         "requestId": {"type": "string"},
@@ -51,7 +53,26 @@
         "inputBytes": {"type": "integer", "minimum": 0},
         "outputBytes": {"type": "integer", "minimum": 0},
         "toolId": {"type": ["string", "null"]},
-        "promptId": {"type": ["string", "null"]}
+        "promptId": {"type": ["string", "null"]},
+        "execution": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["durationMs", "inputBytes", "outputBytes"],
+          "properties": {
+            "durationMs": {"type": "number", "minimum": 0},
+            "inputBytes": {"type": "integer", "minimum": 0},
+            "outputBytes": {"type": "integer", "minimum": 0}
+          }
+        },
+        "idempotency": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["cacheHit"],
+          "properties": {
+            "cacheHit": {"type": "boolean"},
+            "cacheKey": {"type": ["string", "null"]}
+          }
+        }
       }
     }
   },

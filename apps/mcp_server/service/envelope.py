@@ -5,7 +5,26 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
-__all__ = ["Envelope", "EnvelopeMeta", "EnvelopeError"]
+__all__ = ["Envelope", "EnvelopeMeta", "EnvelopeError", "ExecutionMeta", "IdempotencyMeta"]
+
+
+class ExecutionMeta(BaseModel):
+    """Execution telemetry associated with an envelope."""
+
+    model_config = ConfigDict(frozen=True, populate_by_name=True, extra="forbid")
+
+    duration_ms: float = Field(..., alias="durationMs")
+    input_bytes: int = Field(..., alias="inputBytes")
+    output_bytes: int = Field(..., alias="outputBytes")
+
+
+class IdempotencyMeta(BaseModel):
+    """Idempotency metadata describing cache behaviour."""
+
+    model_config = ConfigDict(frozen=True, populate_by_name=True, extra="forbid")
+
+    cache_hit: bool = Field(..., alias="cacheHit")
+    cache_key: str | None = Field(default=None, alias="cacheKey")
 
 
 class EnvelopeError(BaseModel):
@@ -41,6 +60,8 @@ class EnvelopeMeta(BaseModel):
     output_bytes: int = Field(0, alias="outputBytes")
     tool_id: str | None = Field(default=None, alias="toolId")
     prompt_id: str | None = Field(default=None, alias="promptId")
+    execution: ExecutionMeta
+    idempotency: IdempotencyMeta
 
     @classmethod
     def from_ids(
@@ -61,7 +82,15 @@ class EnvelopeMeta(BaseModel):
         output_bytes: int = 0,
         tool_id: str | None = None,
         prompt_id: str | None = None,
+        execution: ExecutionMeta | None = None,
+        idempotency: IdempotencyMeta | None = None,
     ) -> EnvelopeMeta:
+        execution_meta = execution or ExecutionMeta(
+            durationMs=duration_ms,
+            inputBytes=input_bytes,
+            outputBytes=output_bytes,
+        )
+        idempotency_meta = idempotency or IdempotencyMeta(cacheHit=False, cacheKey=None)
         return cls(
             requestId=str(request_id),
             traceId=str(trace_id),
@@ -78,6 +107,8 @@ class EnvelopeMeta(BaseModel):
             outputBytes=output_bytes,
             toolId=tool_id,
             promptId=prompt_id,
+            execution=execution_meta,
+            idempotency=idempotency_meta,
         )
 
 
