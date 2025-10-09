@@ -1,6 +1,11 @@
 from __future__ import annotations
 
-from fastapi import FastAPI
+from typing import Any
+
+try:  # pragma: no cover - optional dependency guard
+    from fastapi import FastAPI
+except ModuleNotFoundError:  # pragma: no cover - fallback when not installed
+    FastAPI = None  # type: ignore[assignment]
 
 from apps.mcp_server.service.mcp_service import McpService
 
@@ -14,8 +19,12 @@ def create_app(
     *,
     enable_openapi: bool = False,
     deterministic_ids: bool = False,
-) -> FastAPI:
+) -> Any:
     """Return a FastAPI application exposing the MCP HTTP endpoints."""
+
+    if FastAPI is None:
+        msg = "fastapi is required to build the MCP HTTP application"
+        raise RuntimeError(msg)
 
     docs_url = "/docs" if enable_openapi else None
     openapi_url = "/openapi.json" if enable_openapi else None

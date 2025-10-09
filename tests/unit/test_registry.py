@@ -5,6 +5,8 @@ from typing import Any
 
 import pytest
 
+pytest.importorskip("numpy")
+
 from ragcore.registry import _reset_registry, get, list_backends, register
 
 

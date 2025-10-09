@@ -7,7 +7,10 @@ from collections.abc import Sequence as SeqType
 from pathlib import Path
 from typing import Any
 
-import numpy as np
+try:  # pragma: no cover - optional dependency guard
+    import numpy as np
+except ModuleNotFoundError:  # pragma: no cover - fallback when not installed
+    np = None  # type: ignore[assignment]
 
 from ragcore.backends import register_default_backends
 from ragcore.backends.dummy import DummyBackend
@@ -21,6 +24,12 @@ except ImportError:  # pragma: no cover - optional dependency
 from ragcore.ingest.scanner import IngestedDocument, scan_corpus
 from ragcore.interfaces import Backend, SerializedIndex
 from ragcore.registry import get, list_backends, register
+
+
+def _require_numpy() -> Any:
+    if np is None:
+        raise RuntimeError("numpy is required for vectordb CLI operations")
+    return np
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -156,7 +165,8 @@ def _cmd_build(args: argparse.Namespace) -> int:
     docmap = _write_docmap(args.corpus_dir, documents, args.out)
 
     vectors = _embed_documents(documents, dim=args.dim)
-    ids = np.arange(vectors.shape[0], dtype=np.int64)
+    numpy = _require_numpy()
+    ids = numpy.arange(vectors.shape[0], dtype=numpy.int64)
 
     if handle.requires_training() and vectors.size:
         handle.train(vectors)
@@ -182,6 +192,7 @@ def _cmd_merge(args: argparse.Namespace) -> int:
         raise SystemExit("merge requires at least one --merge shard path")
 
     shard_payloads = [_load_shard(path) for path in shard_paths]
+    numpy = _require_numpy()
     base_spec = shard_payloads[0]["spec"]
     backend_name = base_spec["backend"]
 
@@ -213,9 +224,9 @@ def _cmd_merge(args: argparse.Namespace) -> int:
         vector_base += vectors.shape[0]
 
     if merged_vectors:
-        all_vectors = np.concatenate(merged_vectors, axis=0)
+        all_vectors = numpy.concatenate(merged_vectors, axis=0)
     else:
-        all_vectors = np.empty((0, base_spec["dim"]), dtype=np.float32)
+        all_vectors = numpy.empty((0, base_spec["dim"]), dtype=numpy.float32)
 
     handle = backend.build({
         "backend": base_spec["backend"],
@@ -336,17 +347,18 @@ def _write_docmap_entries(entries: SeqType[dict[str, Any]], out_dir: Path) -> No
     docmap_path.write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")
 
 
-def _embed_documents(documents: Sequence[IngestedDocument], *, dim: int) -> np.ndarray:
+def _embed_documents(documents: Sequence[IngestedDocument], *, dim: int) -> Any:
+    numpy = _require_numpy()
     if not documents:
-        return np.empty((0, dim), dtype=np.float32)
-    vectors = np.zeros((len(documents), dim), dtype=np.float32)
+        return numpy.empty((0, dim), dtype=numpy.float32)
+    vectors = numpy.zeros((len(documents), dim), dtype=numpy.float32)
     for row, doc in enumerate(documents):
         buffer = doc.text.encode("utf-8")
         if not buffer:
             continue
         for idx, byte in enumerate(buffer):
             vectors[row, idx % dim] += byte / 255.0
-        norm = np.linalg.norm(vectors[row])
+        norm = numpy.linalg.norm(vectors[row])
         if norm > 0:
             vectors[row] /= norm
     return vectors
@@ -367,7 +379,8 @@ def _write_index_payload(serialized: SerializedIndex, out_dir: Path) -> None:
 
     index_bin_path = out_dir / "index.bin"
     with index_bin_path.open("wb") as buffer:
-        np.savez(buffer, vectors=serialized.vectors, ids=serialized.ids)
+        numpy = _require_numpy()
+        numpy.savez(buffer, vectors=serialized.vectors, ids=serialized.ids)
 
 
 def _write_shards(docmap: dict[str, Any], out_dir: Path) -> None:
@@ -388,8 +401,9 @@ def _load_shard(path: Path) -> dict[str, Any]:
 
     spec = json.loads(spec_path.read_text(encoding="utf-8"))
     docmap = json.loads(docmap_path.read_text(encoding="utf-8"))["documents"]
-    payload = np.load(index_path)
-    vectors = payload["vectors"].astype(np.float32)
+    numpy = _require_numpy()
+    payload = numpy.load(index_path)
+    vectors = payload["vectors"].astype(numpy.float32)
     return {"spec": spec, "docmap": docmap, "vectors": vectors}
 
 

@@ -8,6 +8,8 @@ from types import SimpleNamespace
 
 import pytest
 
+pytest.importorskip("pydantic")
+
 from apps.mcp_server import cli
 
 

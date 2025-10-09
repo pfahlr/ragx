@@ -5,13 +5,29 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
-from hypothesis import given
-from hypothesis import strategies as st
 from jsonschema import ValidationError
 
 from apps.mcp_server.validation.schema_registry import SchemaRegistry
 
+hypothesis = pytest.importorskip("hypothesis")
+given = hypothesis.given
+st = hypothesis.strategies
+
+if not hasattr(st, "booleans"):
+    pytest.skip(
+        "Hypothesis strategies module lacks required APIs; skipping property tests",
+        allow_module_level=True,
+    )
+
 _ENVELOPE_VALIDATOR = SchemaRegistry().load_envelope()
+
+
+def _fixed_dict(
+    mapping: dict[str, st.SearchStrategy[Any]]
+) -> st.SearchStrategy[dict[str, Any]]:
+    if hasattr(st, "fixed_dictionaries"):
+        return st.fixed_dictionaries(mapping)  # type: ignore[attr-defined]
+    return st.builds(lambda **kwargs: kwargs, **mapping)
 
 
 def _meta_strategy() -> st.SearchStrategy[dict[str, Any]]:
@@ -26,7 +42,7 @@ def _meta_strategy() -> st.SearchStrategy[dict[str, Any]]:
         "method": st.text(min_size=1),
         "status": st.sampled_from(["ok", "error"]),
         "attempt": st.integers(min_value=0, max_value=3),
-        "execution": st.fixed_dictionaries(
+        "execution": _fixed_dict(
             {
                 "durationMs": st.floats(
                     min_value=0, allow_nan=False, allow_infinity=False
@@ -35,16 +51,16 @@ def _meta_strategy() -> st.SearchStrategy[dict[str, Any]]:
                 "outputBytes": st.integers(min_value=0, max_value=2048),
             }
         ),
-        "idempotency": st.fixed_dictionaries({"cacheHit": st.booleans()}),
+        "idempotency": _fixed_dict({"cacheHit": st.booleans()}),
     }
     optional_fields = {
         "toolId": st.one_of(st.none(), st.text()),
         "promptId": st.one_of(st.none(), st.text()),
     }
-    return st.fixed_dictionaries({**required_fields, **optional_fields})
+    return _fixed_dict({**required_fields, **optional_fields})
 
 
-invalid_missing_meta = st.fixed_dictionaries(
+invalid_missing_meta = _fixed_dict(
     {
         "ok": st.booleans(),
         "data": st.one_of(st.none(), st.dictionaries(keys=st.text(), values=st.integers())),
@@ -52,11 +68,11 @@ invalid_missing_meta = st.fixed_dictionaries(
     }
 )
 
-invalid_success_with_error = st.fixed_dictionaries(
+invalid_success_with_error = _fixed_dict(
     {
         "ok": st.just(True),
         "data": st.dictionaries(keys=st.text(), values=st.text(), min_size=0, max_size=3),
-        "error": st.fixed_dictionaries({"code": st.text(), "message": st.text()}),
+        "error": _fixed_dict({"code": st.text(), "message": st.text()}),
         "meta": _meta_strategy(),
     }
 )

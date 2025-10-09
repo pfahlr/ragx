@@ -7,9 +7,12 @@ import json
 import logging
 import sys
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
-import uvicorn
+try:  # pragma: no cover - optional dependency guard
+    import uvicorn
+except ModuleNotFoundError:  # pragma: no cover - fallback when not installed
+    uvicorn = None
 
 from apps.mcp_server.http import create_app
 from apps.mcp_server.service.mcp_service import McpService, RequestContext
@@ -139,9 +142,12 @@ async def _run_server(args: argparse.Namespace) -> None:
         args.http = True
 
     tasks: list[asyncio.Task[Any]] = []
-    http_server: uvicorn.Server | None = None
+    http_server: Any | None = None
     http_task: asyncio.Task[Any] | None = None
     if args.http:
+        if uvicorn is None:
+            msg = "uvicorn is required for HTTP transport but is not installed"
+            raise RuntimeError(msg)
         config = uvicorn.Config(
             create_app(service, deterministic_ids=args.deterministic_ids),
             host=args.host,
@@ -153,8 +159,10 @@ async def _run_server(args: argparse.Namespace) -> None:
         )
         http_server = uvicorn.Server(config)
         if not args.stdio:
+            assert http_server is not None
             await http_server.serve()
             return
+        assert http_server is not None
         http_task = asyncio.create_task(http_server.serve())
         tasks.append(http_task)
 
@@ -168,7 +176,7 @@ async def _run_server(args: argparse.Namespace) -> None:
         finally:
             for task in tasks:
                 if task is http_task and http_server is not None:
-                    http_server.should_exit = True
+                    cast(Any, http_server).should_exit = True
                 if not task.done():
                     task.cancel()
                 with contextlib.suppress(asyncio.CancelledError):

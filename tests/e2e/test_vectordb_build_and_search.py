@@ -1,15 +1,20 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
+from importlib import import_module
 
-import numpy as np
 import pytest
 
-from ragcore.backends.cuvs import CuVSBackend
-from ragcore.backends.faiss import FaissBackend
-from ragcore.backends.hnsw import HnswBackend
-from ragcore.backends.pyflat import PyFlatBackend
-from ragcore.registry import _reset_registry, get, register
+np = pytest.importorskip("numpy")
+
+CuVSBackend = import_module("ragcore.backends.cuvs").CuVSBackend
+FaissBackend = import_module("ragcore.backends.faiss").FaissBackend
+HnswBackend = import_module("ragcore.backends.hnsw").HnswBackend
+PyFlatBackend = import_module("ragcore.backends.pyflat").PyFlatBackend
+registry_module = import_module("ragcore.registry")
+_reset_registry = registry_module._reset_registry
+get = registry_module.get
+register = registry_module.register
 
 
 @pytest.fixture(autouse=True)

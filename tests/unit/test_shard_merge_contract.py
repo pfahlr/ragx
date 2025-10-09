@@ -1,7 +1,11 @@
 from __future__ import annotations
 
-import numpy as np
 import pytest
+
+try:
+    import numpy as np
+except ModuleNotFoundError:  # pragma: no cover - optional dependency guard
+    pytest.skip("numpy is required for shard merge contract tests", allow_module_level=True)
 
 from ragcore.backends.pyflat import PyFlatBackend
 

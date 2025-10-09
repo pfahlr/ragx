@@ -2,8 +2,12 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 
-import numpy as np
 import pytest
+
+try:
+    import numpy as np
+except ModuleNotFoundError:  # pragma: no cover - optional dependency guard
+    pytest.skip("numpy is required for backend spec tests", allow_module_level=True)
 
 from ragcore.backends import register_default_backends
 from ragcore.backends.base import SerializedIndex

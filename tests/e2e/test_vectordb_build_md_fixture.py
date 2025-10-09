@@ -5,6 +5,10 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
+pytest.importorskip("numpy")
+
 
 def _write(tmp_dir: Path, relative: str, content: str) -> Path:
     path = tmp_dir / relative

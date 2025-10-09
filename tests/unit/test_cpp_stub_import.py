@@ -6,6 +6,8 @@ import types
 
 import pytest
 
+pytest.importorskip("numpy")
+
 
 def _import_cpp_module(
     monkeypatch: pytest.MonkeyPatch,

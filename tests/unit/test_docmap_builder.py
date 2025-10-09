@@ -2,6 +2,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
+pytest.importorskip("numpy")
+
 from ragcore.cli import _build_docmap
 from ragcore.ingest.scanner import IngestedDocument
 

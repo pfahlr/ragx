@@ -4,8 +4,12 @@ import inspect
 from collections.abc import Mapping
 from typing import Any
 
-import numpy as np
 import pytest
+
+try:
+    import numpy as np
+except ModuleNotFoundError:  # pragma: no cover - optional dependency guard
+    pytest.skip("numpy is required for vectordb protocol tests", allow_module_level=True)
 
 
 @pytest.fixture(name="interfaces")

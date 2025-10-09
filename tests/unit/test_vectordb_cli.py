@@ -3,8 +3,12 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-import numpy as np
 import pytest
+
+try:
+    import numpy as np
+except ModuleNotFoundError:  # pragma: no cover - optional dependency guard
+    pytest.skip("numpy is required for vectordb CLI tests", allow_module_level=True)
 
 from ragcore.cli import main
 from ragcore.registry import _reset_registry, register

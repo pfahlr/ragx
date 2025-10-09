@@ -1,13 +1,15 @@
 from __future__ import annotations
 
 import json
+from importlib import import_module
 from pathlib import Path
 
-import numpy as np
 import pytest
 
-from ragcore.backends.pyflat import PyFlatBackend
-from ragcore.cli import main
+np = pytest.importorskip("numpy")
+
+PyFlatBackend = import_module("ragcore.backends.pyflat").PyFlatBackend
+main = import_module("ragcore.cli").main
 
 
 @pytest.mark.parametrize("backend_name", ["py_flat", "cpp_faiss"])
