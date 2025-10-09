@@ -19,7 +19,7 @@ from apps.mcp_server.validation.logging import (
     EnvelopeValidationEvent,
     EnvelopeValidationLogManager,
 )
-from apps.toolpacks.executor import Executor, ToolpackExecutionError
+from apps.toolpacks.executor import ExecutionStats, Executor, ToolpackExecutionError
 from apps.toolpacks.loader import Toolpack, ToolpackLoader
 
 from .envelope import Envelope, EnvelopeError, EnvelopeMeta
@@ -374,12 +374,31 @@ class McpService:
         try:
             result = self._executor.run_toolpack(toolpack, arguments)
         except ToolpackExecutionError as exc:
+            stats = self._executor.last_run_stats
+            execution = self._execution_summary(
+                stats=stats,
+                arguments=arguments,
+                result=None,
+                context=ctx,
+            )
+            extra_metadata = {
+                "execution": {
+                    "durationMs": execution["duration_ms"],
+                    "inputBytes": execution["input_bytes"],
+                    "outputBytes": execution["output_bytes"],
+                },
+                "idempotency": {"cacheHit": execution["cache_hit"]},
+            }
             return self._error_response(
                 code="INTERNAL_ERROR",
                 message=str(exc),
                 context=ctx,
                 payload=payload,
                 tool_id=tool_id,
+                input_bytes_override=execution["input_bytes"],
+                output_bytes_override=execution["output_bytes"],
+                duration_override=execution["duration_ms"],
+                extra_metadata=extra_metadata,
             )
         if self._validation_mode is not ValidationMode.OFF and validators_bundle is not None:
             try:
@@ -394,9 +413,16 @@ class McpService:
                     payload=payload,
                     tool_id=tool_id,
                 )
+        result_payload = dict(result)
+        execution = self._execution_summary(
+            stats=self._executor.last_run_stats,
+            arguments=arguments,
+            result=result_payload,
+            context=ctx,
+        )
         data = {
             "toolId": tool_id,
-            "result": dict(result),
+            "result": result_payload,
             "metadata": {
                 "toolpack": {
                     "id": toolpack.id,
@@ -407,7 +433,23 @@ class McpService:
             },
         }
         self._schemas.validator("tool.response.schema.json").validate(data)
-        return self._finalise_envelope(data, ctx, tool_id=tool_id)
+        extra_metadata = {
+            "execution": {
+                "durationMs": execution["duration_ms"],
+                "inputBytes": execution["input_bytes"],
+                "outputBytes": execution["output_bytes"],
+            },
+            "idempotency": {"cacheHit": execution["cache_hit"]},
+        }
+        return self._finalise_envelope(
+            data,
+            ctx,
+            tool_id=tool_id,
+            input_bytes_override=execution["input_bytes"],
+            output_bytes_override=execution["output_bytes"],
+            duration_override=execution["duration_ms"],
+            extra_metadata=extra_metadata,
+        )
 
     def health(self, context: RequestContext | None = None) -> dict[str, Any]:
         _ = self._normalise_context(context, "health", "mcp.health", {})
@@ -422,11 +464,24 @@ class McpService:
         *,
         tool_id: str | None = None,
         prompt_id: str | None = None,
+        input_bytes_override: int | None = None,
+        output_bytes_override: int | None = None,
+        duration_override: float | None = None,
+        extra_metadata: Mapping[str, Any] | None = None,
     ) -> Envelope:
-        duration_ms = _duration_ms(context.start_time)
-        ids = self._request_ids(context)
+        duration_ms = (
+            duration_override if duration_override is not None else _duration_ms(context.start_time)
+        )
+        ids = dict(self._request_ids(context))
+        if input_bytes_override is not None:
+            ids["input_bytes"] = input_bytes_override
+        context._cached_ids = dict(ids)
         step_id = self._log_manager.next_step_id()
-        output_bytes = _payload_size(data)
+        output_bytes = (
+            output_bytes_override
+            if output_bytes_override is not None
+            else _payload_size(data)
+        )
         meta = EnvelopeMeta.from_ids(
             request_id=ids["request_id"],
             trace_id=ids["trace_id"],
@@ -439,13 +494,21 @@ class McpService:
             duration_ms=duration_ms,
             status="ok",
             attempt=context.attempt,
-            input_bytes=ids["input_bytes"],
+            input_bytes=int(ids["input_bytes"]),
             output_bytes=output_bytes,
             tool_id=tool_id,
             prompt_id=prompt_id,
         )
         envelope = Envelope.success(data=dict(data), meta=meta)
         envelope_dict = envelope.model_dump(by_alias=True)
+        metadata = {
+            "toolId": tool_id,
+            "promptId": prompt_id,
+            "schemaVersion": self._schema_version,
+            "deterministic": context.deterministic_ids,
+        }
+        if extra_metadata:
+            metadata.update(extra_metadata)
         self._log_manager.emit(
             ServerLogEvent(
                 ts=datetime.now(UTC),
@@ -458,14 +521,9 @@ class McpService:
                 status="ok",
                 duration_ms=duration_ms,
                 attempt=context.attempt,
-                input_bytes=ids["input_bytes"],
+                input_bytes=int(ids["input_bytes"]),
                 output_bytes=output_bytes,
-                metadata={
-                    "toolId": tool_id,
-                    "promptId": prompt_id,
-                    "schemaVersion": self._schema_version,
-                    "deterministic": context.deterministic_ids,
-                },
+                metadata=metadata,
                 step_id=step_id,
             )
         )
@@ -490,10 +548,20 @@ class McpService:
         payload: Mapping[str, Any],
         tool_id: str | None = None,
         prompt_id: str | None = None,
+        input_bytes_override: int | None = None,
+        output_bytes_override: int | None = None,
+        duration_override: float | None = None,
+        extra_metadata: Mapping[str, Any] | None = None,
     ) -> Envelope:
-        ids = self._request_ids(context)
+        ids = dict(self._request_ids(context))
+        if input_bytes_override is not None:
+            ids["input_bytes"] = input_bytes_override
+        context._cached_ids = dict(ids)
         step_id = self._log_manager.next_step_id()
-        duration_ms = _duration_ms(context.start_time)
+        duration_ms = (
+            duration_override if duration_override is not None else _duration_ms(context.start_time)
+        )
+        output_bytes = output_bytes_override or 0
         meta = EnvelopeMeta.from_ids(
             request_id=ids["request_id"],
             trace_id=ids["trace_id"],
@@ -506,14 +574,22 @@ class McpService:
             duration_ms=duration_ms,
             status="error",
             attempt=context.attempt,
-            input_bytes=ids["input_bytes"],
-            output_bytes=0,
+            input_bytes=int(ids["input_bytes"]),
+            output_bytes=output_bytes,
             tool_id=tool_id,
             prompt_id=prompt_id,
         )
         envelope = Envelope.failure(error=EnvelopeError(code=code, message=message), meta=meta)
         envelope_dict = envelope.model_dump(by_alias=True)
         error_payload = {"canonical": code, "message": message}
+        metadata = {
+            "toolId": tool_id,
+            "promptId": prompt_id,
+            "schemaVersion": self._schema_version,
+            "deterministic": context.deterministic_ids,
+        }
+        if extra_metadata:
+            metadata.update(extra_metadata)
         self._log_manager.emit(
             ServerLogEvent(
                 ts=datetime.now(UTC),
@@ -526,15 +602,10 @@ class McpService:
                 status="error",
                 duration_ms=duration_ms,
                 attempt=context.attempt,
-                input_bytes=ids["input_bytes"],
-                output_bytes=0,
+                input_bytes=int(ids["input_bytes"]),
+                output_bytes=output_bytes,
                 error={"code": code, "message": message},
-                metadata={
-                    "toolId": tool_id,
-                    "promptId": prompt_id,
-                    "schemaVersion": self._schema_version,
-                    "deterministic": context.deterministic_ids,
-                },
+                metadata=metadata,
                 step_id=step_id,
             )
         )
@@ -663,6 +734,33 @@ class McpService:
             "timeoutMs": toolpack.timeout_ms,
             "limits": dict(toolpack.limits),
             "caps": dict(toolpack.caps),
+        }
+
+    def _execution_summary(
+        self,
+        *,
+        stats: ExecutionStats | None,
+        arguments: Mapping[str, Any],
+        result: Mapping[str, Any] | None,
+        context: RequestContext,
+    ) -> dict[str, Any]:
+        arguments_map = dict(arguments)
+        result_map = dict(result) if result is not None else None
+        if stats is not None:
+            input_bytes = stats.input_bytes
+            output_bytes = stats.output_bytes
+            duration_ms = stats.duration_ms
+            cache_hit = stats.cache_hit
+        else:
+            input_bytes = _payload_size(arguments_map)
+            output_bytes = _payload_size(result_map) if result_map is not None else 0
+            duration_ms = _duration_ms(context.start_time)
+            cache_hit = False
+        return {
+            "input_bytes": int(input_bytes),
+            "output_bytes": int(output_bytes),
+            "duration_ms": float(duration_ms),
+            "cache_hit": bool(cache_hit),
         }
 
     def _request_ids(self, context: RequestContext) -> dict[str, Any]:

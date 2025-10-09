@@ -9,7 +9,7 @@ from typing import Any
 from uuid import uuid4
 
 from apps.mcp_server.logging import JsonLogWriter, McpLogEvent
-from apps.toolpacks.executor import Executor, ToolpackExecutionError
+from apps.toolpacks.executor import ExecutionStats, Executor, ToolpackExecutionError
 from apps.toolpacks.loader import Toolpack
 
 __all__ = ["CoreToolsRuntime"]
@@ -96,6 +96,8 @@ class CoreToolsRuntime:
         try:
             result = self._executor.run_toolpack(toolpack, payload)
         except ToolpackExecutionError as exc:
+            stats = self._executor.last_run_stats
+            duration_ms = stats.duration_ms if stats else self._duration_ms(context.start_monotonic)
             self._log_writer.write(
                 McpLogEvent(
                     ts=datetime.now(UTC),
@@ -107,7 +109,7 @@ class CoreToolsRuntime:
                     tool_id=tool_id,
                     event="tool.err",
                     status="err",
-                    duration_ms=self._duration_ms(context.start_monotonic),
+                    duration_ms=duration_ms,
                     attempt=context.attempt,
                     input_bytes=context.input_bytes,
                     output_bytes=0,
@@ -122,7 +124,15 @@ class CoreToolsRuntime:
             raise
 
         output_mapping = dict(result)
-        output_bytes = _byte_size(output_mapping)
+        stats = self._executor.last_run_stats
+        if stats is None:
+            stats = ExecutionStats(
+                cache_hit=False,
+                duration_ms=self._duration_ms(context.start_monotonic),
+                input_bytes=context.input_bytes,
+                output_bytes=_byte_size(output_mapping),
+            )
+        output_bytes = stats.output_bytes
         result_digest = _hash(output_mapping)
 
         self._log_writer.write(
@@ -136,7 +146,7 @@ class CoreToolsRuntime:
                 tool_id=tool_id,
                 event="tool.ok",
                 status="ok",
-                duration_ms=self._duration_ms(context.start_monotonic),
+                duration_ms=stats.duration_ms,
                 attempt=context.attempt,
                 input_bytes=context.input_bytes,
                 output_bytes=output_bytes,
@@ -144,6 +154,12 @@ class CoreToolsRuntime:
                     "payloadDigest": context.payload_digest,
                     "resultDigest": result_digest,
                     "toolpackVersion": toolpack.version,
+                    "execution": {
+                        "cacheHit": stats.cache_hit,
+                        "durationMs": stats.duration_ms,
+                        "inputBytes": stats.input_bytes,
+                        "outputBytes": stats.output_bytes,
+                    },
                 },
             ),
             attempt_id=context.attempt_id,

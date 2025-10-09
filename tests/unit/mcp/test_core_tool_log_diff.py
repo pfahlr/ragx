@@ -37,6 +37,9 @@ def _normalise_log(path: Path) -> list[dict[str, object]]:
         for field in WHITELIST:
             record.pop(field, None)
             record.get("metadata", {}).pop(field, None)
+        exec_meta = record.get("metadata", {}).get("execution")
+        if isinstance(exec_meta, dict):
+            exec_meta.pop("durationMs", None)
         events.append(record)
     return sorted(events, key=lambda evt: (evt["stepId"], evt["attempt"]))
 

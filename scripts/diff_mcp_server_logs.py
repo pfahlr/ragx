@@ -34,6 +34,9 @@ def _load_log(path: Path, whitelist: Iterable[str]) -> list[dict[str, object]]:
         for field in whitelist_set:
             record.pop(field, None)
             metadata.pop(field, None)
+        execution_meta = metadata.get("execution")
+        if isinstance(execution_meta, dict):
+            execution_meta.pop("durationMs", None)
         record["metadata"] = metadata
         records.append(record)
     return records

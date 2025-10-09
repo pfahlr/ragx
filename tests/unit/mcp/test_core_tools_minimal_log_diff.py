@@ -25,6 +25,9 @@ def _normalise(path: Path) -> list[dict[str, object]]:
         for field in WHITELIST:
             payload["metadata"].pop(field, None)
             payload.pop(field, None)
+        execution_meta = payload.get("metadata", {}).get("execution")
+        if isinstance(execution_meta, dict):
+            execution_meta.pop("durationMs", None)
         events.append(payload)
     return sorted(events, key=lambda item: (item["toolId"], item["event"], item["attempt"]))
 

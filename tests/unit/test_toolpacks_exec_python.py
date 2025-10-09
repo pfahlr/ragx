@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import sys
 import types
+from collections.abc import Mapping
 from pathlib import Path
 
 import pytest
@@ -25,13 +26,16 @@ def _make_toolpack(
     *,
     module: str,
     deterministic: bool = True,
+    limits: Mapping[str, int] | None = None,
 ) -> Toolpack:
+    if limits is None:
+        limits = {"maxInputBytes": 4096, "maxOutputBytes": 4096}
     return Toolpack(
         id="calc.double",
         version="1.0.0",
         deterministic=deterministic,
         timeout_ms=1000,
-        limits={"maxInputBytes": 4096, "maxOutputBytes": 4096},
+        limits=dict(limits),
         input_schema=_make_schema("value"),
         output_schema=_make_schema("result"),
         execution={"kind": "python", "module": module},
@@ -66,6 +70,12 @@ def test_exec_python_toolpack_runs_callable(monkeypatch: pytest.MonkeyPatch) -> 
 
     assert result == {"result": 8}
     assert captured == [{"value": 4}]
+
+    stats = executor.last_run_stats
+    assert stats is not None
+    assert stats.cache_hit is False
+    assert stats.input_bytes > 0
+    assert stats.output_bytes > 0
 
 
 def test_exec_python_toolpack_validates_input(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -113,14 +123,60 @@ def test_exec_python_toolpack_idempotent_cache(monkeypatch: pytest.MonkeyPatch) 
 
     executor = Executor()
     first = executor.run_toolpack(toolpack, {"value": 3})
+    stats_first = executor.last_run_stats
     second = executor.run_toolpack(toolpack, {"value": 3})
+    stats_second = executor.last_run_stats
 
     assert calls == [1]
     assert first == second == {"result": 3}
+    assert stats_first is not None and stats_second is not None
+    assert stats_first.cache_hit is False
+    assert stats_second.cache_hit is True
+    assert stats_second.output_bytes == stats_first.output_bytes
 
     first["result"] = 0
     cached = executor.run_toolpack(toolpack, {"value": 3})
+    stats_cached = executor.last_run_stats
     assert cached == {"result": 3}
+    assert stats_cached is not None and stats_cached.cache_hit is True
+
+
+def test_exec_python_toolpack_enforces_input_limit(monkeypatch: pytest.MonkeyPatch) -> None:
+    def run(payload: dict[str, object]) -> dict[str, object]:
+        return {"result": payload["value"]}
+
+    module_name = "toolpacks_tests.input_limit"
+    _register_module(monkeypatch, module_name, run)
+    toolpack = _make_toolpack(
+        module=f"{module_name}:run",
+        limits={"maxInputBytes": 64, "maxOutputBytes": 4096},
+    )
+
+    executor = Executor()
+
+    with pytest.raises(ToolpackExecutionError) as excinfo:
+        executor.run_toolpack(toolpack, {"value": 1, "padding": "x" * 200})
+
+    assert "input" in str(excinfo.value).lower()
+
+
+def test_exec_python_toolpack_enforces_output_limit(monkeypatch: pytest.MonkeyPatch) -> None:
+    def run(payload: dict[str, object]) -> dict[str, object]:
+        return {"result": "x" * 256}
+
+    module_name = "toolpacks_tests.output_limit"
+    _register_module(monkeypatch, module_name, run)
+    toolpack = _make_toolpack(
+        module=f"{module_name}:run",
+        limits={"maxInputBytes": 4096, "maxOutputBytes": 128},
+    )
+
+    executor = Executor()
+
+    with pytest.raises(ToolpackExecutionError) as excinfo:
+        executor.run_toolpack(toolpack, {"value": 1})
+
+    assert "output" in str(excinfo.value).lower()
 
 
 def test_exec_python_toolpack_skips_cache_for_non_deterministic(
