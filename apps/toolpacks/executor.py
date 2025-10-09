@@ -39,7 +39,13 @@ class Executor:
         self._cache: dict[str, dict[str, Any]] = {}
         self._last_stats: ExecutionStats | None = None
 
-    def run_toolpack(self, toolpack: Toolpack, payload: Mapping[str, Any]) -> dict[str, Any]:
+    def run_toolpack(
+        self,
+        toolpack: Toolpack,
+        payload: Mapping[str, Any],
+        *,
+        cache_scope: str | None = None,
+    ) -> dict[str, Any]:
         """Execute ``toolpack`` with ``payload`` and return the validated output."""
 
         self._last_stats = None
@@ -58,7 +64,7 @@ class Executor:
             toolpack=toolpack,
         )
 
-        cache_key = self._cache_key(toolpack, input_payload)
+        cache_key = self._cache_key(toolpack, input_payload, scope=cache_scope)
         input_bytes = _payload_size(input_payload)
         cache_hit = False
         if toolpack.deterministic:
@@ -148,8 +154,11 @@ class Executor:
 
         return func
 
-    def _cache_key(self, toolpack: Toolpack, payload: Mapping[str, Any]) -> str:
+    def _cache_key(
+        self, toolpack: Toolpack, payload: Mapping[str, Any], *, scope: str | None = None
+    ) -> str:
         envelope = {
+            "scope": scope or "default",
             "id": toolpack.id,
             "version": toolpack.version,
             "payload": payload,

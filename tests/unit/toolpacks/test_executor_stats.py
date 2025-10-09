@@ -87,3 +87,23 @@ def test_executor_reports_cache_hit_on_deterministic_toolpack(sample_toolpack: T
     assert second_stats.input_bytes == first_stats.input_bytes
     assert second_stats.output_bytes == first_stats.output_bytes
     assert second_stats.duration_ms >= 0
+
+
+def test_executor_cache_scope_isolated(sample_toolpack: Toolpack) -> None:
+    executor = Executor()
+    payload = {"text": "scoped"}
+
+    executor.run_toolpack(sample_toolpack, payload, cache_scope="http")
+    first_stats = executor.last_run_stats()
+    assert isinstance(first_stats, ExecutionStats)
+    assert first_stats.cache_hit is False
+
+    executor.run_toolpack(sample_toolpack, payload, cache_scope="http")
+    second_stats = executor.last_run_stats()
+    assert isinstance(second_stats, ExecutionStats)
+    assert second_stats.cache_hit is True
+
+    executor.run_toolpack(sample_toolpack, payload, cache_scope="stdio")
+    third_stats = executor.last_run_stats()
+    assert isinstance(third_stats, ExecutionStats)
+    assert third_stats.cache_hit is False

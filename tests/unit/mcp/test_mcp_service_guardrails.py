@@ -83,7 +83,13 @@ class _QueueExecutor:
     def queue(self, result: Mapping[str, Any], stats: ExecutionStats) -> None:
         self._queue.append((dict(result), stats))
 
-    def run_toolpack(self, toolpack: Toolpack, payload: Mapping[str, Any]) -> Mapping[str, Any]:
+    def run_toolpack(
+        self,
+        toolpack: Toolpack,
+        payload: Mapping[str, Any],
+        *,
+        cache_scope: str | None = None,
+    ) -> Mapping[str, Any]:
         self.calls.append((toolpack, dict(payload)))
         if not self._queue:
             raise AssertionError("Executor queue exhausted")
@@ -113,7 +119,14 @@ def toolpack(tmp_path: Path) -> Toolpack:
     )
 
 
-def _service(executor: _QueueExecutor, toolpack: Toolpack, *, limits: ServiceLimits) -> McpService:
+def _service(
+    executor: _QueueExecutor,
+    toolpack: Toolpack,
+    *,
+    limits: ServiceLimits,
+    validation_mode: ValidationMode = ValidationMode.OFF,
+    validation_log: _ValidationLogStub | None = None,
+) -> McpService:
     return McpService(
         toolpacks={toolpack.id: toolpack},
         executor=executor,
@@ -122,8 +135,8 @@ def _service(executor: _QueueExecutor, toolpack: Toolpack, *, limits: ServiceLim
         log_manager=_ServerLogStub(),
         schema_version="0.1.0",
         validation_registry=_ValidationRegistryStub(),
-        validation_log=_ValidationLogStub(),
-        validation_mode=ValidationMode.OFF,
+        validation_log=validation_log or _ValidationLogStub(),
+        validation_mode=validation_mode,
         limits=limits,
     )
 
@@ -247,3 +260,34 @@ def test_success_populates_execution_and_idempotency(toolpack: Toolpack) -> None
     assert second_payload["ok"] is True
     assert second_payload["meta"]["idempotency"]["cacheHit"] is True
     assert second_payload["meta"]["execution"]["outputBytes"] == second_stats.output_bytes
+
+
+def test_validation_logs_output_bytes_ignore_duration(
+    toolpack: Toolpack, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    executor = _QueueExecutor()
+    log_stub = _ValidationLogStub()
+    service = _service(
+        executor,
+        toolpack,
+        limits=ServiceLimits(max_input_bytes=1024, max_output_bytes=1024, timeout_ms=1000),
+        validation_mode=ValidationMode.SHADOW,
+        validation_log=log_stub,
+    )
+
+    durations = iter([12.345, 67.89])
+
+    def _next_duration(_: float) -> float:
+        return next(durations)
+
+    monkeypatch.setattr(
+        "apps.mcp_server.service.mcp_service._duration_ms", _next_duration
+    )
+
+    service.discover(context=_context())
+    service.discover(context=_context())
+
+    assert len(log_stub.events) == 2
+    first, second = log_stub.events
+    assert first.execution["outputBytes"] == second.execution["outputBytes"]
+    assert first.execution["outputBytes"] > 0

@@ -31,6 +31,7 @@ VOLATILE_META_FIELDS = {"requestId", "traceId", "spanId"}
 
 def _stable_meta(meta: Mapping[str, Any]) -> dict[str, Any]:
     stable = {key: value for key, value in meta.items() if key not in VOLATILE_META_FIELDS}
+    stable.pop("transport", None)
     execution = dict(stable.get("execution", {}))
     execution.pop("durationMs", None)
     stable["execution"] = execution

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import json
 import os
 import time
@@ -425,7 +426,11 @@ class McpService:
                         tool_id=tool_id,
                     )
         try:
-            result = self._executor.run_toolpack(toolpack, arguments)
+            result = self._executor.run_toolpack(
+                toolpack,
+                arguments,
+                cache_scope=ctx.transport,
+            )
         except ToolpackExecutionError as exc:
             return self._error_response(
                 code="INTERNAL_ERROR",
@@ -752,7 +757,13 @@ class McpService:
             if self._validation_mode is ValidationMode.ENFORCE:
                 raise
             return
-        output_bytes = _payload_size(envelope_dict)
+        sanitised_envelope = copy.deepcopy(envelope_dict)
+        meta_section = sanitised_envelope.get("meta")
+        if isinstance(meta_section, dict):
+            execution_section = meta_section.get("execution")
+            if isinstance(execution_section, dict):
+                execution_section["durationMs"] = 0.0
+        output_bytes = _payload_size(sanitised_envelope)
         execution_payload = dict(execution)
         execution_payload["outputBytes"] = max(int(output_bytes), 0)
         execution_payload.setdefault(
