@@ -1,0 +1,103 @@
+metadata:
+  last_updated: 2024-02-25T11:22:33Z
+  repo: pfahlr/
+  tags: [dsl, codex_task, policy_engine, traceability, refactor]
+  execution_mode: plan_synthesis
+analysis:
+  branch_diffs:
+    - from: codex/implement-dsl-policy-engine-in-yaml
+      to: codex/implement-dsl-policy-engine-in-yaml-81p0id
+      git_diff: |
+        diff --git a/pkgs/dsl/policy.py b/pkgs/dsl/policy.py
+        @@
+        -class PolicyTraceEvent:
+        -    event: str
+        -    scope: str
+        -    data: Mapping[str, object]
+        +class PolicyEvent:
+        +    event: str
+        +    scope: str
+        +    payload: dict[str, Any] = field(default_factory=dict)
+        @@
+        -class PolicyResolution:
+        -    allowed: frozenset[str]
+        -    blocked: frozenset[str]
+        -    reasons: Mapping[str, str]
+        +class PolicyDecision:
+        +    allowed: set[str]
+        +    denied: dict[str, str]
+        +    candidates: list[str]
+        +    stack_depth: int
+        @@
+        -        self.trace.record(PolicyTraceEvent(event="policy_resolved", scope="stack", data=...))
+        +        self._emit("policy_allowlist", scope, {"allowed": sorted(allowed_candidates), ...})
+      commentary: |
+        81p0id pivots to a mutating allowlist state machine that emits per-scope payloads but iterates frames oldest-to-newest, so later scopes cannot relax upstream denials. It also drops cycle detection and the explicit `policy_resolved` trace, replacing it with a bespoke `policy_allowlist` event, which diverges from the spec contract.
+    - from: codex/implement-dsl-policy-engine-in-yaml
+      to: codex/implement-dsl-policy-engine-in-yaml-reclz1
+      git_diff: |
+        diff --git a/pkgs/dsl/policy.py b/pkgs/dsl/policy.py
+        @@
+        -class PolicyResolution:
+        -    allowed: frozenset[str]
+        -    blocked: frozenset[str]
+        -    reasons: Mapping[str, str]
+        +class PolicyResolution:
+        +    allowed: frozenset[str]
+        +    denied: frozenset[str]
+        +    decisions: Mapping[str, PolicyDecision]
+        @@
+        -class PolicyStack:
+        -    def __init__(self, *, tools: Mapping[str, Mapping[str, object]], ...):
+        +class PolicyStack:
+        +    def __init__(self, *, tool_sets: Mapping[str, Sequence[str]] | None = None, ...):
+        @@
+        +    def effective_allowlist(self, tools: Mapping[str, ToolDescriptor | Mapping[str, object]]) -> PolicyResolution:
+        +        descriptors = {name: ToolDescriptor.from_mapping(...)}
+        +        ...
+      commentary: |
+        reclz1 introduces `ToolDescriptor` modeling and contextual stack cloning so the linter can explore loop and decision branches. However, the stack no longer owns the canonical tool registry, so unknown tool references slip through unchecked and pushes skip `None` policies entirely, reducing trace coverage.
+    - from: codex/implement-dsl-policy-engine-in-yaml
+      to: codex/implement-dsl-policy-engine-in-yaml-yp01n0
+      git_diff: |
+        diff --git a/pkgs/dsl/policy.py b/pkgs/dsl/policy.py
+        @@
+        -class PolicyError(RuntimeError):
+        -    ...
+        +class PolicyDefinitionError(ValueError):
+        +class PolicyViolationError(RuntimeError):
+        @@
+        +@dataclass(frozen=True)
+        +class PolicySnapshot:
+        +    allowed_tools: frozenset[str]
+        +    denied_tools: Mapping[str, PolicyDenial]
+        +    stack: Sequence[str]
+        @@
+        +    def enforce(self, tool_ref: str, *, scope: str | None = None, raise_on_violation: bool = True) -> bool:
+        +        ...
+      commentary: |
+        yp01n0 layers an `enforce()` API and violation emission pathway around precomputed snapshots, adding structured denial metadata. Yet allowlist resolution still walks scopes from oldest to newest, so “nearest scope wins” is lost, and `_tools_with_tags_mapping()` records the first matching tag instead of the most local directive.
+  summary_of_findings:
+    common_flaws:
+      - Later scopes cannot override upstream allow/deny choices because 81p0id and yp01n0 iterate frames in insertion order instead of reverse order.
+      - None of the variants emit the exact `policy_resolved` trace envelope defined in the base branch.
+    unique_strengths:
+      - reclz1 supplies branch-aware linting with loop/decision context cloning.
+      - yp01n0 adds `PolicyViolationError` plus an `enforce()` façade ready for runner integration.
+      - 81p0id captures verbose denial diagnostics per candidate tool, useful for observability.
+    critical_gaps:
+      - reclz1 drops validation for unknown tools and tool-set cycles, so malformed policies are silently accepted.
+      - yp01n0 always pushes even empty policies and lacks cycle detection, polluting traces and hiding configuration bugs.
+      - 81p0id omits an exception path for unknown tools, relying on `KeyError` instead of a typed error.
+confidence_notes:
+  - area: enforce() semantics
+    confidence: medium
+    reason: Branches disagree on stack traversal order and denial precedence, so expected behavior requires clarification from the spec owner.
+coverage_gaps:
+  - missing: unit test for `policy_resolved` trace when computing allowlists.
+  - missing: recursion validation in allowlist expansion (tool-set cycles) in all but the base branch.
+traceability_checklist:
+  - must-emit: push
+  - must-emit: pop
+  - must-emit: policy_resolved
+  - must-raise: PolicyViolationError
