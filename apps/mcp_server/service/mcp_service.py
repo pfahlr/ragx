@@ -221,8 +221,9 @@ class ServerLogManager:
         deterministic: bool,
         retention: int = 5,
     ) -> None:
-        self._storage_prefix = Path(log_dir) / "mcp_server" / "bootstrap"
-        self._latest_symlink = Path(log_dir) / "mcp_server" / "bootstrap.latest.jsonl"
+        base_dir = Path(log_dir) / "mcp_server"
+        self._storage_prefix = base_dir / "tool_invocations"
+        self._latest_symlink = base_dir / "tool_invocations.latest.jsonl"
         self._writer = JsonLogWriter(
             agent_id=_AGENT_ID,
             task_id=_TASK_ID,

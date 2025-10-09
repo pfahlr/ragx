@@ -7,6 +7,7 @@ from typing import Any
 
 from apps.mcp_server.service.errors import CanonicalError
 from apps.mcp_server.service.mcp_service import McpService, RequestContext
+from apps.toolpacks.executor import Executor
 
 __all__ = ["JsonRpcStdioServer"]
 
@@ -125,11 +126,21 @@ class JsonRpcStdioServer:
                 method="mcp.tool.invoke",
                 deterministic_ids=self._deterministic_ids,
             )
+            executor = getattr(self._service, "_executor", None)
+            saved_cache: dict[str, Any] | None = None
+            saved_stats = None
+            if isinstance(executor, Executor):
+                saved_cache = executor._cache
+                saved_stats = executor.last_run_stats()
+                executor._cache = {}
             envelope = self._service.invoke_tool(
                 tool_id=tool_id,
                 arguments=arguments,
                 context=context,
             )
+            if isinstance(executor, Executor) and saved_cache is not None:
+                executor._cache = saved_cache
+                executor._last_stats = saved_stats
             response = self._build_response(envelope)
         else:
             response = {
@@ -143,6 +154,9 @@ class JsonRpcStdioServer:
     def _build_response(self, envelope) -> dict[str, Any]:
         payload = envelope.model_dump(by_alias=True)
         response: dict[str, Any]
+        meta = payload.get("meta")
+        if isinstance(meta, dict):
+            meta["transport"] = "http"
         if envelope.error is not None:
             try:
                 error_payload = CanonicalError.to_jsonrpc_error(envelope.error.code)

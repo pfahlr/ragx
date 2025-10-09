@@ -67,10 +67,10 @@ fields specified in the bootstrap contract (`ts`, `agentId`, `taskId`,
 `durationMs`, `attempt`, `inputBytes`, `outputBytes`, `metadata`, `error`).
 Metadata is enriched with `runId`, `attemptId`, `schemaVersion`,
 `deterministic`, and `logPath`. Logs rotate with keep-last-5 retention and a
-stable `runs/mcp_server/bootstrap.latest.jsonl` symlink.
+stable `runs/mcp_server/tool_invocations.latest.jsonl` symlink.
 
 The repository includes a golden fixture at
-`tests/fixtures/mcp/server/bootstrap_golden.jsonl`. Use the diff tool
+`tests/fixtures/mcp/logs/mcp_toolpacks_transport_golden.jsonl`. Use the diff tool
 `scripts/diff_mcp_server_logs.py` to compare new runs while ignoring the
 volatile whitelist (`ts`, `durationMs`, `traceId`, `spanId`, `runId`,
 `attemptId`, `requestId`, `logPath`).
@@ -81,8 +81,8 @@ Run the CLI in deterministic once mode to regenerate the golden log:
 
 ```
 python -m apps.mcp_server.cli --once --deterministic-ids --log-dir tmp/runs
-python scripts/diff_mcp_server_logs.py --new tmp/runs/mcp_server/bootstrap.latest.jsonl \
-    --golden tests/fixtures/mcp/server/bootstrap_golden.jsonl
+python scripts/diff_mcp_server_logs.py --new tmp/runs/mcp_server/tool_invocations.latest.jsonl \
+    --golden tests/fixtures/mcp/logs/mcp_toolpacks_transport_golden.jsonl
 ```
 
 After verification, update the fixture and symlink in `tests/fixtures/mcp/logs`.

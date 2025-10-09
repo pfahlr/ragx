@@ -66,6 +66,24 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         default="runs",
         help="Directory for structured logs",
     )
+    parser.add_argument(
+        "--max-input-bytes",
+        type=int,
+        default=None,
+        help="Override global maximum input payload size in bytes",
+    )
+    parser.add_argument(
+        "--max-output-bytes",
+        type=int,
+        default=None,
+        help="Override global maximum output payload size in bytes",
+    )
+    parser.add_argument(
+        "--timeout-ms",
+        type=int,
+        default=None,
+        help="Override global execution timeout in milliseconds",
+    )
     return parser.parse_args(argv)
 
 
@@ -108,6 +126,9 @@ async def _run_server(args: argparse.Namespace) -> None:
         schema_dir=schema_dir,
         log_dir=log_dir,
         deterministic_logs=args.deterministic_ids,
+        max_input_bytes=args.max_input_bytes,
+        max_output_bytes=args.max_output_bytes,
+        timeout_ms=args.timeout_ms,
     )
 
     if args.once:
