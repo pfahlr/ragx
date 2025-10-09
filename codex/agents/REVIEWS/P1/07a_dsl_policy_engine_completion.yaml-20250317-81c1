@@ -1,0 +1,127 @@
+metadata:
+  last_updated: 2025-03-17
+  repo: pfahlr/
+  tags: [dsl, codex_task, policy_engine, traceability, refactor]
+  execution_mode: plan_synthesis
+analysis:
+  branch_diffs:
+    - from: codex/implement-dsl-policy-engine-in-yaml
+      to: codex/implement-dsl-policy-engine-in-yaml-81p0id
+      git_diff: |
+        --- a/pkgs/dsl/policy.py
+        +++ b/pkgs/dsl/policy.py
+        @@
+        -class PolicyTraceRecorder:
+        -    """Collects policy trace events for later inspection."""
+        -    def __init__(self) -> None:
+        -        self.events: list[PolicyTraceEvent] = []
+        +class PolicyEvent:
+        +    """Structured trace emitted by ``PolicyStack`` operations."""
+        +    payload: dict[str, Any] = field(default_factory=dict)
+        @@
+        -        self.trace.record(
+        -            PolicyTraceEvent(event="policy_resolved", scope="stack", data={...})
+        -        )
+        +        self._emit(
+        +            "policy_allowlist",
+        +            self.stack[-1].scope if self.stack else "global",
+        +            {"allowed": sorted(allowed_candidates), "denied": denied_candidates},
+        +        )
+      commentary: |
+        Branch 81p0id swaps the recorder abstraction for a bare list of ``PolicyEvent``
+        records, but the contract regresses: ``effective_allowlist`` emits a non-spec
+        ``policy_allowlist`` event and only tracks denial reasons for the provided
+        candidates. Because the evaluation loop walks frames in push order, newer
+        scopes cannot re-allow a tool denied earlier, breaking the nearest-scope-wins
+        rule. Unknown tool references only raise ``KeyError`` on access and set
+        expansion does not detect cycles.
+    - from: codex/implement-dsl-policy-engine-in-yaml
+      to: codex/implement-dsl-policy-engine-in-yaml-reclz1
+      git_diff: |
+        --- a/pkgs/dsl/policy.py
+        +++ b/pkgs/dsl/policy.py
+        @@
+        -class PolicyDefinition:
+        -    allow_tools: frozenset[str] | None = None
+        -    deny_tools: frozenset[str] | None = None
+        +class PolicyDecision:
+        +    allowed: bool
+        +    source: str
+        +    scope: str
+        @@
+        -class PolicyStack:
+        -    def __init__(..., tools: Mapping[str, Mapping[str, object]], ...):
+        -        self._tools = {...}
+        +class PolicyStack:
+        +    def __init__(..., tool_sets: Mapping[str, Sequence[str]] | None = None, trace=None):
+        +        self._tool_sets = {...}
+        +        self.stack: list[_PolicyFrame] = []
+        +        self.trace: MutableSequence[PolicyTraceEvent] = trace or []
+      commentary: |
+        Branch reclz1 promotes richer diagnostics by introducing ``ToolDescriptor``
+        objects, per-tool ``PolicyDecision`` records, and stack cloning for branch
+        previews. It no longer retains a registry of known tools in the stack
+        itself—callers must pass descriptors to ``effective_allowlist``—so unknown
+        tool references in directives silently pass through. Trace coverage still
+        lacks ``policy_resolved`` and no violation event is emitted.
+    - from: codex/implement-dsl-policy-engine-in-yaml
+      to: codex/implement-dsl-policy-engine-in-yaml-yp01n0
+      git_diff: |
+        --- a/pkgs/dsl/policy.py
+        +++ b/pkgs/dsl/policy.py
+        @@
+        -class PolicyTraceEvent:
+        -    event: str
+        -    scope: str
+        -    data: Mapping[str, object]
+        +class PolicyEvent:
+        +    kind: str
+        +    scope: str
+        +    policy: Mapping[str, Any] | None
+        +    detail: Mapping[str, Any] = field(default_factory=dict)
+        @@
+        -class PolicyStack:
+        -    def effective_allowlist(self) -> PolicyResolution:
+        -        ...
+        +class PolicyStack:
+        +    def enforce(self, tool_ref: str, *, scope: str | None = None,
+        +                 raise_on_violation: bool = True) -> bool:
+        +        ...
+      commentary: |
+        Branch yp01n0 layers in enforcement primitives (``PolicyViolationError``,
+        ``PolicyEvent`` sink, ``PolicySnapshot``) and validates tool/set references on
+        ingestion. However, stack evaluation iterates frames in insertion order, so a
+        later scope cannot override an earlier denial, and ``policy_resolved`` traces
+        disappear. Tool-set expansion still lacks cycle detection.
+  summary_of_findings:
+    common_flaws:
+      - Missing ``policy_resolved`` trace emission across non-base branches.
+      - No branch wires policy evaluation into unit tests; coverage remains absent.
+      - Tool-set expansion lacks cycle detection in every variant.
+    unique_strengths:
+      - codex/implement-dsl-policy-engine-in-yaml provides robust normalization,
+        cycle protection, and complete trace coverage for push/pop/resolved events.
+      - codex/implement-dsl-policy-engine-in-yaml-reclz1 adds reusable
+        ``ToolDescriptor`` models and per-tool decision diagnostics.
+      - codex/implement-dsl-policy-engine-in-yaml-yp01n0 introduces
+        ``PolicyViolationError`` plus an ``enforce()`` API with event sink hooks.
+    critical_gaps:
+      - codex/implement-dsl-policy-engine-in-yaml-81p0id breaks nearest-scope-wins by
+        evaluating in FIFO order and never clearing prior denials.
+      - codex/implement-dsl-policy-engine-in-yaml-reclz1 silently accepts unknown
+        tools/sets, deferring discovery until runtime consumers pass registries.
+      - codex/implement-dsl-policy-engine-in-yaml-yp01n0 emits no ``policy_resolved``
+        trace and leaves allowlist decisions irreversible once filtered.
+confidence_notes:
+  - area: enforce() semantics
+    confidence: medium
+    reason: Divergent stack traversal strategies lead to inconsistent allow/deny
+      overrides across branches.
+coverage_gaps:
+  - missing: Unit tests validating ``policy_resolved`` traces across push/pop cycles.
+  - missing: Regression tests for recursive tool-set cycle validation.
+traceability_checklist:
+  - must-emit: push
+  - must-emit: pop
+  - must-emit: policy_resolved
+  - must-raise: PolicyViolationError
