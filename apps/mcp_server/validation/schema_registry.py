@@ -59,12 +59,15 @@ class _ToolPayloadValidator:
         self._payload.validate(payload_value)
 
 
+_MODULE_ROOT = Path(__file__).resolve().parent.parent
+
+
 class SchemaRegistry:
     """Load and cache JSON schema validators for envelopes and tool IO."""
 
-    _DEFAULT_ENVELOPE_SCHEMA = Path("apps/mcp_server/schemas/envelope.schema.json")
+    _DEFAULT_ENVELOPE_SCHEMA = _MODULE_ROOT / "schemas" / "mcp" / "envelope.schema.json"
     _DEFAULT_TOOL_IO_SCHEMA = Path("codex/specs/schemas/tool_io.schema.json")
-    _DEFAULT_TOOL_SCHEMA_ROOT = Path("apps/mcp_server/schemas/tools")
+    _DEFAULT_TOOL_SCHEMA_ROOT = _MODULE_ROOT / "schemas" / "tools"
 
     def __init__(
         self,

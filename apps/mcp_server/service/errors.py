@@ -16,6 +16,29 @@ class _CanonicalSpec:
     message: str
 
 
+@dataclass(frozen=True)
+class _JsonRpcErrorTemplate:
+    """Immutable template describing JSON-RPC error payload fields."""
+
+    code: int
+    message: str
+    retryable: bool
+
+    def build_payload(self, *, canonical_code: str, http_status: int) -> dict[str, object]:
+        """Materialise a JSON-RPC error payload without sharing state."""
+
+        return {
+            "code": self.code,
+            "message": self.message,
+            "data": {
+                "canonical": canonical_code,
+                "httpStatus": http_status,
+                "message": self.message,
+                "retryable": bool(self.retryable),
+            },
+        }
+
+
 class CanonicalError:
     """Canonical error codes used across transports."""
 
@@ -63,8 +86,13 @@ class CanonicalError:
     )
 
     _HTTP_STATUS_MAP: dict[str, int] = {spec.code: spec.http_status for spec in _SPECS}
-    _JSONRPC_MAP: dict[str, tuple[int, str, bool]] = {
-        spec.code: (spec.jsonrpc_code, spec.message, spec.retryable) for spec in _SPECS
+    _JSONRPC_MAP: dict[str, _JsonRpcErrorTemplate] = {
+        spec.code: _JsonRpcErrorTemplate(
+            code=spec.jsonrpc_code,
+            message=spec.message,
+            retryable=spec.retryable,
+        )
+        for spec in _SPECS
     }
 
     @classmethod
@@ -86,18 +114,8 @@ class CanonicalError:
 
     @classmethod
     def to_jsonrpc_error(cls, code: str) -> dict[str, object]:
-        value = cls._lookup(code, cls._JSONRPC_MAP, context="JSON-RPC error")
-        if not isinstance(value, tuple):  # pragma: no cover - defensive
-            raise TypeError("JSON-RPC mapping must be a tuple")
-        jsonrpc_code, message, retryable = value
-        payload = {
-            "code": jsonrpc_code,
-            "message": message,
-            "data": {
-                "canonical": code,
-                "httpStatus": cls.to_http_status(code),
-                "message": message,
-                "retryable": bool(retryable),
-            },
-        }
-        return payload
+        template = cls._lookup(code, cls._JSONRPC_MAP, context="JSON-RPC error")
+        if not isinstance(template, _JsonRpcErrorTemplate):  # pragma: no cover - defensive
+            raise TypeError("JSON-RPC mapping must be a _JsonRpcErrorTemplate")
+        http_status = cls.to_http_status(code)
+        return template.build_payload(canonical_code=code, http_status=http_status)
