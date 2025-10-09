@@ -425,7 +425,7 @@ class McpService:
                         tool_id=tool_id,
                     )
         try:
-            result = self._executor.run_toolpack(toolpack, arguments)
+            result, stats = self._executor.run_toolpack_with_stats(toolpack, arguments)
         except ToolpackExecutionError as exc:
             return self._error_response(
                 code="INTERNAL_ERROR",
@@ -433,14 +433,6 @@ class McpService:
                 context=ctx,
                 payload=payload,
                 tool_id=tool_id,
-            )
-        stats = self._executor.last_run_stats()
-        if stats is None:
-            stats = ExecutionStats(
-                duration_ms=_duration_ms(ctx.start_time),
-                input_bytes=ids["input_bytes"],
-                output_bytes=_payload_size(result),
-                cache_hit=False,
             )
         effective_timeout = min(self._limits.timeout_ms, toolpack.timeout_ms)
         if stats.duration_ms > effective_timeout:

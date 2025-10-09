@@ -54,11 +54,10 @@ def test_executor_records_duration_and_bytes(sample_toolpack: Toolpack) -> None:
     executor = Executor()
     payload = {"text": "hello"}
 
-    result = executor.run_toolpack(sample_toolpack, payload)
+    result, stats = executor.run_toolpack_with_stats(sample_toolpack, payload)
 
     assert result["echo"]["text"] == "hello"
 
-    stats = executor.last_run_stats()
     assert isinstance(stats, ExecutionStats)
     assert stats.cache_hit is False
     assert stats.input_bytes == _canonical_size(payload)
@@ -70,18 +69,16 @@ def test_executor_reports_cache_hit_on_deterministic_toolpack(sample_toolpack: T
     executor = Executor()
     payload = {"text": "cached"}
 
-    first = executor.run_toolpack(sample_toolpack, payload)
-    first_stats = executor.last_run_stats()
+    first, first_stats = executor.run_toolpack_with_stats(sample_toolpack, payload)
     assert isinstance(first_stats, ExecutionStats)
     assert first_stats.cache_hit is False
 
     # Sleep to ensure measurable elapsed time even for cached hits.
     time.sleep(0.01)
 
-    second = executor.run_toolpack(sample_toolpack, payload)
+    second, second_stats = executor.run_toolpack_with_stats(sample_toolpack, payload)
     assert second == first
 
-    second_stats = executor.last_run_stats()
     assert isinstance(second_stats, ExecutionStats)
     assert second_stats.cache_hit is True
     assert second_stats.input_bytes == first_stats.input_bytes
