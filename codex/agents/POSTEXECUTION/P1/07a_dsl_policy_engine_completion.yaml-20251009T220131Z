@@ -1,0 +1,15 @@
+post_execution_feedback:
+  was_successful: null
+  failed_tasks: []
+  recommended_revisions: []
+handoff_contract:
+  expected_consumer: gpt-5-codex
+  input_format: schema://codex/specs/schemas/full_task.schema.json
+  output_type: executable-python+unit-tests
+codex_directives:
+  must:
+    - attribute reused logic to specific branches when landing code comments or docstrings.
+    - emit policy_resolved trace events in the unified implementation.
+  do_not:
+    - invent tools or APIs that are absent from the compared branches.
+    - reuse test logic verbatim without acknowledging its origin.
