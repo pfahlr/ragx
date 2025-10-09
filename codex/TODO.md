@@ -31,7 +31,6 @@
 - [x] codex/agents/TASKS/06c_mcp_envelope_and_schema_validation.yaml
 - [ ] codex/agents/TASKS/06cV2A_mcp_envelope_and_schema_validation_A.yaml
 - [ ] codex/agents/TASKS/06cV2B_mcp_envelope_and_schema_validation_B.yaml
-
 - [ ] codex/agents/TASKS/06d_mcp_toolpacks_transport.yaml
 
 - [ ] codex/agents/TASKS/07a_dsl_policy_engine_completion.yaml
@@ -113,3 +112,9 @@
 - [ ] codex/agents/TASKS/60a-codex-bootstrap-and-guardrails.yaml
 
 - [ ] codex/agents/TASKS/70a-docs-foundation.yaml
+
+
+---
+## Phase II
+---
+- [ ] codex/agents/TASKS/106a-mcp-server-prod-enhancements.yaml
