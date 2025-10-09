@@ -10,7 +10,7 @@ import pytest
 pytest.importorskip("uvicorn")
 pytest.importorskip("pydantic")
 
-GOLDEN_LOG = Path("tests/fixtures/mcp/server/bootstrap_golden.jsonl")
+GOLDEN_LOG = Path("tests/fixtures/mcp/logs/mcp_toolpacks_transport_golden.jsonl")
 DIFF_SCRIPT = Path("scripts/diff_mcp_server_logs.py")
 
 
@@ -35,7 +35,7 @@ def test_mcp_server_once_mode_generates_deterministic_log(
     result = subprocess.run(cmd, capture_output=True, text=True, env=env)
     assert result.returncode == 0, result.stdout + result.stderr
 
-    latest = log_dir / "mcp_server" / "bootstrap.latest.jsonl"
+    latest = log_dir / "mcp_server" / "tool_invocations.latest.jsonl"
     assert latest.exists()
 
     diff = subprocess.run(

@@ -13,6 +13,7 @@ DEFAULT_WHITELIST = [
     "spanId",
     "requestId",
     "execution.durationMs",
+    "execution.outputBytes",
     "metadata.runId",
     "metadata.attemptId",
     "metadata.logPath",

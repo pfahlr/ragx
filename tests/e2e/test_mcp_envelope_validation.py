@@ -51,6 +51,7 @@ def test_mcp_envelope_validation_logs_match_golden(
             "spanId",
             "requestId",
             "execution.durationMs",
+            "execution.outputBytes",
             "metadata.runId",
             "metadata.attemptId",
             "metadata.logPath",

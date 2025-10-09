@@ -10,7 +10,7 @@ import pytest
 pytest.importorskip("deepdiff")
 
 SCRIPT = Path("scripts/diff_mcp_server_logs.py")
-GOLDEN = Path("tests/fixtures/mcp/server/bootstrap_golden.jsonl")
+GOLDEN = Path("tests/fixtures/mcp/logs/mcp_toolpacks_transport_golden.jsonl")
 
 
 @pytest.mark.parametrize("whitelisted", [True, False])
