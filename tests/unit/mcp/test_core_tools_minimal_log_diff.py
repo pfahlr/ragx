@@ -30,6 +30,12 @@ def _normalise(path: Path) -> list[dict[str, object]]:
         if isinstance(execution, dict):
             for field in EXECUTION_WHITELIST:
                 execution.pop(field, None)
+        metadata = payload.get("metadata")
+        if isinstance(metadata, dict):
+            execution_meta = metadata.get("execution")
+            if isinstance(execution_meta, dict):
+                for field in EXECUTION_WHITELIST:
+                    execution_meta.pop(field, None)
         events.append(payload)
     return sorted(events, key=lambda item: (item["toolId"], item["event"], item["attempt"]))
 

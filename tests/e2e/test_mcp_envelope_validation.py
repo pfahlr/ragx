@@ -34,7 +34,7 @@ def test_mcp_envelope_validation_logs_match_golden(
     result = subprocess.run(cmd, capture_output=True, text=True, env=env)
     assert result.returncode == 0, result.stdout + result.stderr
 
-    latest = log_dir / "mcp_server" / "envelope_validation.latest.jsonl"
+    latest = log_dir / "logs" / "mcp_server" / "envelope_validation.latest.jsonl"
     assert latest.exists(), f"Expected structured log at {latest}"
 
     diff = subprocess.run(
@@ -50,10 +50,13 @@ def test_mcp_envelope_validation_logs_match_golden(
             "traceId",
             "spanId",
             "requestId",
+            "attemptId",
+            "runId",
             "execution.durationMs",
-            "metadata.runId",
-            "metadata.attemptId",
-            "metadata.logPath",
+            "execution.outputBytes",
+            "logPath",
+            "metadata.execution.durationMs",
+            "metadata.execution.outputBytes",
         ],
         capture_output=True,
         text=True,

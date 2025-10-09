@@ -64,7 +64,8 @@ def test_log_writer_serialises_event(tmp_path: Path) -> None:
         assert required in record
     assert record["metadata"]["schemaVersion"] == "0.1.0"
     assert record["metadata"]["deterministic"] is True
-    assert Path(record["metadata"]["logPath"]).name.startswith("minimal")
+    assert "logPath" not in record["metadata"], "logPath should be top-level"
+    assert Path(record["logPath"]).name.startswith("minimal")
 
 
 def test_log_rotation_keeps_latest_symlink(tmp_path: Path) -> None:
