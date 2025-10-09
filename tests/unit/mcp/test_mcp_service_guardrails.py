@@ -83,7 +83,11 @@ class _QueueExecutor:
         self._queue.append((dict(result), stats))
 
     def run_toolpack_with_stats(
-        self, toolpack: Toolpack, payload: Mapping[str, Any]
+        self,
+        toolpack: Toolpack,
+        payload: Mapping[str, Any],
+        *,
+        use_cache: bool = True,
     ) -> tuple[Mapping[str, Any], ExecutionStats]:
         self.calls.append((toolpack, dict(payload)))
         if not self._queue:

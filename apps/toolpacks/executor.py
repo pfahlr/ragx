@@ -37,6 +37,12 @@ class Executor:
 
     def __init__(self) -> None:
         self._cache: dict[str, dict[str, Any]] = {}
+        self._last_stats: ExecutionStats | None = None
+
+    def last_run_stats(self) -> ExecutionStats | None:
+        """Return metrics for the most recent invocation."""
+
+        return self._last_stats
 
     def run_toolpack(self, toolpack: Toolpack, payload: Mapping[str, Any]) -> dict[str, Any]:
         """Execute ``toolpack`` with ``payload`` and return the validated output."""
@@ -45,7 +51,11 @@ class Executor:
         return result
 
     def run_toolpack_with_stats(
-        self, toolpack: Toolpack, payload: Mapping[str, Any]
+        self,
+        toolpack: Toolpack,
+        payload: Mapping[str, Any],
+        *,
+        use_cache: bool = True,
     ) -> tuple[dict[str, Any], ExecutionStats]:
         """Execute ``toolpack`` with ``payload`` and return result + metrics."""
 
@@ -66,7 +76,8 @@ class Executor:
 
         cache_key = self._cache_key(toolpack, input_payload)
         input_bytes = _payload_size(input_payload)
-        if toolpack.deterministic:
+        cache_enabled = use_cache and toolpack.deterministic
+        if cache_enabled:
             cached = self._cache.get(cache_key)
             if cached is not None:
                 output_bytes = _payload_size(cached)
@@ -77,6 +88,7 @@ class Executor:
                     output_bytes=output_bytes,
                     cache_hit=True,
                 )
+                self._last_stats = stats
                 return copy.deepcopy(cached), stats
 
         runner = self._resolve_python_callable(toolpack)
@@ -106,8 +118,10 @@ class Executor:
             output_bytes=output_bytes,
             cache_hit=False,
         )
+        self._last_stats = stats
         if toolpack.deterministic:
-            self._cache[cache_key] = copy.deepcopy(materialised)
+            if cache_enabled:
+                self._cache[cache_key] = copy.deepcopy(materialised)
             return copy.deepcopy(materialised), stats
         return materialised, stats
 
