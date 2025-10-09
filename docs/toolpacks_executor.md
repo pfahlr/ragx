@@ -20,6 +20,19 @@ result = executor.run_toolpack(pack, {"text": "hello"})
 print(result["text"])
 ```
 
+To capture execution metrics alongside the payload, use
+`run_toolpack_with_stats`:
+
+```python
+result, stats = executor.run_toolpack_with_stats(pack, {"text": "hello"})
+print(result["text"], stats.duration_ms)
+```
+
+Pass ``use_cache=False`` to `run_toolpack_with_stats` when you need to bypass
+deterministic caching (for example, to isolate transport-specific invocations)
+without flushing previously cached entries. The most recent metrics can always
+be retrieved via `executor.last_run_stats()`.
+
 ## Behaviour
 
 - Only `execution.kind: python` toolpacks are supported. Other kinds raise
@@ -30,6 +43,12 @@ print(result["text"])
 - Deterministic toolpacks (`deterministic: true`) are cached by a SHA-256 hash
   of `id`, `version`, and the normalised input payload. Each cache hit returns a
   fresh deep copy, keeping results immutable to the caller.
+- `run_toolpack_with_stats` returns an `ExecutionStats` instance describing the
+  duration, payload sizes, and cache-hit status for the invocation. It exposes a
+  ``use_cache`` flag to bypass caching when required.
+- `Executor.last_run_stats()` returns the metrics collected for the most recent
+  invocation, allowing transports to preserve observability when they temporarily
+  disable caching.
 - Non-deterministic toolpacks bypass the cache entirely.
 - Handlers are resolved via the `execution.module` field using the
   `module:callable` convention. Invalid formats, missing modules, missing

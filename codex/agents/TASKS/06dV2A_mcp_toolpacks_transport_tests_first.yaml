@@ -1,0 +1,249 @@
+version: 1
+id: 06dV2A_mcp_toolpacks_transport_tests_first
+title: MCP Toolpacks Transport — Unify execution, guardrails, and telemetry (Part A — Tests First)
+
+metadata:
+  owners:
+    - pfahlr@gmail.com
+  priority: P1
+  last_updated: "2025-10-09"
+  labels: [tests-first, spec, scaffold, mcp-server, toolpacks, observability]
+
+summary: >
+  Lock in a spec-first test scaffold for a unified HTTP/STDIO transport: deterministic caching,
+  service-level guardrails (timeouts/byte limits), canonical errors, and structured telemetry.
+
+description: >
+  Define the executable contract via tests and schemas before implementation. Executor measures;
+  service enforces. Ensure envelopes/logs expose execution and idempotency metadata deterministically,
+  with parity across HTTP and STDIO.
+
+scope:
+  goals:
+    - Golden tests asserting deterministic cache hit/miss and execution telemetry (durationMs, inputBytes, outputBytes).
+    - Service-level enforcement of timeoutMs, maxInputBytes, maxOutputBytes with canonical errors (TIMEOUT, INVALID_INPUT/OUTPUT).
+    - HTTP/STDIO parity: same envelope + metadata + logging shape.
+    - Schema/envelope validation wired into tests.
+  non_goals:
+    - Non-Python toolpack kinds.
+    - Transport framework rewrites beyond invocation and response finalization.
+
+assumptions:
+  - Existing Python toolpack manifests are spec-compliant and deterministic where marked.
+  - Baseline envelope and schema registries are available from prior tasks.
+
+constraints:
+  - Structured logs must be stable aside from approved volatile fields.
+  - Golden updates require an explicit approval step.
+
+component_ids: [apps.mcp_server.service, apps.toolpacks.executor, tests.e2e.mcp]
+depends_on: [06cV2A_mcp_envelope_and_schema_validation_A, 06b_mcp_server_bootstrap]
+
+arg_spec:
+  - --deterministic-ids
+  - --max-input-bytes=<int>
+  - --max-output-bytes=<int>
+  - --timeout-ms=<int>
+
+config_flags:
+  - name: deterministic_ids
+    type: bool
+    default: true
+    desc: Mask nondeterministic IDs in envelopes/logs.
+  - name: max_input_bytes
+    type: int
+    default: 1048576
+    desc: Reject payloads exceeding this size.
+  - name: max_output_bytes
+    type: int
+    default: 2097152
+    desc: Clamp/err on oversized results.
+  - name: timeout_ms
+    type: int
+    default: 15000
+    desc: Budget per tool invocation.
+
+x-volatile-fields: [ts, traceId, spanId, requestId, attemptId, runId, durationMs]
+x-log-event-fields:
+  - ts
+  - transport
+  - route
+  - method
+  - status
+  - execution.durationMs
+  - execution.inputBytes
+  - execution.outputBytes
+  - idempotency.cacheHit
+
+server_contract:
+  transports:
+    http:
+      framework: fastapi
+      endpoints:
+        - method: POST
+          path: /mcp/tool/{toolId}
+          response:
+            description: Deterministic invocation envelope with execution/idempotency metadata and result payload.
+      shutdown: ASGI lifespan
+    stdio:
+      protocol: json-rpc 2.0
+      lifecycle: [init, invoke_tool, finalise_envelope, shutdown]
+      control: [deterministic_ids, idempotency cache reporting]
+  shared_service:
+    class: apps.mcp_server.service.mcp_service.McpService
+    methods: [discover, get_prompt, invoke_tool, health]
+    behavior:
+      - Enforce toolpack limits/timeouts before finalising response.
+      - Attach execution and idempotency metadata for success and error envelopes.
+  cli:
+    command: mcp-server
+    flags: [--deterministic-ids, --max-input-bytes, --max-output-bytes, --timeout-ms]
+
+classes_contract:
+  language: python
+  classes:
+    - name: Executor
+      responsibilities:
+        - Run toolpacks; measure duration/bytes; expose last-run stats
+      methods:
+        - signature: run_toolpack(toolpack: Toolpack, payload: Mapping[str, Any]) -> Mapping[str, Any]
+        - signature: last_run_stats() -> ExecutionStats | None
+          raises: []
+          invariants: [stats refer to last call only]
+    - name: McpService
+      responsibilities:
+        - Enforce limits/timeouts; canonicalize errors; assemble envelopes; log telemetry
+      methods:
+        - signature: invoke_tool(tool_id: str, arguments: Mapping[str, Any], ctx: RequestContext | None = None) -> Envelope
+
+interfaces_contract:
+  protocols:
+    - name: ToolpackExecutorProtocol
+      methods:
+        - name: run_toolpack
+          params: [Toolpack, Mapping[str, Any]]
+          returns: Mapping[str, Any]
+        - name: last_run_stats
+          params: []
+          returns: ExecutionStats | None
+
+cli_contract:
+  program: mcp-server
+  commands:
+    - name: serve
+      flags:
+        - name: --deterministic-ids
+          type: bool
+          required: false
+        - name: --timeout-ms
+          type: int
+          required: false
+      exit_codes:
+        - code: 0
+          meaning: OK
+        - code: 2
+          meaning: Schema/validation error
+
+schema_contract:
+  draft: "2020-12"
+  files:
+    - path: apps/mcp_server/schemas/mcp/tool.response.schema.json
+      kind: output
+      required_fields: [data, meta.execution, meta.idempotency]
+
+toolpack_contract:
+  manifests: [apps/mcp_server/toolpacks/**/*.yaml]
+  deterministic: true
+
+datastore_contract:
+  engine: sqlite
+  schemas: []
+  migrations_dir: ""
+
+structured_logging_contract:
+  format: jsonl
+  storage_path_prefix: runs/mcp_server/toolpacks_transport
+  latest_symlink: runs/mcp_server/toolpacks_transport.latest.jsonl
+  retention: keep-last-5
+  event_fields:
+    - ts
+    - transport
+    - route
+    - method
+    - status
+    - execution.durationMs
+    - execution.inputBytes
+    - execution.outputBytes
+    - idempotency.cacheHit
+    - metadata
+  metadata_fields: [schemaVersion, deterministic, toolId, promptId, execution, idempotency]
+  volatile_fields: [ts, traceId, spanId, requestId, attemptId, runId]
+
+log_diff_strategy:
+  tool: deepdiff
+  baseline_path: tests/fixtures/mcp/logs/mcp_toolpacks_transport_golden.jsonl
+  whitelist_fields: [ts, traceId, spanId, requestId, attemptId, runId, execution.durationMs]
+  notes: Only approved volatile fields are ignored; telemetry fields must exist.
+
+artifacts:
+  tests:
+    unit:
+      - tests/unit/toolpacks/test_executor_stats.py
+    integration:
+      - tests/integration/mcp/test_transport_parity_http_stdio.py
+    property_based: []
+  fixtures:
+    - tests/fixtures/mcp/logs/*
+    - tests/fixtures/toolpacks/*
+  stubs:
+    - tests/stubs/toolpacks/deterministic_sum.yaml
+  schemas:
+    - apps/mcp_server/schemas/mcp/tool.response.schema.json
+  docs:
+    - docs/mcp_toolpacks_transport.md
+
+test_plan:
+  unit:
+    - Executor exposes last_run_stats after success and failure
+    - Stats reset semantics across consecutive runs
+  integration:
+    - HTTP & STDIO both return meta.execution + meta.idempotency
+    - Service enforces maxInputBytes/maxOutputBytes with canonical errors
+  property_based: []
+  fixtures:
+    - golden logs with cache hit/miss
+    - oversized input/output payloads
+
+ci:
+  xfail_marker: mcp_toolpacks_transport_spec_xfail
+  matrix:
+    python: ["3.11", "3.12"]
+    os: [ubuntu-latest]
+  gates:
+    - ruff
+    - mypy
+    - pytest -q
+    - python scripts/diff_logs_allowlist.py
+
+actions:
+  - stage: spec_alignment
+    summary: Freeze contracts & schemas
+    tasks:
+      - Pin response schema fields for meta.execution/meta.idempotency
+      - List volatile fields for diff allowlist
+  - stage: tests_scaffold
+    summary: Author unit/integration/e2e shells
+    tasks:
+      - Write failing tests for TIMEOUT, INVALID_INPUT/OUTPUT
+      - Add cache hit/miss assertions in both transports
+      - Goldenize minimal log line shape
+  - stage: validation_wiring
+    summary: Envelope/schema checks in tests
+    tasks:
+      - Assert envelopes validate against schema
+      - Assert logs contain required metadata keys
+
+acceptance:
+  - All Part A tests fail for the right reasons before implementation.
+  - Golden diff shows missing telemetry/metadata prior to Part B.
+  - CI gates run and report failures tied to Part A assertions.

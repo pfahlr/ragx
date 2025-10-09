@@ -28,8 +28,9 @@
 - [x] codex/agents/TASKS/06ab_core_tools_minimal_subset.yaml
 - [x] codex/agents/TASKS/06aV2_core_tools_minimal_subset.yaml
 - [x] codex/agents/TASKS/06b_mcp_server_bootstrap.yaml
-- [x] codex/agents/TASKS/06bV2_mcp_server_bootstrap.yaml
-- [ ] codex/agents/TASKS/06c_mcp_envelope_and_schema_validation.yaml
+- [x] codex/agents/TASKS/06c_mcp_envelope_and_schema_validation.yaml
+- [ ] codex/agents/TASKS/06cV2A_mcp_envelope_and_schema_validation_A.yaml
+- [ ] codex/agents/TASKS/06cV2B_mcp_envelope_and_schema_validation_B.yaml
 - [ ] codex/agents/TASKS/06d_mcp_toolpacks_transport.yaml
 
 - [ ] codex/agents/TASKS/07a_dsl_policy_engine_completion.yaml

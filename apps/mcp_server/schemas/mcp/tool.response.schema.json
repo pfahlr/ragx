@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Tool Invocation Response",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["toolId", "result", "metadata"],
+  "properties": {
+    "toolId": {"type": "string"},
+    "result": {"type": "object"},
+    "metadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["toolpack"],
+      "properties": {
+        "toolpack": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["id", "version", "deterministic", "timeoutMs"],
+          "properties": {
+            "id": {"type": "string"},
+            "version": {"type": "string"},
+            "deterministic": {"type": "boolean"},
+            "timeoutMs": {"type": "integer", "minimum": 1}
+          }
+        }
+      }
+    }
+  }
+}

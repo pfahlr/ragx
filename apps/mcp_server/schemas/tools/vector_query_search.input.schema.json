@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "vector.query.search input",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "query": {"type": "string", "minLength": 1},
+    "topK": {"type": "integer", "minimum": 1, "maximum": 10},
+    "filters": {"type": "object", "additionalProperties": true}
+  },
+  "required": ["query", "topK"]
+}

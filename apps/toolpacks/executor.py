@@ -5,7 +5,9 @@ import copy
 import hashlib
 import importlib
 import json
+import time
 from collections.abc import Callable, Mapping
+from dataclasses import dataclass
 from typing import Any
 
 from jsonschema import validators
@@ -13,7 +15,17 @@ from jsonschema.exceptions import SchemaError, ValidationError
 
 from apps.toolpacks.loader import Toolpack, ToolpackValidationError
 
-__all__ = ["Executor", "ToolpackExecutionError"]
+__all__ = ["ExecutionStats", "Executor", "ToolpackExecutionError"]
+
+
+@dataclass(slots=True)
+class ExecutionStats:
+    """Structured execution metrics recorded for the last tool invocation."""
+
+    duration_ms: float
+    input_bytes: int
+    output_bytes: int
+    cache_hit: bool
 
 
 class ToolpackExecutionError(Exception):
@@ -25,10 +37,29 @@ class Executor:
 
     def __init__(self) -> None:
         self._cache: dict[str, dict[str, Any]] = {}
+        self._last_stats: ExecutionStats | None = None
+
+    def last_run_stats(self) -> ExecutionStats | None:
+        """Return metrics for the most recent invocation."""
+
+        return self._last_stats
 
     def run_toolpack(self, toolpack: Toolpack, payload: Mapping[str, Any]) -> dict[str, Any]:
         """Execute ``toolpack`` with ``payload`` and return the validated output."""
 
+        result, _ = self.run_toolpack_with_stats(toolpack, payload)
+        return result
+
+    def run_toolpack_with_stats(
+        self,
+        toolpack: Toolpack,
+        payload: Mapping[str, Any],
+        *,
+        use_cache: bool = True,
+    ) -> tuple[dict[str, Any], ExecutionStats]:
+        """Execute ``toolpack`` with ``payload`` and return result + metrics."""
+
+        start_time = time.perf_counter()
         execution_kind = toolpack.execution.get("kind")
         if execution_kind != "python":
             raise ToolpackExecutionError(
@@ -44,10 +75,21 @@ class Executor:
         )
 
         cache_key = self._cache_key(toolpack, input_payload)
-        if toolpack.deterministic:
+        input_bytes = _payload_size(input_payload)
+        cache_enabled = use_cache and toolpack.deterministic
+        if cache_enabled:
             cached = self._cache.get(cache_key)
             if cached is not None:
-                return copy.deepcopy(cached)
+                output_bytes = _payload_size(cached)
+                duration_ms = _elapsed_ms(start_time)
+                stats = ExecutionStats(
+                    duration_ms=duration_ms,
+                    input_bytes=input_bytes,
+                    output_bytes=output_bytes,
+                    cache_hit=True,
+                )
+                self._last_stats = stats
+                return copy.deepcopy(cached), stats
 
         runner = self._resolve_python_callable(toolpack)
         try:
@@ -68,10 +110,20 @@ class Executor:
         )
 
         materialised = copy.deepcopy(output_payload)
+        output_bytes = _payload_size(materialised)
+        duration_ms = _elapsed_ms(start_time)
+        stats = ExecutionStats(
+            duration_ms=duration_ms,
+            input_bytes=input_bytes,
+            output_bytes=output_bytes,
+            cache_hit=False,
+        )
+        self._last_stats = stats
         if toolpack.deterministic:
-            self._cache[cache_key] = copy.deepcopy(materialised)
-            return copy.deepcopy(materialised)
-        return materialised
+            if cache_enabled:
+                self._cache[cache_key] = copy.deepcopy(materialised)
+            return copy.deepcopy(materialised), stats
+        return materialised, stats
 
     def _resolve_python_callable(self, toolpack: Toolpack) -> Callable[[Mapping[str, Any]], Any]:
         execution = toolpack.execution
@@ -153,3 +205,11 @@ def _validate_instance(
         raise ToolpackExecutionError(
             f"Toolpack {toolpack.id} {stage} failed JSON schema validation: {exc.message}"
         ) from exc
+
+
+def _payload_size(payload: Mapping[str, Any]) -> int:
+    return len(json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8"))
+
+
+def _elapsed_ms(start: float) -> float:
+    return (time.perf_counter() - start) * 1000.0

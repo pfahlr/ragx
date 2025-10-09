@@ -1,0 +1,7 @@
+{
+  "title": "Example Fixture",
+  "summary": "This example document demonstrates deterministic content for the docs.load.fetch tool.",
+  "authors": ["RAGX"],
+  "tags": ["example", "core-tools"],
+  "source": "tests/fixtures/mcp/core_tools/docs/example.md"
+}

@@ -75,12 +75,11 @@ Doc two body paragraph.
     docs = payload["documents"]
     assert len(docs) == 2
 
-    doc_ids = {entry["id"] for entry in docs}
-    assert doc_ids == {"doc-one", "doc_two"}
+    doc_map = {entry["id"]: entry for entry in docs}
+    assert set(doc_map) == {"doc-one", "doc_two"}
 
-    assert "doc-one" in documents
-    assert doc_ids"doc-one"]["metadata"]["slug"] == "doc-one"
-
+    assert "doc-one" in doc_map
+    assert doc_map["doc-one"]["metadata"]["slug"] == "doc-one"
 
 
 

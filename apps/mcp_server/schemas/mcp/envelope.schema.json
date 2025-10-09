@@ -1,0 +1,80 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ragx.dev/schemas/mcp/envelope.schema.json",
+  "title": "MCP Envelope",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["ok", "data", "error", "meta"],
+  "properties": {
+    "ok": {"type": "boolean"},
+    "data": {"type": ["object", "null"]},
+    "error": {
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "required": ["code", "message"],
+      "properties": {
+        "code": {"type": "string"},
+        "message": {"type": "string"},
+        "details": {"type": ["object", "null"]}
+      }
+    },
+    "meta": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "requestId",
+        "traceId",
+        "spanId",
+        "schemaVersion",
+        "deterministic",
+        "transport",
+        "route",
+        "method",
+        "status",
+        "attempt",
+        "execution",
+        "idempotency"
+      ],
+      "properties": {
+        "requestId": {"type": "string"},
+        "traceId": {"type": "string"},
+        "spanId": {"type": "string"},
+        "schemaVersion": {"type": "string"},
+        "deterministic": {"type": "boolean"},
+        "transport": {"type": "string"},
+        "route": {"type": "string"},
+        "method": {"type": "string"},
+        "status": {"type": "string", "enum": ["ok", "error"]},
+        "attempt": {"type": "integer", "minimum": 0},
+        "execution": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["durationMs", "inputBytes", "outputBytes"],
+          "properties": {
+            "durationMs": {"type": "number", "minimum": 0},
+            "inputBytes": {"type": "integer", "minimum": 0},
+            "outputBytes": {"type": "integer", "minimum": 0}
+          }
+        },
+        "idempotency": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["cacheHit"],
+          "properties": {"cacheHit": {"type": "boolean"}}
+        },
+        "toolId": {"type": ["string", "null"]},
+        "promptId": {"type": ["string", "null"]}
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"ok": {"const": true}}},
+      "then": {"properties": {"error": {"const": null}}, "required": ["data"]}
+    },
+    {
+      "if": {"properties": {"ok": {"const": false}}},
+      "then": {"properties": {"data": {"const": null}}, "required": ["error"]}
+    }
+  ]
+}

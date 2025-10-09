@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Discover Response",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["tools", "prompts"],
+  "properties": {
+    "tools": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "version", "deterministic", "timeoutMs", "limits", "caps"],
+        "properties": {
+          "id": {"type": "string"},
+          "version": {"type": "string"},
+          "deterministic": {"type": "boolean"},
+          "timeoutMs": {"type": "integer", "minimum": 1},
+          "limits": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "maxInputBytes": {"type": "integer", "minimum": 1},
+              "maxOutputBytes": {"type": "integer", "minimum": 1}
+            }
+          },
+          "caps": {"type": "object"}
+        }
+      }
+    },
+    "prompts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "name", "description", "version", "tags"],
+        "properties": {
+          "id": {"type": "string"},
+          "name": {"type": "string"},
+          "description": {"type": "string"},
+          "version": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["major"],
+            "properties": {"major": {"type": "integer", "minimum": 1}}
+          },
+          "tags": {
+            "type": "array",
+            "items": {"type": "string"}
+          }
+        }
+      }
+    }
+  }
+}
