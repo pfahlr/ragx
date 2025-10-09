@@ -7,3 +7,364 @@ acceptance:
   - tests/unit/test_linter_unreachable_tools.py pass
 steps:
   - Implement effective_allowlist(); emit policy trace events; linter rule for unreachable branches.
+dsl_spec:
+  version: 0.1
+  purpose: >
+    Declarative DSL for multi-shot prompting workflows. Describes graphs of nodes
+    (unit/transform/decision/loop/end) with hierarchical tool policies, cost/budget
+    guards, fallbacks, and templates. Designed for deterministic, auditable runs.
+
+  # ---------------------------
+  # Core concepts & vocabulary
+  # ---------------------------
+  graph_model:
+    nodes:
+      kinds:
+        - unit        # execute an LLM or MCP/tool call (main processing unit)
+        - transform   # modify/combine/split data (Jinja/Python/Shell)
+        - decision    # branch selection based on predicates or model output
+        - loop        # control node (in 'control' list) repeating a subgraph
+        - end         # optional terminal marker (no spec; used for clarity)
+    wiring:
+      inputs:  "Map: name -> expression (Jinja over vars + prior outputs)"
+      outputs: "Array of names. Runner stores node outputs under node_id.*"
+      refs:
+        syntax:
+          value_ref: "${node_id.output_name}"         # required output
+          value_ref_optional: "${node_id.output_name?}" # optional (may be null)
+          var_ref: "${root.some_var}"                 # run-time variable
+    templating: "Jinja2 for prompts, args, transforms; full {{ }} support."
+
+  # ---------------------------
+  # Global context
+  # ---------------------------
+  globals:
+    tools: "Registry keyed by tool_ref name. Includes type (llm|mcp|internal), tags, pricing."
+    tool_sets: "Aliases mapping names -> [tool_names] for policies."
+    run_budget:
+      fields: [max_usd, max_calls, max_tokens, time_limit_sec, token_rate]
+      token_rate: { per_seconds: int, max_tokens: int }
+      mode: { enum: [hard, soft], default: hard }
+      scope: run
+    linter:
+      strict_missing_pricing: true   # error if pricing absent
+
+  # ---------------------------
+  # Node specifications
+  # ---------------------------
+  node:
+    common_fields:
+      id: "string (unique)"
+      kind: "unit|transform|decision|end"
+      inputs:  "object (Jinja-templated)"
+      outputs: "array[string]"
+      policy: *policy_object
+      budget: *budget_object
+      hints:
+        min_tokens_in: 0
+        min_tokens_out: 0
+    unit:
+      spec:
+        type: "llm|tool"               # 'tool' means MCP/internal tool
+        tool_ref: "name in globals.tools"
+        system: "string (optional) - LLM system prompt"
+        prompt: "string (optional) - LLM user prompt"
+        args: "object (for tools)"
+        budget: *budget_soft_object     # advisory cap merged with node budget
+        fallback:
+          try: ["tool_a", "tool_b"]     # in order; filtered by policy
+          on_fail: "error|skip|default_branch:<node_id>"
+    transform:
+      spec:
+        language: "jinja|python|shell"
+        template: "string (for jinja)"
+        code: "string (for python/shell)"
+    decision:
+      spec:
+        options:
+          - key: "search"
+            when: "{{ 'ACTION: search' in inputs.plan }}"
+            goto: "do_search"
+            policy: *policy_object        # policy pushed when branch taken
+          - key: "answer"
+            when: "{{ condition }}"
+            goto: "final_answer"
+        default: "search"
+      inputs:
+        plan: "${react_reason.plan}"
+    end:
+      spec: {}
+
+  # ---------------------------
+  # Control nodes (loops)
+  # ---------------------------
+  control_node_loop:
+    id: "loop_id"
+    kind: "loop"
+    policy: *policy_object             # enforced inside the loop
+    target_subgraph: ["node_a", "node_b", "node_c"]
+    stop:
+      max_iterations: 4
+      budget: *budget_stop_object      # loop-local stop-on-budget
+      until_llm:                       # optional model-based halting check
+        tool_ref: "gpt"
+        prompt: "Return STOP:true|false based on latest plan."
+        check_path: "STOP"
+
+  # ---------------------------
+  # Policies & budgets (reusable anchors)
+  # ---------------------------
+  policy_object: &policy_object
+    allow_tools: ["analysis_only"]     # names or tool_sets
+    deny_tools: []                     # names or tool_sets
+    allow_tags: ["search", "retrieve"] # tool tags
+    deny_tags: ["external"]
+  budget_common: &budget_common
+    max_usd: 0.0
+    max_calls: 0
+    max_tokens: 0
+    time_limit_sec: 0
+    token_rate: { per_seconds: 0, max_tokens: 0 }
+  budget_object: &budget_object
+    <<: *budget_common
+    mode: "hard"                       # hard|soft
+    scope: "node"                      # node|subgraph|run
+  budget_soft_object: &budget_soft_object
+    <<: *budget_common
+    mode: "soft"
+    scope: "node"
+  budget_stop_object: &budget_stop_object
+    <<: *budget_common
+    breach_action: "stop"              # stop|error
+
+  # ---------------------------
+  # Execution semantics (concise)
+  # ---------------------------
+  semantics:
+    policies:
+      scoping_order: "globals < loop < decision-option < node (nearest wins)"
+      effective_allowlist: >
+        (allow_tools ∪ tools_with_allow_tags) − (deny_tools ∪ tools_with_deny_tags).
+      branch_policy: "Option.policy is pushed when that option is chosen."
+      violations:
+        - "If unit.tool_ref not allowed → try fallback.try filtered by allowlist."
+        - "If none allowed → error (or decision.default if defined)."
+    budgets:
+      effective_caps:
+        - "RunMeter (globals.run_budget)"
+        - "Loop stop.budget (halting condition)"
+        - "Node budget (hard)"
+        - "Unit spec.budget (soft advisory)"
+      breach_behavior:
+        hard: "fail fast (or loop halts if stop.budget with breach_action: stop)"
+        soft: "warn, try fallback if available"
+    caching:
+      key: "hash(tool_ref, inputs, system, prompt, args, policy_digest)"
+      mode: "off|read|readwrite"
+    transforms:
+      safety_defaults: "python: sandboxed; shell: disabled unless policy allows"
+
+  # ---------------------------
+  # Minimal example flow (end-to-end)
+  # ---------------------------
+  example_flow:
+    version: 0.1
+    globals:
+      tools:
+        gpt: { type: llm, model: gpt-5, tags: [llm, analysis],
+               pricing: { input_per_1k_tokens_usd: 0.002, output_per_1k_tokens_usd: 0.006 } }
+        web_search: { type: mcp, name: mcp.tool:web.search, tags: [search, external],
+                      pricing: { per_call_usd: 0.003 } }
+        vector_query: { type: mcp, name: mcp.tool:vector.query, tags: [retrieve, internal],
+                        pricing: { per_call_usd: 0.0005 } }
+      tool_sets:
+        search_only: [web_search]
+        retrieval_only: [vector_query]
+        analysis_only: [gpt]
+        safe_internal: [vector_query, gpt]
+      run_budget:
+        max_usd: 3.0
+        max_tokens: 400000
+        mode: hard
+    graph:
+      nodes:
+        - id: seed
+          kind: unit
+          hints: { min_tokens_in: 150, min_tokens_out: 350 }
+          spec:
+            type: llm
+            tool_ref: gpt
+            system: "You are a careful research assistant."
+            prompt: |
+              Task: {{inputs.task}}
+              Constraints: {{inputs.constraints | default('none')}}
+            budget: { mode: soft, max_tokens: 8000 }
+          budget: { mode: hard, max_calls: 2, max_usd: 1.00 }
+          inputs:
+            task: ${root.task}
+            constraints: ${root.constraints}
+          outputs: [draft]
+
+        - id: self_feedback
+          kind: unit
+          hints: { min_tokens_in: 250, min_tokens_out: 250 }
+          spec:
+            type: llm
+            tool_ref: gpt
+            system: "Critique for defects and testability."
+            prompt: |
+              Evaluate DRAFT:
+              ---
+              {{inputs.draft}}
+              ---
+              Provide: issues, risks, missing info, and a revision plan.
+          inputs: { draft: ${seed.draft} }
+          outputs: [feedback]
+
+        - id: refine
+          kind: unit
+          hints: { min_tokens_in: 350, min_tokens_out: 350 }
+          spec:
+            type: llm
+            tool_ref: gpt
+            system: "Apply feedback precisely."
+            prompt: |
+              Draft:
+              {{inputs.draft}}
+              Feedback:
+              {{inputs.feedback}}
+              Produce a revised draft.
+          inputs:
+            draft: ${seed.draft}
+            feedback: ${self_feedback.feedback}
+          outputs: [draft]
+
+        - id: react_reason
+          kind: unit
+          hints: { min_tokens_in: 200, min_tokens_out: 200 }
+          spec:
+            type: llm
+            tool_ref: gpt
+            system: "Plan next action in ReAct style."
+            prompt: |
+              Question: {{inputs.question}}
+              Context: {{inputs.context}}
+              Allowed ACTIONS: search, retrieve, answer
+              Output exactly:
+              ACTION: <search|retrieve|answer>
+              ARGS: <json>
+          inputs:
+            question: ${root.question}
+            context: ${refine.draft}
+          outputs: [plan]
+
+        - id: decision_next
+          kind: decision
+          spec:
+            options:
+              - key: search
+                when: "{{ 'ACTION: search' in inputs.plan }}"
+                goto: do_search
+                policy: { allow_tools: [search_only] }
+              - key: retrieve
+                when: "{{ 'ACTION: retrieve' in inputs.plan }}"
+                goto: do_retrieve
+                policy: { allow_tools: [retrieval_only] }
+              - key: answer
+                when: "{{ 'ACTION: answer' in inputs.plan }}"
+                goto: final_answer
+                policy: { allow_tools: [analysis_only] }
+            default: search
+          inputs: { plan: ${react_reason.plan} }
+
+        - id: do_search
+          kind: unit
+          hints: { min_tokens_in: 50, min_tokens_out: 0 }
+          spec:
+            type: tool
+            tool_ref: web_search
+            args: { q: "{{ inputs.q }}", k: 5 }
+            fallback: { try: [vector_query], on_fail: error }
+          inputs: { q: ${react_reason.plan} }
+          outputs: [results]
+
+        - id: do_retrieve
+          kind: unit
+          spec:
+            type: tool
+            tool_ref: vector_query
+            args: { query: "{{ inputs.q }}", top_k: 6 }
+          inputs: { q: ${react_reason.plan} }
+          outputs: [chunks]
+
+        - id: consolidate
+          kind: transform
+          spec:
+            language: jinja
+            template: |
+              {% set s = inputs.search_results or '' %}
+              {% set r = inputs.retrieved or '' %}
+              SEARCH:\n{{s}}\nRETRIEVE:\n{{r}}
+          inputs:
+            search_results: ${do_search.results?}
+            retrieved: ${do_retrieve.chunks?}
+          outputs: [evidence]
+
+        - id: final_answer
+          kind: unit
+          policy: { allow_tools: [analysis_only], deny_tags: [external] }
+          hints: { min_tokens_in: 250, min_tokens_out: 350 }
+          spec:
+            type: llm
+            tool_ref: gpt
+            system: "Answer using provided evidence; include citations."
+            prompt: |
+              Question: {{inputs.question}}
+              Evidence:
+              {{inputs.evidence}}
+              Draft context:
+              {{inputs.context}}
+              Provide a precise answer with citations.
+            budget: { mode: soft, max_tokens: 9000 }
+          budget: { mode: hard, max_usd: 0.80 }
+          inputs:
+            question: ${root.question}
+            evidence: ${consolidate.evidence}
+            context: ${refine.draft}
+          outputs: [answer]
+
+    control:
+      - id: self_refine_loop
+        kind: loop
+        policy: { allow_tools: [analysis_only], deny_tags: [external] }
+        target_subgraph: [self_feedback, refine]
+        stop:
+          max_iterations: 3
+          budget: { max_calls: 6, max_usd: 0.75, breach_action: stop }
+
+      - id: react_loop
+        kind: loop
+        policy: { allow_tools: [safe_internal, analysis_only] }
+        target_subgraph: [react_reason, decision_next, do_retrieve, consolidate, final_answer]
+        stop:
+          max_iterations: 4
+          budget: { max_usd: 1.25, breach_action: stop }
+
+  # ---------------------------
+  # Runner expectations (for Codex)
+  # ---------------------------
+  runner_contract:
+    resolve_templates: "Jinja render over (root vars + prior node outputs)."
+    policy_resolution: "Compute effective allowlist at each node using stacked scopes."
+    budget_enforcement: "Charge cost/tokens/calls; hard caps fail/stop; soft caps warn + fallbacks."
+    caching: "Content-addressed cache keyed by (tool_ref, prompts/args, inputs, policy digest)."
+    tracing: "Emit JSONL events: run_start, node_start, node_end, budget_charge, policy_applied, loop_iter."
+
+  # ---------------------------
+  # Schema references (for validators)
+  # ---------------------------
+  schemas:
+    base: "schemas/flow.base.schema.json"
+    policy_patch: "schemas/flow.policy.patch.schema.json"
+    budget_patch: "schemas/flow.budget.patch.schema.json"
+    hints_patch: "schemas/flow.hints.patch.schema.json"
