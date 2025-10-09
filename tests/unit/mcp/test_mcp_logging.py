@@ -49,6 +49,9 @@ def test_server_logging_creates_latest_symlink(service: McpService) -> None:
 
     log_root = service.log_manager.latest_symlink.parent
     latest = service.log_manager.latest_symlink
+    assert latest.name == "tool_invocations.latest.jsonl"
+    assert latest.parent.name == "mcp_server"
+    assert latest.parent.parent.name == "logs"
     assert latest.exists()
     records = [
         json.loads(line)
@@ -60,6 +63,13 @@ def test_server_logging_creates_latest_symlink(service: McpService) -> None:
     assert first["transport"] in {"http", "stdio"}
     assert first["route"] in {"discover", "tool", "prompt", "health"}
     assert first["metadata"]["deterministic"] is True
+    assert first["metadata"]["schemaVersion"] == "0.1.0"
+    assert "logPath" in first
+    assert first["logPath"].startswith("logs/mcp_server/tool_invocations.")
+    assert first["runId"]
+    assert first["attemptId"]
+    assert set(first["execution"].keys()) >= {"durationMs", "inputBytes", "outputBytes"}
+    assert set(first["idempotency"].keys()) == {"cacheHit"}
 
     # Ensure retention policy keeps at most 5 files
     paths = sorted(

@@ -20,11 +20,10 @@ WHITELIST = {
     "ts",
     "traceId",
     "spanId",
+    "runId",
+    "attemptId",
+    "logPath",
     "execution.durationMs",
-    "metadata.runId",
-    "metadata.attemptId",
-    "metadata.logPath",
-    "schemaVersion",
 }
 
 
@@ -63,6 +62,7 @@ def test_log_diff_against_golden(tmp_path: Path) -> None:
         latest_symlink=latest_symlink,
         schema_version="0.1.0",
         deterministic=True,
+        root_dir=tmp_path,
     )
     runtime = CoreToolsRuntime(
         toolpacks=loader.list(),

@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import argparse
 import json
 from collections.abc import Iterable
@@ -5,17 +7,17 @@ from pathlib import Path
 
 from deepdiff import DeepDiff
 
-DEFAULT_NEW = Path("runs/mcp_server/envelope_validation.latest.jsonl")
+DEFAULT_NEW = Path("logs/mcp_server/envelope_validation.latest.jsonl")
 DEFAULT_GOLDEN = Path("tests/fixtures/mcp/envelope_validation_golden.jsonl")
 DEFAULT_WHITELIST = [
     "ts",
     "traceId",
     "spanId",
     "requestId",
+    "attemptId",
+    "runId",
     "execution.durationMs",
-    "metadata.runId",
-    "metadata.attemptId",
-    "metadata.logPath",
+    "execution.outputBytes",
 ]
 
 

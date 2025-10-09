@@ -7,17 +7,16 @@ from pathlib import Path
 
 from deepdiff import DeepDiff
 
-DEFAULT_NEW = Path("runs/mcp_server/bootstrap.latest.jsonl")
-DEFAULT_GOLDEN = Path("tests/fixtures/mcp/server/bootstrap_golden.jsonl")
+DEFAULT_NEW = Path("logs/mcp_server/tool_invocations.latest.jsonl")
+DEFAULT_GOLDEN = Path("tests/fixtures/mcp/logs/mcp_toolpacks_transport_golden.jsonl")
 DEFAULT_WHITELIST = [
     "ts",
     "traceId",
     "spanId",
-    "execution.durationMs",
-    "metadata.runId",
-    "metadata.attemptId",
-    "metadata.logPath",
     "requestId",
+    "attemptId",
+    "runId",
+    "execution.durationMs",
 ]
 
 

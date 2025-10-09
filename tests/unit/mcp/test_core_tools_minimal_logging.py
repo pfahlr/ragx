@@ -37,6 +37,7 @@ def test_log_writer_serialises_event(tmp_path: Path) -> None:
         latest_symlink=latest,
         schema_version="0.1.0",
         deterministic=True,
+        root_dir=tmp_path,
     )
 
     event = _event("tool.ok", "ok", 0)
@@ -64,7 +65,9 @@ def test_log_writer_serialises_event(tmp_path: Path) -> None:
         assert required in record
     assert record["metadata"]["schemaVersion"] == "0.1.0"
     assert record["metadata"]["deterministic"] is True
-    assert Path(record["metadata"]["logPath"]).name.startswith("minimal")
+    assert record["logPath"] == str(latest.relative_to(tmp_path))
+    assert record["runId"]
+    assert record["attemptId"]
 
 
 def test_log_rotation_keeps_latest_symlink(tmp_path: Path) -> None:
@@ -80,6 +83,7 @@ def test_log_rotation_keeps_latest_symlink(tmp_path: Path) -> None:
             latest_symlink=latest,
             schema_version="0.1.0",
             deterministic=True,
+            root_dir=tmp_path,
         )
         writer.write(_event("tool.ok", "ok", attempt), attempt_id=writer.new_attempt_id())
         writer.close()

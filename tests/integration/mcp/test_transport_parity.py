@@ -26,7 +26,7 @@ def _seed(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("RAGX_SEED", "42")
 
 
-VOLATILE_META_FIELDS = {"requestId", "traceId", "spanId"}
+VOLATILE_META_FIELDS = {"requestId", "traceId", "spanId", "transport"}
 
 
 def _stable_meta(meta: Mapping[str, Any]) -> dict[str, Any]:
@@ -34,6 +34,9 @@ def _stable_meta(meta: Mapping[str, Any]) -> dict[str, Any]:
     execution = dict(stable.get("execution", {}))
     execution.pop("durationMs", None)
     stable["execution"] = execution
+    idempotency = dict(stable.get("idempotency", {}))
+    idempotency.pop("cacheHit", None)
+    stable["idempotency"] = idempotency
     return stable
 
 

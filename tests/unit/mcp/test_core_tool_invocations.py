@@ -27,6 +27,7 @@ def runtime(tmp_path: Path) -> tuple[CoreToolsRuntime, JsonLogWriter]:
         latest_symlink=latest,
         schema_version="0.1.0",
         deterministic=True,
+        root_dir=tmp_path,
     )
     runtime = CoreToolsRuntime(
         toolpacks=loader.list(),

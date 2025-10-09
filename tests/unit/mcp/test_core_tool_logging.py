@@ -52,6 +52,7 @@ def test_json_log_writer_persists_success_event(tmp_path: Path) -> None:
         latest_symlink=latest_symlink,
         schema_version="0.1.0",
         deterministic=True,
+        root_dir=tmp_path,
     )
 
     event = _base_event(event="invocation_success", status="success", attempt=1)
@@ -77,6 +78,7 @@ def test_json_log_writer_includes_error_payload(tmp_path: Path) -> None:
         latest_symlink=latest_symlink,
         schema_version="0.1.0",
         deterministic=True,
+        root_dir=tmp_path,
     )
 
     failure = _base_event(event="invocation_failure", status="error", attempt=2)

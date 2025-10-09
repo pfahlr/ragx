@@ -35,6 +35,7 @@ def runtime(
         latest_symlink=latest_symlink,
         schema_version=SCHEMA_VERSION,
         deterministic=True,
+        root_dir=tmp_path,
     )
 
     runtime = CoreToolsRuntime(

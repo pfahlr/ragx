@@ -61,8 +61,8 @@ class EnvelopeValidationLogManager:
         deterministic: bool,
         retention: int = 5,
     ) -> None:
-        prefix = Path(log_dir) / "mcp_server" / "envelope_validation"
-        latest = Path(log_dir) / "mcp_server" / "envelope_validation.latest.jsonl"
+        prefix = Path(log_dir) / "logs" / "mcp_server" / "envelope_validation"
+        latest = Path(log_dir) / "logs" / "mcp_server" / "envelope_validation.latest.jsonl"
         self._writer = JsonLogWriter(
             agent_id="mcp_server",
             task_id="06cV2B_mcp_envelope_and_schema_validation_B",
@@ -70,6 +70,7 @@ class EnvelopeValidationLogManager:
             latest_symlink=latest,
             schema_version=schema_version,
             deterministic=deterministic,
+            root_dir=Path(log_dir),
             retention=retention,
         )
         self._step = 0

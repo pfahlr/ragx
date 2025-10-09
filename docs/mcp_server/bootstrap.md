@@ -62,18 +62,19 @@ after every write to remain deterministic for tests.
 ## Structured logging
 
 All requests emit JSONL records through `JsonLogWriter`. Records include the
-fields specified in the bootstrap contract (`ts`, `agentId`, `taskId`,
+fields specified in the transport contract (`ts`, `agentId`, `taskId`,
 `stepId`, `transport`, `route`, `traceId`, `spanId`, `requestId`, `status`,
-`durationMs`, `attempt`, `inputBytes`, `outputBytes`, `metadata`, `error`).
-Metadata is enriched with `runId`, `attemptId`, `schemaVersion`,
-`deterministic`, and `logPath`. Logs rotate with keep-last-5 retention and a
-stable `runs/mcp_server/bootstrap.latest.jsonl` symlink.
+`attempt`, `execution`, `idempotency`, `metadata`, `logPath`, `runId`,
+`attemptId`, `error`). Metadata now only contains the stable
+`schemaVersion`, `deterministic`, `toolId`, and `promptId` keys. Logs rotate
+with keep-last-5 retention beneath `logs/mcp_server/` with a deterministic
+`logs/mcp_server/tool_invocations.latest.jsonl` symlink.
 
 The repository includes a golden fixture at
-`tests/fixtures/mcp/server/bootstrap_golden.jsonl`. Use the diff tool
-`scripts/diff_mcp_server_logs.py` to compare new runs while ignoring the
-volatile whitelist (`ts`, `durationMs`, `traceId`, `spanId`, `runId`,
-`attemptId`, `requestId`, `logPath`).
+`tests/fixtures/mcp/logs/mcp_toolpacks_transport_golden.jsonl`. Use the diff
+tool `scripts/diff_mcp_server_logs.py` to compare new runs while ignoring the
+volatile whitelist (`ts`, `traceId`, `spanId`, `requestId`, `attemptId`,
+`runId`, `execution.durationMs`).
 
 ## Regenerating the golden log
 
@@ -81,8 +82,8 @@ Run the CLI in deterministic once mode to regenerate the golden log:
 
 ```
 python -m apps.mcp_server.cli --once --deterministic-ids --log-dir tmp/runs
-python scripts/diff_mcp_server_logs.py --new tmp/runs/mcp_server/bootstrap.latest.jsonl \
-    --golden tests/fixtures/mcp/server/bootstrap_golden.jsonl
+python scripts/diff_mcp_server_logs.py --new tmp/runs/logs/mcp_server/tool_invocations.latest.jsonl \
+    --golden tests/fixtures/mcp/logs/mcp_toolpacks_transport_golden.jsonl
 ```
 
-After verification, update the fixture and symlink in `tests/fixtures/mcp/logs`.
+After verification, update the fixture in `tests/fixtures/mcp/logs`.

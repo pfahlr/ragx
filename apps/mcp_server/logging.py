@@ -61,6 +61,7 @@ class JsonLogWriter:
         latest_symlink: Path,
         schema_version: str,
         deterministic: bool,
+        root_dir: Path,
         retention: int = 5,
     ) -> None:
         self._agent_id = agent_id
@@ -69,6 +70,7 @@ class JsonLogWriter:
         self._latest_symlink = latest_symlink
         self._schema_version = schema_version
         self._deterministic = deterministic
+        self._root_dir = Path(root_dir)
         self._retention = retention
         self._run_id = str(uuid4())
 
@@ -140,19 +142,15 @@ class JsonLogWriter:
     def write(self, event: LogEvent, *, attempt_id: str) -> None:
         record = event.to_serialisable()
         metadata = dict(record.get("metadata", {}))
-        metadata.update(
-            {
-                "runId": self._run_id,
-                "attemptId": attempt_id,
-                "schemaVersion": self._schema_version,
-                "deterministic": self._deterministic,
-                "logPath": self._relative_log_path(),
-            }
-        )
+        metadata.setdefault("schemaVersion", self._schema_version)
+        metadata.setdefault("deterministic", self._deterministic)
         record["metadata"] = metadata
         record.setdefault("error", None)
         record.setdefault("agentId", self._agent_id)
         record.setdefault("taskId", self._task_id)
+        record.setdefault("runId", self._run_id)
+        record.setdefault("attemptId", attempt_id)
+        record.setdefault("logPath", self._relative_symlink_path())
         self._file.write(json.dumps(record, sort_keys=True) + "\n")
         self._file.flush()
 
@@ -167,9 +165,10 @@ class JsonLogWriter:
         self.close()
 
     def _relative_log_path(self) -> str:
-        parent_parts = list(self._storage_prefix.parent.parts)
-        tail = parent_parts[-2:] if len(parent_parts) >= 2 else parent_parts
-        return str(Path(*tail, self._path.name))
+        return os.path.relpath(self._path, self._root_dir)
+
+    def _relative_symlink_path(self) -> str:
+        return os.path.relpath(self._latest_symlink, self._root_dir)
 
 
 class LogEvent(Protocol):

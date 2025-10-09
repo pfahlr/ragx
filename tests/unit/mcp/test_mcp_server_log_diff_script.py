@@ -10,7 +10,21 @@ import pytest
 pytest.importorskip("deepdiff")
 
 SCRIPT = Path("scripts/diff_mcp_server_logs.py")
-GOLDEN = Path("tests/fixtures/mcp/server/bootstrap_golden.jsonl")
+GOLDEN = Path("tests/fixtures/mcp/logs/mcp_toolpacks_transport_golden.jsonl")
+
+
+def test_default_whitelist_matches_spec() -> None:
+    from scripts.diff_mcp_server_logs import DEFAULT_WHITELIST
+
+    assert DEFAULT_WHITELIST == [
+        "ts",
+        "traceId",
+        "spanId",
+        "requestId",
+        "attemptId",
+        "runId",
+        "execution.durationMs",
+    ]
 
 
 @pytest.mark.parametrize("whitelisted", [True, False])
@@ -46,9 +60,8 @@ def test_server_log_diff(tmp_path: Path, whitelisted: bool) -> None:
         "traceId",
         "spanId",
         "execution.durationMs",
-        "metadata.runId",
-        "metadata.attemptId",
-        "metadata.logPath",
+        "attemptId",
+        "runId",
         "requestId",
     ]
     result = subprocess.run(args, capture_output=True, text=True)

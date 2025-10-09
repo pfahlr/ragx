@@ -26,6 +26,7 @@ def test_end_to_end_invocations(tmp_path, monkeypatch) -> None:
         latest_symlink=latest,
         schema_version="0.1.0",
         deterministic=True,
+        root_dir=tmp_path,
     )
     runtime = CoreToolsRuntime(
         toolpacks=loader.list(),

@@ -14,6 +14,7 @@ from uuid import UUID, uuid4, uuid5
 from jsonschema import Draft202012Validator, ValidationError, validators
 
 from apps.mcp_server.logging import JsonLogWriter
+from apps.mcp_server.runtime.logging import resolve_tool_invocation_log_paths
 from apps.mcp_server.validation import SchemaRegistry
 from apps.mcp_server.validation.logging import (
     EnvelopeValidationEvent,
@@ -221,22 +222,24 @@ class ServerLogManager:
         deterministic: bool,
         retention: int = 5,
     ) -> None:
-        self._storage_prefix = Path(log_dir) / "mcp_server" / "bootstrap"
-        self._latest_symlink = Path(log_dir) / "mcp_server" / "bootstrap.latest.jsonl"
+        paths = resolve_tool_invocation_log_paths(Path(log_dir))
+        paths.ensure_directories()
+        self._paths = paths
         self._writer = JsonLogWriter(
             agent_id=_AGENT_ID,
             task_id=_TASK_ID,
-            storage_prefix=self._storage_prefix,
-            latest_symlink=self._latest_symlink,
+            storage_prefix=self._paths.storage_prefix,
+            latest_symlink=self._paths.latest_symlink,
             schema_version=schema_version,
             deterministic=deterministic,
+            root_dir=self._paths.root,
             retention=retention,
         )
         self._step_counter = 0
 
     @property
     def latest_symlink(self) -> Path:
-        return self._latest_symlink
+        return self._paths.latest_symlink
 
     @property
     def writer(self) -> JsonLogWriter:
@@ -573,6 +576,11 @@ class McpService:
         )
         envelope = Envelope.success(data=dict(data), meta=meta)
         envelope_dict = envelope.model_dump(by_alias=True)
+        metadata_payload = {
+            key: value
+            for key, value in {"toolId": tool_id, "promptId": prompt_id}.items()
+            if value is not None
+        }
         self._log_manager.emit(
             ServerLogEvent(
                 ts=datetime.now(UTC),
@@ -586,12 +594,7 @@ class McpService:
                 attempt=context.attempt,
                 execution=execution_payload,
                 idempotency=idempotency_payload,
-                metadata={
-                    "toolId": tool_id,
-                    "promptId": prompt_id,
-                    "schemaVersion": self._schema_version,
-                    "deterministic": context.deterministic_ids,
-                },
+                metadata=metadata_payload,
                 step_id=step_id,
             )
         )
@@ -658,6 +661,11 @@ class McpService:
         envelope = Envelope.failure(error=EnvelopeError(code=code, message=message), meta=meta)
         envelope_dict = envelope.model_dump(by_alias=True)
         error_payload = {"canonical": code, "message": message}
+        metadata_payload = {
+            key: value
+            for key, value in {"toolId": tool_id, "promptId": prompt_id}.items()
+            if value is not None
+        }
         self._log_manager.emit(
             ServerLogEvent(
                 ts=datetime.now(UTC),
@@ -672,12 +680,7 @@ class McpService:
                 execution=execution_payload,
                 idempotency=idempotency_payload,
                 error={"code": code, "message": message},
-                metadata={
-                    "toolId": tool_id,
-                    "promptId": prompt_id,
-                    "schemaVersion": self._schema_version,
-                    "deterministic": context.deterministic_ids,
-                },
+                metadata=metadata_payload,
                 step_id=step_id,
             )
         )
