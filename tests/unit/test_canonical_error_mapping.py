@@ -9,6 +9,7 @@ EXPECTED_CODES = [
     "INVALID_INPUT",
     "INVALID_OUTPUT",
     "NOT_FOUND",
+    "TIMEOUT",
     "UNAUTHORIZED",
     "INTERNAL_ERROR",
 ]
@@ -17,6 +18,7 @@ HTTP_STATUS_EXPECTATIONS = {
     "INVALID_INPUT": 400,
     "INVALID_OUTPUT": 502,
     "NOT_FOUND": 404,
+    "TIMEOUT": 504,
     "UNAUTHORIZED": 401,
     "INTERNAL_ERROR": 500,
 }
@@ -25,6 +27,7 @@ JSONRPC_EXPECTATIONS = {
     "INVALID_INPUT": (-32602, "invalid input"),
     "INVALID_OUTPUT": (-32002, "invalid output"),
     "NOT_FOUND": (-32004, "not found"),
+    "TIMEOUT": (-32005, "timed out"),
     "UNAUTHORIZED": (-32001, "unauthorized"),
     "INTERNAL_ERROR": (-32603, "internal server error"),
 }

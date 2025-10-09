@@ -25,10 +25,12 @@ class Executor:
 
     def __init__(self) -> None:
         self._cache: dict[str, dict[str, Any]] = {}
+        self._last_cache_hit = False
 
     def run_toolpack(self, toolpack: Toolpack, payload: Mapping[str, Any]) -> dict[str, Any]:
         """Execute ``toolpack`` with ``payload`` and return the validated output."""
 
+        self._last_cache_hit = False
         execution_kind = toolpack.execution.get("kind")
         if execution_kind != "python":
             raise ToolpackExecutionError(
@@ -47,6 +49,7 @@ class Executor:
         if toolpack.deterministic:
             cached = self._cache.get(cache_key)
             if cached is not None:
+                self._last_cache_hit = True
                 return copy.deepcopy(cached)
 
         runner = self._resolve_python_callable(toolpack)
@@ -72,6 +75,12 @@ class Executor:
             self._cache[cache_key] = copy.deepcopy(materialised)
             return copy.deepcopy(materialised)
         return materialised
+
+    @property
+    def last_result_from_cache(self) -> bool:
+        """Return whether the most recent invocation was served from cache."""
+
+        return self._last_cache_hit
 
     def _resolve_python_callable(self, toolpack: Toolpack) -> Callable[[Mapping[str, Any]], Any]:
         execution = toolpack.execution
