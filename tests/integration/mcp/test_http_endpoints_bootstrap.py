@@ -64,7 +64,7 @@ def test_http_endpoints_validate_against_schemas(service: McpService) -> None:
     )
     assert tool.status_code == 200
     tool_payload = tool.json()
-    _validator("tool.response.schema.json").validate(tool_payload["data"])
+    _validator("tool.response.schema.json").validate(tool_payload)
 
     health = client.get("/healthz")
     assert health.status_code == 200

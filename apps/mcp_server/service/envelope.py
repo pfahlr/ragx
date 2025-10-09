@@ -5,7 +5,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
-__all__ = ["Envelope", "EnvelopeMeta", "EnvelopeError"]
+__all__ = ["Envelope", "EnvelopeError", "EnvelopeMeta", "ExecutionMeta", "IdempotencyMeta"]
 
 
 class EnvelopeError(BaseModel):
@@ -21,6 +21,25 @@ class EnvelopeError(BaseModel):
     )
 
 
+class ExecutionMeta(BaseModel):
+    """Execution telemetry for a tool invocation."""
+
+    model_config = ConfigDict(frozen=True, populate_by_name=True, extra="forbid")
+
+    duration_ms: float = Field(..., alias="durationMs")
+    input_bytes: int = Field(0, alias="inputBytes")
+    output_bytes: int = Field(0, alias="outputBytes")
+
+
+class IdempotencyMeta(BaseModel):
+    """Idempotency metadata for deterministic toolpacks."""
+
+    model_config = ConfigDict(frozen=True, populate_by_name=True, extra="forbid")
+
+    cache_hit: bool = Field(False, alias="cacheHit")
+    cache_key: str | None = Field(default=None, alias="cacheKey")
+
+
 class EnvelopeMeta(BaseModel):
     """Structured metadata attached to every envelope."""
 
@@ -34,13 +53,12 @@ class EnvelopeMeta(BaseModel):
     transport: str
     route: str
     method: str
-    duration_ms: float = Field(..., alias="durationMs")
     status: str
     attempt: int = 0
-    input_bytes: int = Field(0, alias="inputBytes")
-    output_bytes: int = Field(0, alias="outputBytes")
     tool_id: str | None = Field(default=None, alias="toolId")
     prompt_id: str | None = Field(default=None, alias="promptId")
+    execution: ExecutionMeta
+    idempotency: IdempotencyMeta
 
     @classmethod
     def from_ids(
@@ -54,11 +72,10 @@ class EnvelopeMeta(BaseModel):
         transport: str,
         route: str,
         method: str,
-        duration_ms: float,
         status: str,
+        execution: ExecutionMeta,
+        idempotency: IdempotencyMeta,
         attempt: int = 0,
-        input_bytes: int = 0,
-        output_bytes: int = 0,
         tool_id: str | None = None,
         prompt_id: str | None = None,
     ) -> EnvelopeMeta:
@@ -71,13 +88,12 @@ class EnvelopeMeta(BaseModel):
             transport=transport,
             route=route,
             method=method,
-            durationMs=duration_ms,
             status=status,
             attempt=attempt,
-            inputBytes=input_bytes,
-            outputBytes=output_bytes,
             toolId=tool_id,
             promptId=prompt_id,
+            execution=execution,
+            idempotency=idempotency,
         )
 
 

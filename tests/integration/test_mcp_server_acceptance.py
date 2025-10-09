@@ -4,12 +4,24 @@ from typing import TypedDict
 import pytest
 
 
+class MCPExecutionMeta(TypedDict):
+    durationMs: float
+    inputBytes: int
+    outputBytes: int
+
+
+class MCPIdempotencyMeta(TypedDict, total=False):
+    cacheHit: bool
+    cacheKey: str | None
+
+
 class MCPResponseMeta(TypedDict):
     tool: str
     version: str
-    durationMs: int
     traceId: str
     warnings: list[str]
+    execution: MCPExecutionMeta
+    idempotency: MCPIdempotencyMeta
 
 
 class MCPResponse(TypedDict):
@@ -28,12 +40,13 @@ def test_mcp_envelope_schema_contract() -> None:
         "meta": {
             "tool": "web.search.query",
             "version": "1.0.0",
-            "durationMs": 1,
             "traceId": "test-trace",
             "warnings": [],
+            "execution": {"durationMs": 1.0, "inputBytes": 10, "outputBytes": 42},
+            "idempotency": {"cacheHit": False},
         },
         "errors": [],
     }
     # In real test: validate against apps/mcp_server/schemas/envelope.schema.json
     assert set(sample) == {"ok", "data", "meta", "errors"}
-    assert isinstance(sample["meta"]["durationMs"], int)
+    assert isinstance(sample["meta"]["execution"]["durationMs"], float)

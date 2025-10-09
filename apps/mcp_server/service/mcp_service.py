@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import time
@@ -19,10 +20,10 @@ from apps.mcp_server.validation.logging import (
     EnvelopeValidationEvent,
     EnvelopeValidationLogManager,
 )
-from apps.toolpacks.executor import Executor, ToolpackExecutionError
+from apps.toolpacks.executor import ExecutionStats, Executor, ToolpackExecutionError
 from apps.toolpacks.loader import Toolpack, ToolpackLoader
 
-from .envelope import Envelope, EnvelopeError, EnvelopeMeta
+from .envelope import Envelope, EnvelopeError, EnvelopeMeta, ExecutionMeta, IdempotencyMeta
 
 __all__ = ["McpService", "RequestContext", "ServerLogManager"]
 
@@ -162,10 +163,9 @@ class ServerLogEvent:
     route: str
     method: str
     status: str
-    duration_ms: float
     attempt: int
-    input_bytes: int
-    output_bytes: int
+    execution: dict[str, Any]
+    idempotency: dict[str, Any]
     metadata: dict[str, Any]
     step_id: int
     error: dict[str, Any] | None = None
@@ -183,10 +183,9 @@ class ServerLogEvent:
             "spanId": self.span_id,
             "requestId": self.request_id,
             "status": self.status,
-            "durationMs": self.duration_ms,
             "attempt": self.attempt,
-            "inputBytes": self.input_bytes,
-            "outputBytes": self.output_bytes,
+            "execution": dict(self.execution),
+            "idempotency": dict(self.idempotency),
             "metadata": dict(self.metadata),
             "error": self.error,
         }
@@ -248,6 +247,10 @@ class McpService:
         validation_registry: SchemaRegistry,
         validation_log: EnvelopeValidationLogManager,
         validation_mode: ValidationMode,
+        max_input_bytes: int,
+        max_output_bytes: int,
+        timeout_ms: int,
+        default_deterministic_ids: bool,
     ) -> None:
         self._toolpacks = toolpacks
         self._executor = executor
@@ -258,6 +261,10 @@ class McpService:
         self._validation_registry = validation_registry
         self._validation_log = validation_log
         self._validation_mode = validation_mode
+        self._max_input_bytes = max(1, int(max_input_bytes))
+        self._max_output_bytes = max(1, int(max_output_bytes))
+        self._timeout_ms = max(1, int(timeout_ms))
+        self._default_deterministic_ids = bool(default_deterministic_ids)
 
     @property
     def log_manager(self) -> ServerLogManager:
@@ -274,6 +281,10 @@ class McpService:
         schema_version: str = _SCHEMA_VERSION_DEFAULT,
         deterministic_logs: bool = True,
         logger: ServerLogManager | None = None,
+        deterministic_ids: bool = True,
+        max_input_bytes: int = 1_048_576,
+        max_output_bytes: int = 2_097_152,
+        timeout_ms: int = 15_000,
     ) -> McpService:
         loader = ToolpackLoader()
         loader.load_dir(toolpacks_dir)
@@ -305,6 +316,10 @@ class McpService:
             validation_registry=validation_registry,
             validation_log=validation_log,
             validation_mode=validation_mode,
+            max_input_bytes=max_input_bytes,
+            max_output_bytes=max_output_bytes,
+            timeout_ms=timeout_ms,
+            default_deterministic_ids=deterministic_ids,
         )
 
     def discover(self, context: RequestContext | None = None) -> Envelope:
@@ -341,7 +356,8 @@ class McpService:
         arguments: Mapping[str, Any],
         context: RequestContext | None = None,
     ) -> Envelope:
-        payload = {"toolId": tool_id, "arguments": dict(arguments)}
+        arguments_payload = dict(arguments)
+        payload = {"toolId": tool_id, "arguments": arguments_payload}
         ctx = self._normalise_context(context, "tool", "mcp.tool.invoke", payload)
         if tool_id not in self._toolpacks:
             return self._error_response(
@@ -352,6 +368,26 @@ class McpService:
                 tool_id=tool_id,
             )
         toolpack = self._toolpacks[tool_id]
+        cache_key = self._cache_key_for(toolpack, arguments_payload)
+        input_limit, output_limit, timeout_limit = self._tool_limits(toolpack)
+        arguments_bytes = _payload_size(arguments_payload)
+        if arguments_bytes > input_limit:
+            execution_meta, idempotency_meta = self._execution_from_stats(
+                None,
+                fallback_duration_ms=_duration_ms(ctx.start_time),
+                fallback_input_bytes=arguments_bytes,
+                fallback_output_bytes=0,
+                cache_key=cache_key,
+            )
+            return self._error_response(
+                code="INVALID_INPUT",
+                message=f"Input payload exceeds maxInputBytes ({input_limit})",
+                context=ctx,
+                payload=payload,
+                tool_id=tool_id,
+                execution=execution_meta,
+                idempotency=idempotency_meta,
+            )
         validators_bundle = None
         if self._validation_mode is not ValidationMode.OFF:
             try:
@@ -361,25 +397,46 @@ class McpService:
             if validators_bundle is not None:
                 try:
                     validators_bundle.input.validate(
-                        {"tool": tool_id, "input": dict(arguments)}
+                        {"tool": tool_id, "input": arguments_payload}
                     )
                 except ValidationError as exc:
+                    execution_meta, idempotency_meta = self._execution_from_stats(
+                        None,
+                        fallback_duration_ms=_duration_ms(ctx.start_time),
+                        fallback_input_bytes=arguments_bytes,
+                        fallback_output_bytes=0,
+                        cache_key=cache_key,
+                    )
                     return self._error_response(
                         code="INVALID_INPUT",
                         message=str(exc).splitlines()[0],
                         context=ctx,
                         payload=payload,
                         tool_id=tool_id,
+                        execution=execution_meta,
+                        idempotency=idempotency_meta,
                     )
+        stats: ExecutionStats | None = None
         try:
-            result = self._executor.run_toolpack(toolpack, arguments)
+            result = self._executor.run_toolpack(toolpack, arguments_payload)
+            stats = self._executor.last_run_stats()
         except ToolpackExecutionError as exc:
+            stats = self._executor.last_run_stats()
+            execution_meta, idempotency_meta = self._execution_from_stats(
+                stats,
+                fallback_duration_ms=_duration_ms(ctx.start_time),
+                fallback_input_bytes=arguments_bytes,
+                fallback_output_bytes=0,
+                cache_key=cache_key,
+            )
             return self._error_response(
                 code="INTERNAL_ERROR",
                 message=str(exc),
                 context=ctx,
                 payload=payload,
                 tool_id=tool_id,
+                execution=execution_meta,
+                idempotency=idempotency_meta,
             )
         if self._validation_mode is not ValidationMode.OFF and validators_bundle is not None:
             try:
@@ -387,13 +444,52 @@ class McpService:
                     {"tool": tool_id, "output": dict(result)}
                 )
             except ValidationError as exc:
+                self._executor.invalidate_cache(toolpack, arguments_payload)
+                execution_meta, idempotency_meta = self._execution_from_stats(
+                    stats,
+                    fallback_duration_ms=_duration_ms(ctx.start_time),
+                    fallback_input_bytes=arguments_bytes,
+                    fallback_output_bytes=_payload_size(result),
+                    cache_key=cache_key,
+                )
                 return self._error_response(
                     code="INVALID_OUTPUT",
                     message=str(exc).splitlines()[0],
                     context=ctx,
                     payload=payload,
                     tool_id=tool_id,
+                    execution=execution_meta,
+                    idempotency=idempotency_meta,
                 )
+        execution_meta, idempotency_meta = self._execution_from_stats(
+            stats,
+            fallback_duration_ms=_duration_ms(ctx.start_time),
+            fallback_input_bytes=arguments_bytes,
+            fallback_output_bytes=_payload_size(result),
+            cache_key=cache_key,
+        )
+        if execution_meta.output_bytes > output_limit:
+            self._executor.invalidate_cache(toolpack, arguments_payload)
+            return self._error_response(
+                code="INVALID_OUTPUT",
+                message=f"Output payload exceeds maxOutputBytes ({output_limit})",
+                context=ctx,
+                payload=payload,
+                tool_id=tool_id,
+                execution=execution_meta,
+                idempotency=idempotency_meta,
+            )
+        if execution_meta.duration_ms > timeout_limit:
+            self._executor.invalidate_cache(toolpack, arguments_payload)
+            return self._error_response(
+                code="TIMEOUT",
+                message=f"Tool execution exceeded timeout ({timeout_limit} ms)",
+                context=ctx,
+                payload=payload,
+                tool_id=tool_id,
+                execution=execution_meta,
+                idempotency=idempotency_meta,
+            )
         data = {
             "toolId": tool_id,
             "result": dict(result),
@@ -406,8 +502,17 @@ class McpService:
                 }
             },
         }
-        self._schemas.validator("tool.response.schema.json").validate(data)
-        return self._finalise_envelope(data, ctx, tool_id=tool_id)
+        envelope = self._finalise_envelope(
+            data,
+            ctx,
+            tool_id=tool_id,
+            execution=execution_meta,
+            idempotency=idempotency_meta,
+        )
+        self._schemas.validator("tool.response.schema.json").validate(
+            envelope.model_dump(by_alias=True)
+        )
+        return envelope
 
     def health(self, context: RequestContext | None = None) -> dict[str, Any]:
         _ = self._normalise_context(context, "health", "mcp.health", {})
@@ -422,11 +527,22 @@ class McpService:
         *,
         tool_id: str | None = None,
         prompt_id: str | None = None,
+        execution: ExecutionMeta | None = None,
+        idempotency: IdempotencyMeta | None = None,
     ) -> Envelope:
-        duration_ms = _duration_ms(context.start_time)
         ids = self._request_ids(context)
         step_id = self._log_manager.next_step_id()
-        output_bytes = _payload_size(data)
+        if execution is None:
+            output_bytes = _payload_size(data)
+            execution = ExecutionMeta(
+                durationMs=_duration_ms(context.start_time),
+                inputBytes=int(ids["input_bytes"]),
+                outputBytes=output_bytes,
+            )
+        else:
+            output_bytes = execution.output_bytes
+        if idempotency is None:
+            idempotency = IdempotencyMeta(cacheHit=False)
         meta = EnvelopeMeta.from_ids(
             request_id=ids["request_id"],
             trace_id=ids["trace_id"],
@@ -436,13 +552,12 @@ class McpService:
             transport=context.transport,
             route=context.route,
             method=context.method,
-            duration_ms=duration_ms,
             status="ok",
             attempt=context.attempt,
-            input_bytes=ids["input_bytes"],
-            output_bytes=output_bytes,
             tool_id=tool_id,
             prompt_id=prompt_id,
+            execution=execution,
+            idempotency=idempotency,
         )
         envelope = Envelope.success(data=dict(data), meta=meta)
         envelope_dict = envelope.model_dump(by_alias=True)
@@ -456,10 +571,9 @@ class McpService:
                 route=context.route,
                 method=context.method,
                 status="ok",
-                duration_ms=duration_ms,
                 attempt=context.attempt,
-                input_bytes=ids["input_bytes"],
-                output_bytes=output_bytes,
+                execution=execution.model_dump(by_alias=True),
+                idempotency=idempotency.model_dump(by_alias=True),
                 metadata={
                     "toolId": tool_id,
                     "promptId": prompt_id,
@@ -475,9 +589,11 @@ class McpService:
             ids=ids,
             tool_id=tool_id,
             prompt_id=prompt_id,
-            duration_ms=duration_ms,
+            duration_ms=execution.duration_ms,
             status="ok",
             error=None,
+            execution=execution,
+            idempotency=idempotency,
         )
         return envelope
 
@@ -490,10 +606,34 @@ class McpService:
         payload: Mapping[str, Any],
         tool_id: str | None = None,
         prompt_id: str | None = None,
+        execution: ExecutionMeta | None = None,
+        idempotency: IdempotencyMeta | None = None,
+        input_bytes: int | None = None,
+        output_bytes: int = 0,
+        duration_ms: float | None = None,
+        cache_hit: bool = False,
+        cache_key: str | None = None,
     ) -> Envelope:
         ids = self._request_ids(context)
         step_id = self._log_manager.next_step_id()
-        duration_ms = _duration_ms(context.start_time)
+        if execution is None:
+            duration = (
+                duration_ms
+                if duration_ms is not None
+                else _duration_ms(context.start_time)
+            )
+            resolved_input = (
+                input_bytes
+                if input_bytes is not None
+                else int(ids.get("input_bytes", 0))
+            )
+            execution = ExecutionMeta(
+                durationMs=float(duration),
+                inputBytes=int(resolved_input),
+                outputBytes=int(output_bytes),
+            )
+        if idempotency is None:
+            idempotency = IdempotencyMeta(cacheHit=cache_hit, cacheKey=cache_key)
         meta = EnvelopeMeta.from_ids(
             request_id=ids["request_id"],
             trace_id=ids["trace_id"],
@@ -503,13 +643,12 @@ class McpService:
             transport=context.transport,
             route=context.route,
             method=context.method,
-            duration_ms=duration_ms,
             status="error",
             attempt=context.attempt,
-            input_bytes=ids["input_bytes"],
-            output_bytes=0,
             tool_id=tool_id,
             prompt_id=prompt_id,
+            execution=execution,
+            idempotency=idempotency,
         )
         envelope = Envelope.failure(error=EnvelopeError(code=code, message=message), meta=meta)
         envelope_dict = envelope.model_dump(by_alias=True)
@@ -524,10 +663,9 @@ class McpService:
                 route=context.route,
                 method=context.method,
                 status="error",
-                duration_ms=duration_ms,
                 attempt=context.attempt,
-                input_bytes=ids["input_bytes"],
-                output_bytes=0,
+                execution=execution.model_dump(by_alias=True),
+                idempotency=idempotency.model_dump(by_alias=True),
                 error={"code": code, "message": message},
                 metadata={
                     "toolId": tool_id,
@@ -544,9 +682,11 @@ class McpService:
             ids=ids,
             tool_id=tool_id,
             prompt_id=prompt_id,
-            duration_ms=duration_ms,
+            duration_ms=execution.duration_ms,
             status="error",
             error=error_payload,
+            execution=execution,
+            idempotency=idempotency,
         )
         return envelope
 
@@ -562,7 +702,7 @@ class McpService:
                 transport="http",
                 route=route,
                 method=method,
-                deterministic_ids=False,
+                deterministic_ids=self._default_deterministic_ids,
             )
         return context.clone_with_payload(payload)
 
@@ -577,6 +717,8 @@ class McpService:
         duration_ms: float,
         status: str,
         error: dict[str, Any] | None,
+        execution: ExecutionMeta,
+        idempotency: IdempotencyMeta,
     ) -> None:
         if self._validation_mode is ValidationMode.OFF:
             return
@@ -598,6 +740,8 @@ class McpService:
                 prompt_id=prompt_id,
                 output_bytes=0,
                 error=fallback_error,
+                execution=execution,
+                idempotency=idempotency,
             )
             if self._validation_mode is ValidationMode.ENFORCE:
                 raise
@@ -612,6 +756,8 @@ class McpService:
             prompt_id=prompt_id,
             output_bytes=output_bytes,
             error=error,
+            execution=execution,
+            idempotency=idempotency,
         )
 
     def _log_validation_event(
@@ -625,6 +771,8 @@ class McpService:
         prompt_id: str | None,
         output_bytes: int,
         error: dict[str, Any] | None,
+        execution: ExecutionMeta,
+        idempotency: IdempotencyMeta,
     ) -> None:
         if self._validation_mode is ValidationMode.OFF:
             return
@@ -636,6 +784,8 @@ class McpService:
             metadata["toolId"] = tool_id
         if prompt_id:
             metadata["promptId"] = prompt_id
+        metadata["execution"] = execution.model_dump(by_alias=True)
+        metadata["idempotency"] = idempotency.model_dump(by_alias=True)
         event = EnvelopeValidationEvent(
             ts=datetime.now(UTC),
             request_id=str(ids["request_id"]),
@@ -664,6 +814,61 @@ class McpService:
             "limits": dict(toolpack.limits),
             "caps": dict(toolpack.caps),
         }
+
+    def _tool_limits(self, toolpack: Toolpack) -> tuple[int, int, int]:
+        tool_input_limit = int(toolpack.limits.get("maxInputBytes", self._max_input_bytes))
+        tool_output_limit = int(toolpack.limits.get("maxOutputBytes", self._max_output_bytes))
+        return (
+            min(self._max_input_bytes, tool_input_limit),
+            min(self._max_output_bytes, tool_output_limit),
+            min(self._timeout_ms, int(toolpack.timeout_ms)),
+        )
+
+    def _cache_key_for(
+        self, toolpack: Toolpack, arguments: Mapping[str, Any]
+    ) -> str | None:
+        if not toolpack.deterministic:
+            return None
+        envelope = {
+            "id": toolpack.id,
+            "version": toolpack.version,
+            "payload": dict(arguments),
+        }
+        try:
+            serialised = json.dumps(envelope, sort_keys=True, separators=(",", ":"))
+        except TypeError:
+            return None
+        return hashlib.sha256(serialised.encode("utf-8")).hexdigest()
+
+    def _execution_from_stats(
+        self,
+        stats: ExecutionStats | None,
+        *,
+        fallback_duration_ms: float,
+        fallback_input_bytes: int,
+        fallback_output_bytes: int,
+        cache_key: str | None,
+    ) -> tuple[ExecutionMeta, IdempotencyMeta]:
+        if stats is not None:
+            duration_ms = stats.duration_ms
+            input_bytes = stats.input_bytes
+            output_bytes = stats.output_bytes
+            cache_hit = stats.cache_hit
+        else:
+            duration_ms = fallback_duration_ms
+            input_bytes = fallback_input_bytes
+            output_bytes = fallback_output_bytes
+            cache_hit = False
+        execution = ExecutionMeta(
+            durationMs=float(duration_ms),
+            inputBytes=int(input_bytes),
+            outputBytes=int(output_bytes),
+        )
+        idempotency = IdempotencyMeta(
+            cacheHit=bool(cache_hit),
+            cacheKey=cache_key if cache_key else None,
+        )
+        return execution, idempotency
 
     def _request_ids(self, context: RequestContext) -> dict[str, Any]:
         if context._cached_ids is not None:

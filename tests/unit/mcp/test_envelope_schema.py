@@ -8,7 +8,13 @@ from jsonschema import Draft202012Validator
 
 pytest.importorskip("pydantic")
 
-from apps.mcp_server.service.envelope import Envelope, EnvelopeError, EnvelopeMeta
+from apps.mcp_server.service.envelope import (
+    Envelope,
+    EnvelopeError,
+    EnvelopeMeta,
+    ExecutionMeta,
+    IdempotencyMeta,
+)
 
 SCHEMA_PATH = Path("apps/mcp_server/schemas/mcp/envelope.schema.json")
 
@@ -40,10 +46,9 @@ def test_envelope_success_matches_schema() -> None:
             route="discover",
             method="mcp.discover",
             status="ok",
-            duration_ms=12.5,
             attempt=0,
-            input_bytes=0,
-            output_bytes=0,
+            execution=ExecutionMeta(duration_ms=12.5, input_bytes=0, output_bytes=0),
+            idempotency=IdempotencyMeta(cache_hit=False, cache_key=None),
         ),
     )
     payload = envelope.model_dump(by_alias=True)
@@ -51,6 +56,10 @@ def test_envelope_success_matches_schema() -> None:
     assert payload["ok"] is True
     assert payload["error"] is None
     assert payload["data"] == {"status": "ok"}
+    assert payload["meta"]["execution"]["durationMs"] == pytest.approx(12.5)
+    assert payload["meta"]["execution"]["inputBytes"] == 0
+    assert payload["meta"]["execution"]["outputBytes"] == 0
+    assert payload["meta"]["idempotency"] == {"cacheHit": False, "cacheKey": None}
 
 
 def test_envelope_error_includes_details() -> None:
@@ -66,10 +75,9 @@ def test_envelope_error_includes_details() -> None:
             route="tool",
             method="mcp.tool.invoke",
             status="error",
-            duration_ms=3.4,
             attempt=0,
-            input_bytes=0,
-            output_bytes=0,
+            execution=ExecutionMeta(duration_ms=3.4, input_bytes=0, output_bytes=0),
+            idempotency=IdempotencyMeta(cache_hit=False, cache_key=None),
         ),
     )
     payload = envelope.model_dump(by_alias=True)
@@ -78,6 +86,8 @@ def test_envelope_error_includes_details() -> None:
     assert payload["error"] == {"code": "MCP_TOOL_ERROR", "message": "boom", "details": None}
     assert payload["data"] is None
     assert payload["meta"]["deterministic"] is False
+    assert payload["meta"]["execution"]["durationMs"] == pytest.approx(3.4)
+    assert payload["meta"]["idempotency"] == {"cacheHit": False, "cacheKey": None}
 
 
 def test_envelope_serialises_optional_metadata() -> None:
@@ -93,10 +103,9 @@ def test_envelope_serialises_optional_metadata() -> None:
             route="prompt",
             method="mcp.prompt.get",
             status="ok",
-            duration_ms=1.23,
             attempt=0,
-            input_bytes=0,
-            output_bytes=0,
+            execution=ExecutionMeta(duration_ms=1.23, input_bytes=0, output_bytes=0),
+            idempotency=IdempotencyMeta(cache_hit=True, cache_key="prompt-cache"),
             prompt_id="core.generic.welcome@1",
         ),
     )
@@ -104,3 +113,4 @@ def test_envelope_serialises_optional_metadata() -> None:
     _validator().validate(payload)
     assert payload["meta"]["promptId"] == "core.generic.welcome@1"
     assert payload["meta"]["toolId"] is None
+    assert payload["meta"]["idempotency"] == {"cacheHit": True, "cacheKey": "prompt-cache"}

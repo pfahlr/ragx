@@ -72,4 +72,4 @@ def test_stdio_end_to_end(server: JsonRpcStdioServer) -> None:
             },
         })
     )
-    _validator("tool.response.schema.json").validate(tool["result"]["data"])
+    _validator("tool.response.schema.json").validate(tool["result"])

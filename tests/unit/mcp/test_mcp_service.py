@@ -117,7 +117,7 @@ def test_invoke_tool_executes_and_validates(service: McpService, tmp_path: Path)
         context=context,
     )
     payload = envelope.model_dump(by_alias=True)
-    _validator("tool.response.schema.json").validate(payload["data"])
+    _validator("tool.response.schema.json").validate(payload)
     assert payload["ok"] is True
     assert payload["data"]["result"]["document"]["sha256"].isalnum()
 
