@@ -1,0 +1,112 @@
+plan_preview:
+  branch_inclusions:
+    - codex/implement-dsl-policy-engine-in-yaml: tool-set validation, cycle detection, policy_resolved trace payload
+    - codex/implement-dsl-policy-engine-in-yaml-reclz1: ToolDescriptor model and branch/loop policy context cloning
+    - codex/implement-dsl-policy-engine-in-yaml-yp01n0: enforce() API, PolicyViolationError, denial metadata sink
+    - codex/implement-dsl-policy-engine-in-yaml-81p0id: candidate-aware trace payloads for diagnostics
+  conflict_resolution:
+    - Iterate stack frames from newest to oldest so nearest scope wins while still emitting aggregate traces.
+    - Normalize trace schema to include push/pop/policy_resolved/violation events with deterministic payload keys.
+    - Reconcile enforcement with resolution by reusing cached snapshots instead of recomputing per call.
+  exclusions:
+    - Drop reclz1's permissive push() that ignores None policies; explicit callers must guard optional scopes.
+    - Remove yp01n0's flow-level policy auto-push to keep policy stack API deterministic.
+  open_questions:
+    - Should decision-option policies be exposed as explicit frames in traces for downstream observability?
+    - What caching horizon is acceptable before the runner invalidates a PolicySnapshot (per node vs per evaluation)?
+
+refinement_opportunities:
+  - Introduce PolicyState cache keyed by stack depth to avoid recomputing allowlists on repeated enforce() calls.
+  - Extract trace schema to codex/specs/schemas/policy_trace_event.schema.json for contract validation.
+  - Extend linter to surface unreachable fallback chains separately from primary tool blocks.
+
+shared_blocks:
+  - name: scope_enforcer
+    implementation: |
+      def resolve_effective_allowlist(stack: PolicyStack, *, candidates: Iterable[str] | None = None) -> PolicyResolution:
+          """Return allowed/denied tool names with per-tool provenance."""
+          resolution = stack.effective_allowlist(candidates=candidates)
+          stack.emit_policy_resolved(resolution)
+          return resolution
+  - name: trace_event_emitter
+    implementation: |
+      def emit_trace_event(emitter: Callable[[PolicyTraceEvent], None], event: str, *, scope: str, payload: Mapping[str, object]) -> None:
+          emitter(PolicyTraceEvent(event=event, scope=scope, payload=MappingProxyType(dict(payload))))
+
+tasks:
+  - id: consolidate_policy_models
+    execution_mode: always
+    reusable: true
+    description: >
+      Merge PolicyDefinition/ToolDescriptor into a unified PolicyFrame that validates tool refs, prevents cycles, and preserves
+      per-tool decision provenance.
+    source_files:
+      - pkgs/dsl/policy.py
+      - pkgs/dsl/models.py
+    adapted_from_branch: codex/implement-dsl-policy-engine-in-yaml
+    dependencies: []
+    implementation_ref: scope_enforcer
+
+  - id: integrate_trace_and_enforcement
+    execution_mode: always
+    reusable: false
+    description: >
+      Provide enforce() with PolicyViolationError using cached PolicyResolution snapshots and emit push/pop/policy_resolved/
+      violation trace events via a pluggable sink.
+    source_files:
+      - pkgs/dsl/policy.py
+    adapted_from_branch: codex/implement-dsl-policy-engine-in-yaml-yp01n0
+    dependencies: [consolidate_policy_models]
+    implementation:
+      python: |
+        class PolicyStack:
+            def enforce(self, tool_ref: str, *, scope: str | None = None, raise_on_violation: bool = True) -> bool:
+                snapshot = self._snapshot_cache.current()
+                if tool_ref in snapshot.allowed:
+                    return True
+                denial = snapshot.denied.get(tool_ref)
+                self._emit_violation(tool_ref, scope, denial)
+                if raise_on_violation:
+                    raise PolicyViolationError(...)
+                return False
+
+  - id: restore_branch_aware_linter
+    execution_mode: always
+    reusable: true
+    description: >
+      Reintroduce branch/loop policy context evaluation while aligning diagnostics with the new PolicyResolution schema.
+    adapted_from_branch: codex/implement-dsl-policy-engine-in-yaml-reclz1
+    dependencies: [consolidate_policy_models]
+    source_files:
+      - pkgs/dsl/linter.py
+      - tests/unit/test_linter_unreachable_tools.py
+    tests:
+      - name: test_decision_branch_policy_override
+        file: tests/unit/test_linter_unreachable_tools.py
+
+  - id: extend_trace_tests
+    execution_mode: always
+    reusable: true
+    description: Ensure policy traces include push, pop, policy_resolved, and violation events with deterministic payloads.
+    adapted_from_branch: codex/implement-dsl-policy-engine-in-yaml-81p0id
+    dependencies: [integrate_trace_and_enforcement]
+    source_files:
+      - tests/unit/test_policy_stack_resolution.py
+      - pkgs/dsl/policy.py
+    implementation_ref: trace_event_emitter
+    artifacts:
+      - name: policy_trace_event_schema
+        file: codex/specs/schemas/policy_trace_event.schema.json
+
+handoff_contract:
+  expected_consumer: gpt-5-codex
+  input_format: schema://codex/specs/schemas/full_task.schema.json
+  output_type: executable-python+unit-tests
+
+codex_directives:
+  must:
+    - attribute reused logic to specific branches
+    - emit `policy_resolved` trace
+  do_not:
+    - invent tools or APIs not seen in diffs
+    - reuse test logic without attribution
