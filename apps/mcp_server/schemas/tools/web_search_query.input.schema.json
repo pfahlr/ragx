@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "web.search.query input",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "query": {"type": "string", "minLength": 1},
+    "topK": {"type": "integer", "minimum": 1, "maximum": 50},
+    "language": {"type": "string", "minLength": 2},
+    "filters": {"type": "object", "additionalProperties": true}
+  },
+  "required": ["query"]
+}

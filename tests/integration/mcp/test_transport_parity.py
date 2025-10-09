@@ -34,8 +34,8 @@ def test_transport_parity_for_tool_invocation(tmp_path: Path) -> None:
         deterministic_logs=True,
     )
 
-    client = TestClient(create_app(service))
-    server = JsonRpcStdioServer(service)
+    client = TestClient(create_app(service, deterministic_ids=True))
+    server = JsonRpcStdioServer(service, deterministic_ids=True)
     fixture_path = Path("tests/fixtures/mcp/docs/sample_article.md")
 
     http_response = client.post(
@@ -43,7 +43,8 @@ def test_transport_parity_for_tool_invocation(tmp_path: Path) -> None:
         json={"arguments": {"path": str(fixture_path)}},
     )
     assert http_response.status_code == 200
-    http_payload = http_response.json()["data"]
+    http_envelope = http_response.json()
+    http_payload = http_envelope["data"]
 
     stdio_response = asyncio.run(
         server.handle_request({
@@ -56,6 +57,12 @@ def test_transport_parity_for_tool_invocation(tmp_path: Path) -> None:
             },
         })
     )
-    stdio_payload = stdio_response["result"]["data"]
+    stdio_envelope = stdio_response["result"]
+    stdio_payload = stdio_envelope["data"]
 
     assert http_payload == stdio_payload
+    assert http_envelope["meta"]["requestId"] == stdio_envelope["meta"]["requestId"]
+    assert http_envelope["meta"]["traceId"] == stdio_envelope["meta"]["traceId"]
+    assert http_envelope["meta"]["spanId"] == stdio_envelope["meta"]["spanId"]
+    assert http_envelope["meta"]["deterministic"] is True
+    assert stdio_envelope["meta"]["deterministic"] is True

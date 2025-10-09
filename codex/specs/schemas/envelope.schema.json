@@ -3,12 +3,14 @@
   "$id": "https://spec.ragx.ai/mcp/envelope.schema.json",
   "title": "RAGX MCP Envelope",
   "type": "object",
+  "$comment": "JSON-RPC requests and notifications share this envelope. Notifications omit 'id'.",
   "additionalProperties": false,
-  "required": ["id", "jsonrpc", "method", "params"],
+  "required": ["jsonrpc", "method", "params"],
   "properties": {
     "id": {
       "description": "Deterministic request identifier (UUID or stable string).",
-      "type": ["string", "integer"]
+      "$comment": "When absent the envelope is treated as a notification.",
+      "type": ["string", "integer", "null"]
     },
     "jsonrpc": {
       "description": "JSON-RPC protocol version indicator.",

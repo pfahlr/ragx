@@ -52,6 +52,16 @@ def test_query_search_sorts_by_score_then_tie_breaker(monkeypatch: pytest.Monkey
     assert ids == [doc.doc_id for doc in expected_order]
 
 
+def test_query_search_prefers_matching_documents(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("RAGX_SEED", "75")
+    result = _invoke({"query": "demonstrates", "topK": 1})
+
+    assert result["hits"], "Expected at least one hit"
+    top_hit = result["hits"][0]
+    assert top_hit["id"] == "example_fixture"
+    assert top_hit["score"] >= 1.0
+
+
 def test_query_search_includes_document_metadata(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("RAGX_SEED", "100")
     result = _invoke({"query": "retrieval", "topK": 1})

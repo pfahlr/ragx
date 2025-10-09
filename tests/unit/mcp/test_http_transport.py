@@ -38,6 +38,12 @@ def client(service: McpService) -> TestClient:
     return TestClient(app)
 
 
+@pytest.fixture
+def deterministic_client(service: McpService) -> TestClient:
+    app = create_app(service, deterministic_ids=True)
+    return TestClient(app)
+
+
 def test_http_discover_endpoint(client: TestClient) -> None:
     response = client.get("/mcp/discover")
     assert response.status_code == 200
@@ -53,6 +59,13 @@ def test_http_prompt_endpoint(client: TestClient) -> None:
     assert payload["data"]["id"] == "core.generic.bootstrap@1"
 
 
+def test_http_prompt_not_found_returns_404(client: TestClient) -> None:
+    response = client.get("/mcp/prompt/unknown.prompt@1")
+    assert response.status_code == 404
+    payload = response.json()
+    assert payload["error"]["code"] == "NOT_FOUND"
+
+
 def test_http_tool_endpoint(client: TestClient) -> None:
     fixture_path = Path("tests/fixtures/mcp/docs/sample_article.md")
     response = client.post(
@@ -65,7 +78,40 @@ def test_http_tool_endpoint(client: TestClient) -> None:
     assert payload["data"]["result"]["document"]["path"].endswith("sample_article.md")
 
 
+def test_http_tool_not_found_returns_404(client: TestClient) -> None:
+    response = client.post("/mcp/tool/mcp.tool:missing.tool", json={"arguments": {}})
+    assert response.status_code == 404
+    payload = response.json()
+    assert payload["error"]["code"] == "NOT_FOUND"
+
+
+def test_http_tool_invalid_payload_returns_400(client: TestClient) -> None:
+    response = client.post(
+        "/mcp/tool/mcp.tool:docs.load.fetch",
+        json={"arguments": {"encoding": "utf-8"}},
+    )
+    assert response.status_code == 400
+    payload = response.json()
+    assert payload["error"]["code"] == "INVALID_INPUT"
+
+
 def test_http_health_endpoint(client: TestClient) -> None:
     response = client.get("/healthz")
     assert response.status_code == 200
     assert response.json() == {"status": "ok"}
+
+
+def test_http_deterministic_ids(deterministic_client: TestClient) -> None:
+    first = deterministic_client.get("/mcp/discover")
+    second = deterministic_client.get("/mcp/discover")
+
+    assert first.status_code == 200
+    assert second.status_code == 200
+
+    first_meta = first.json()["meta"]
+    second_meta = second.json()["meta"]
+
+    assert first_meta["deterministic"] is True
+    assert first_meta["requestId"] == second_meta["requestId"]
+    assert first_meta["traceId"] == second_meta["traceId"]
+    assert first_meta["spanId"] == second_meta["spanId"]

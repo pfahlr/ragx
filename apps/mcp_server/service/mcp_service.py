@@ -1,17 +1,24 @@
 from __future__ import annotations
 
 import json
+import os
 import time
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
+from enum import Enum
 from pathlib import Path
 from typing import Any
 from uuid import UUID, uuid4, uuid5
 
-from jsonschema import Draft202012Validator, validators
+from jsonschema import Draft202012Validator, ValidationError, validators
 
 from apps.mcp_server.logging import JsonLogWriter
+from apps.mcp_server.validation import SchemaRegistry
+from apps.mcp_server.validation.logging import (
+    EnvelopeValidationEvent,
+    EnvelopeValidationLogManager,
+)
 from apps.toolpacks.executor import Executor, ToolpackExecutionError
 from apps.toolpacks.loader import Toolpack, ToolpackLoader
 
@@ -25,6 +32,22 @@ _SCHEMA_VERSION_DEFAULT = "0.1.0"
 _DETERMINISTIC_NAMESPACE = UUID("c1fd1c20-77b7-4f73-b39c-8ed2dd2f2d8c")
 
 
+class ValidationMode(Enum):
+    OFF = "off"
+    SHADOW = "shadow"
+    ENFORCE = "enforce"
+
+    @classmethod
+    def from_str(cls, raw: str | None) -> ValidationMode:
+        if not raw:
+            return cls.SHADOW
+        normalised = raw.strip().lower()
+        for mode in cls:
+            if mode.value == normalised:
+                return mode
+        return cls.SHADOW
+
+
 @dataclass(slots=True)
 class RequestContext:
     """Per-request metadata supplied by transports."""
@@ -36,6 +59,7 @@ class RequestContext:
     request_payload: Mapping[str, Any] | None = None
     start_time: float = field(default_factory=time.perf_counter)
     attempt: int = 0
+    _cached_ids: dict[str, Any] | None = field(default=None, repr=False, init=False)
 
     def clone_with_payload(self, payload: Mapping[str, Any]) -> RequestContext:
         return RequestContext(
@@ -221,6 +245,9 @@ class McpService:
         schema_store: SchemaStore,
         log_manager: ServerLogManager,
         schema_version: str,
+        validation_registry: SchemaRegistry,
+        validation_log: EnvelopeValidationLogManager,
+        validation_mode: ValidationMode,
     ) -> None:
         self._toolpacks = toolpacks
         self._executor = executor
@@ -228,6 +255,9 @@ class McpService:
         self._schemas = schema_store
         self._log_manager = log_manager
         self._schema_version = schema_version
+        self._validation_registry = validation_registry
+        self._validation_log = validation_log
+        self._validation_mode = validation_mode
 
     @property
     def log_manager(self) -> ServerLogManager:
@@ -256,6 +286,15 @@ class McpService:
             schema_version=schema_version,
             deterministic=deterministic_logs,
         )
+        validation_registry = SchemaRegistry()
+        validation_log = EnvelopeValidationLogManager(
+            log_dir=log_dir,
+            schema_version=schema_version,
+            deterministic=deterministic_logs,
+        )
+        validation_mode = ValidationMode.from_str(
+            os.getenv("RAGX_MCP_ENVELOPE_VALIDATION")
+        )
         return cls(
             toolpacks=toolpacks,
             executor=executor,
@@ -263,6 +302,9 @@ class McpService:
             schema_store=schema_store,
             log_manager=log_manager,
             schema_version=schema_version,
+            validation_registry=validation_registry,
+            validation_log=validation_log,
+            validation_mode=validation_mode,
         )
 
     def discover(self, context: RequestContext | None = None) -> Envelope:
@@ -282,7 +324,7 @@ class McpService:
             prompt = self._prompts.get(prompt_id)
         except KeyError:
             return self._error_response(
-                code="MCP_UNKNOWN_PROMPT",
+                code="NOT_FOUND",
                 message=f"Prompt '{prompt_id}' not found",
                 context=ctx,
                 payload=payload,
@@ -303,23 +345,55 @@ class McpService:
         ctx = self._normalise_context(context, "tool", "mcp.tool.invoke", payload)
         if tool_id not in self._toolpacks:
             return self._error_response(
-                code="MCP_UNKNOWN_TOOL",
+                code="NOT_FOUND",
                 message=f"Tool '{tool_id}' not found",
                 context=ctx,
                 payload=payload,
                 tool_id=tool_id,
             )
         toolpack = self._toolpacks[tool_id]
+        validators_bundle = None
+        if self._validation_mode is not ValidationMode.OFF:
+            try:
+                validators_bundle = self._validation_registry.load_tool_io(tool_id)
+            except KeyError:
+                validators_bundle = None
+            if validators_bundle is not None:
+                try:
+                    validators_bundle.input.validate(
+                        {"tool": tool_id, "input": dict(arguments)}
+                    )
+                except ValidationError as exc:
+                    return self._error_response(
+                        code="INVALID_INPUT",
+                        message=str(exc).splitlines()[0],
+                        context=ctx,
+                        payload=payload,
+                        tool_id=tool_id,
+                    )
         try:
             result = self._executor.run_toolpack(toolpack, arguments)
         except ToolpackExecutionError as exc:
             return self._error_response(
-                code="MCP_VALIDATION_ERROR",
+                code="INTERNAL_ERROR",
                 message=str(exc),
                 context=ctx,
                 payload=payload,
                 tool_id=tool_id,
             )
+        if self._validation_mode is not ValidationMode.OFF and validators_bundle is not None:
+            try:
+                validators_bundle.output.validate(
+                    {"tool": tool_id, "output": dict(result)}
+                )
+            except ValidationError as exc:
+                return self._error_response(
+                    code="INVALID_OUTPUT",
+                    message=str(exc).splitlines()[0],
+                    context=ctx,
+                    payload=payload,
+                    tool_id=tool_id,
+                )
         data = {
             "toolId": tool_id,
             "result": dict(result),
@@ -352,6 +426,7 @@ class McpService:
         duration_ms = _duration_ms(context.start_time)
         ids = self._request_ids(context)
         step_id = self._log_manager.next_step_id()
+        output_bytes = _payload_size(data)
         meta = EnvelopeMeta.from_ids(
             request_id=ids["request_id"],
             trace_id=ids["trace_id"],
@@ -365,14 +440,12 @@ class McpService:
             status="ok",
             attempt=context.attempt,
             input_bytes=ids["input_bytes"],
-            output_bytes=_payload_size(data),
+            output_bytes=output_bytes,
             tool_id=tool_id,
             prompt_id=prompt_id,
         )
         envelope = Envelope.success(data=dict(data), meta=meta)
-        self._schemas.validator("envelope.schema.json").validate(
-            envelope.model_dump(by_alias=True)
-        )
+        envelope_dict = envelope.model_dump(by_alias=True)
         self._log_manager.emit(
             ServerLogEvent(
                 ts=datetime.now(UTC),
@@ -386,7 +459,7 @@ class McpService:
                 duration_ms=duration_ms,
                 attempt=context.attempt,
                 input_bytes=ids["input_bytes"],
-                output_bytes=_payload_size(data),
+                output_bytes=output_bytes,
                 metadata={
                     "toolId": tool_id,
                     "promptId": prompt_id,
@@ -395,6 +468,16 @@ class McpService:
                 },
                 step_id=step_id,
             )
+        )
+        self._validate_envelope_and_log(
+            envelope_dict=envelope_dict,
+            context=context,
+            ids=ids,
+            tool_id=tool_id,
+            prompt_id=prompt_id,
+            duration_ms=duration_ms,
+            status="ok",
+            error=None,
         )
         return envelope
 
@@ -429,9 +512,8 @@ class McpService:
             prompt_id=prompt_id,
         )
         envelope = Envelope.failure(error=EnvelopeError(code=code, message=message), meta=meta)
-        self._schemas.validator("envelope.schema.json").validate(
-            envelope.model_dump(by_alias=True)
-        )
+        envelope_dict = envelope.model_dump(by_alias=True)
+        error_payload = {"canonical": code, "message": message}
         self._log_manager.emit(
             ServerLogEvent(
                 ts=datetime.now(UTC),
@@ -456,6 +538,16 @@ class McpService:
                 step_id=step_id,
             )
         )
+        self._validate_envelope_and_log(
+            envelope_dict=envelope_dict,
+            context=context,
+            ids=ids,
+            tool_id=tool_id,
+            prompt_id=prompt_id,
+            duration_ms=duration_ms,
+            status="error",
+            error=error_payload,
+        )
         return envelope
 
     def _normalise_context(
@@ -474,6 +566,95 @@ class McpService:
             )
         return context.clone_with_payload(payload)
 
+    def _validate_envelope_and_log(
+        self,
+        *,
+        envelope_dict: Mapping[str, Any],
+        context: RequestContext,
+        ids: Mapping[str, Any],
+        tool_id: str | None,
+        prompt_id: str | None,
+        duration_ms: float,
+        status: str,
+        error: dict[str, Any] | None,
+    ) -> None:
+        if self._validation_mode is ValidationMode.OFF:
+            return
+        validator = self._validation_registry.load_envelope()
+        try:
+            validator.validate(envelope_dict)
+        except ValidationError as exc:
+            canonical_code = "INVALID_OUTPUT" if tool_id else "INTERNAL_ERROR"
+            fallback_error = {
+                "canonical": canonical_code,
+                "message": str(exc).splitlines()[0],
+            }
+            self._log_validation_event(
+                context=context,
+                ids=ids,
+                status="error",
+                duration_ms=duration_ms,
+                tool_id=tool_id,
+                prompt_id=prompt_id,
+                output_bytes=0,
+                error=fallback_error,
+            )
+            if self._validation_mode is ValidationMode.ENFORCE:
+                raise
+            return
+        output_bytes = _payload_size(envelope_dict)
+        self._log_validation_event(
+            context=context,
+            ids=ids,
+            status=status,
+            duration_ms=duration_ms,
+            tool_id=tool_id,
+            prompt_id=prompt_id,
+            output_bytes=output_bytes,
+            error=error,
+        )
+
+    def _log_validation_event(
+        self,
+        *,
+        context: RequestContext,
+        ids: Mapping[str, Any],
+        status: str,
+        duration_ms: float,
+        tool_id: str | None,
+        prompt_id: str | None,
+        output_bytes: int,
+        error: dict[str, Any] | None,
+    ) -> None:
+        if self._validation_mode is ValidationMode.OFF:
+            return
+        metadata = {
+            "schemaVersion": self._schema_version,
+            "deterministic": context.deterministic_ids,
+        }
+        if tool_id:
+            metadata["toolId"] = tool_id
+        if prompt_id:
+            metadata["promptId"] = prompt_id
+        event = EnvelopeValidationEvent(
+            ts=datetime.now(UTC),
+            request_id=str(ids["request_id"]),
+            trace_id=str(ids["trace_id"]),
+            span_id=str(ids["span_id"]),
+            transport=context.transport,
+            route=context.route,
+            method=context.method,
+            status=status,
+            duration_ms=duration_ms,
+            attempt=context.attempt,
+            input_bytes=int(ids.get("input_bytes", 0)),
+            output_bytes=output_bytes,
+            metadata=metadata,
+            error=error,
+            step_id=self._validation_log.next_step_id(),
+        )
+        self._validation_log.emit(event)
+
     def _tool_to_dict(self, toolpack: Toolpack) -> dict[str, Any]:
         return {
             "id": toolpack.id,
@@ -485,6 +666,8 @@ class McpService:
         }
 
     def _request_ids(self, context: RequestContext) -> dict[str, Any]:
+        if context._cached_ids is not None:
+            return context._cached_ids
         payload = context.request_payload or {}
         fingerprint = _fingerprint({
             "route": context.route,
@@ -499,12 +682,14 @@ class McpService:
             request_id = uuid4()
             trace_id = uuid4()
             span_id = uuid4()
-        return {
+        computed = {
             "request_id": str(request_id),
             "trace_id": str(trace_id),
             "span_id": str(span_id),
             "input_bytes": _payload_size(payload),
         }
+        context._cached_ids = computed
+        return computed
 
 
 def _fingerprint(payload: Mapping[str, Any]) -> str:

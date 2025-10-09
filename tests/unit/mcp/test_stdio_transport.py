@@ -64,6 +64,19 @@ def test_stdio_tool_invoke(server: JsonRpcStdioServer) -> None:
     assert response["result"]["data"]["result"]["document"]["path"].endswith("sample_article.md")
 
 
+def test_stdio_prompt_get_accepts_string_major(server: JsonRpcStdioServer) -> None:
+    response = asyncio.run(
+        server.handle_request(
+            _request(
+                "mcp.prompt.get",
+                params={"promptId": "core.generic.bootstrap", "major": "1"},
+            )
+        )
+    )
+    assert response["result"]["ok"] is True
+    assert response["result"]["data"]["id"] == "core.generic.bootstrap@1"
+
+
 def test_stdio_cancel_notification(server: JsonRpcStdioServer) -> None:
     response = asyncio.run(
         server.handle_notification(
@@ -71,3 +84,26 @@ def test_stdio_cancel_notification(server: JsonRpcStdioServer) -> None:
         )
     )
     assert response is None
+
+
+def test_stdio_rejects_positional_params(server: JsonRpcStdioServer) -> None:
+    response = asyncio.run(
+        server.handle_request(
+            {"jsonrpc": "2.0", "id": "req-1", "method": "mcp.tool.invoke", "params": ["foo"]}
+        )
+    )
+    assert response["error"]["code"] == -32602
+    assert response["id"] == "req-1"
+
+
+def test_stdio_prompt_get_rejects_non_integer_major(server: JsonRpcStdioServer) -> None:
+    response = asyncio.run(
+        server.handle_request(
+            _request(
+                "mcp.prompt.get",
+                params={"promptId": "core.generic.bootstrap", "major": "foo"},
+            )
+        )
+    )
+    assert response["error"]["code"] == -32602
+    assert response["id"] == "req-1"
