@@ -1,0 +1,230 @@
+version: 1
+id: 06dV2B_mcp_toolpacks_transport_impl.yaml
+title: MCP Toolpacks Transport — Unified execution, guardrails, and telemetry (Part B — Implementation & Enhancements)
+
+depends_on:
+  - 06d_mcp_toolpacks_transport_A_tests_first
+
+summary: >
+  Implement executor measurement + service enforcement, unify HTTP/STDIO envelopes, and emit deterministic
+  telemetry and idempotency metadata that make Part A green.
+
+description: >
+  Executor measures (duration/bytes/cache); service enforces (limits/timeouts) and maps canonical errors.
+  HTTP and STDIO produce the same validated envelope shape and structured logs. DeepDiff allowlisted goldens
+  guard regressions.
+
+component_ids: [apps.mcp_server.service, apps.toolpacks.executor, apps.mcp_server.runtime]
+arg_spec:
+  - --deterministic-ids
+  - --max-input-bytes=<int>
+  - --max-output-bytes=<int>
+  - --timeout-ms=<int>
+
+x-volatile-fields: [ts, traceId, spanId, requestId, attemptId, runId, durationMs]
+x-log-event-fields:
+  - ts
+  - transport
+  - route
+  - method
+  - status
+  - execution.durationMs
+  - execution.inputBytes
+  - execution.outputBytes
+  - idempotency.cacheHit
+
+server_contract:
+  transports:
+    http:
+      framework: fastapi
+      endpoints:
+        - method: POST
+          path: /mcp/tool/{toolId}
+          response:
+            description: Deterministic envelope with execution/idempotency metadata
+      shutdown: ASGI lifespan
+    stdio:
+      protocol: json-rpc 2.0
+      lifecycle: [init, invoke_tool, finalise_envelope, shutdown]
+      control: [deterministic_ids, idempotency cache reporting]
+  shared_service:
+    class: apps.mcp_server.service.mcp_service.McpService
+    methods: [discover, get_prompt, invoke_tool, health]
+    behavior:
+      - Enforce timeout/size before finalise_envelope
+      - Populate meta.execution + meta.idempotency on success and error paths
+  cli:
+    command: mcp-server
+    flags: [--deterministic-ids, --max-input-bytes, --max-output-bytes, --timeout-ms]
+
+classes_contract:
+  language: python
+  classes:
+    - name: ExecutionStats
+      responsibilities: [Hold durationMs, inputBytes, outputBytes, cacheHit; JSON-serializable]
+      methods: []
+    - name: Executor
+      responsibilities: [Run toolpacks; collect ExecutionStats; maintain deterministic cache]
+      methods:
+        - signature: run_toolpack(toolpack: Toolpack, payload: Mapping[str, Any]) -> Mapping[str, Any]
+          raises: [ToolpackExecutionError]
+          invariants: [last_run_stats refers to most recent call]
+        - signature: last_run_stats() -> ExecutionStats | None
+    - name: McpService
+      responsibilities: [Apply policy (limits/timeouts), canonicalize errors, assemble envelopes/log lines]
+      methods:
+        - signature: invoke_tool(tool_id: str, arguments: Mapping[str, Any], ctx: RequestContext | None = None) -> Envelope
+
+interfaces_contract:
+  protocols:
+    - name: ToolpackExecutorProtocol
+      methods:
+        - name: run_toolpack
+          params: [Toolpack, Mapping[str, Any]]
+          returns: Mapping[str, Any]
+        - name: last_run_stats
+          params: []
+          returns: ExecutionStats | None
+
+cli_contract:
+  program: mcp-server
+  commands:
+    - name: serve
+      flags:
+        - name: --deterministic-ids
+          type: bool
+          required: false
+        - name: --timeout-ms
+          type: int
+          required: false
+      exit_codes:
+        - code: 0
+          meaning: OK
+        - code: 2
+          meaning: Schema/validation error
+
+schema_contract:
+  draft: "2020-12"
+  files:
+    - path: apps/mcp_server/schemas/mcp/tool.response.schema.json
+      kind: output
+      required_fields:
+        - data
+        - meta.execution.durationMs
+        - meta.execution.inputBytes
+        - meta.execution.outputBytes
+        - meta.idempotency.cacheHit
+
+toolpack_contract:
+  manifests: [apps/mcp_server/toolpacks/**/*.yaml]
+  deterministic: true
+
+datastore_contract:
+  engine: sqlite
+  schemas: []
+  migrations_dir: ""
+
+structured_logging_contract:
+  format: jsonl
+  storage_path_prefix: logs/mcp_server/tool_invocations
+  latest_symlink: logs/mcp_server/tool_invocations.latest.jsonl
+  retention: keep-last-5
+  event_fields:
+    - ts
+    - transport
+    - route
+    - method
+    - status
+    - execution.durationMs
+    - execution.inputBytes
+    - execution.outputBytes
+    - idempotency.cacheHit
+    - metadata
+  metadata_fields: [schemaVersion, deterministic, toolId, promptId, execution, idempotency]
+  volatile_fields: [ts, traceId, spanId, requestId, attemptId, runId]
+
+metrics_contract:
+  counters:
+    - { name: mcp_invocations_total }
+  histograms:
+    - { name: mcp_invocation_duration_ms }
+
+tracing_contract:
+  spans:
+    - name: mcp.invoke_tool
+      attributes: [toolId, cacheHit]
+  propagation: [traceparent]
+
+security_privacy:
+  authn: []
+  pii_redaction:
+    denylist_keys: [password, token, authorization]
+    policy: retain-none
+
+log_diff_strategy:
+  tool: deepdiff
+  baseline_path: tests/fixtures/mcp/logs/mcp_toolpacks_transport_golden.jsonl
+  whitelist_fields: [ts, traceId, spanId, requestId, attemptId, runId, execution.durationMs]
+
+artifacts:
+  code:
+    - apps/toolpacks/executor.py
+    - apps/mcp_server/service/mcp_service.py
+    - apps/mcp_server/runtime/logging.py
+  scripts:
+    - scripts/diff_mcp_server_logs.py
+  docs:
+    - docs/mcp_toolpacks_transport.md
+  structured_logs:
+    - logs/mcp_server/tool_invocations/*.jsonl
+
+test_plan:
+  unit:
+    - Executor.last_run_stats returns precise duration/bytes and cacheHit
+    - Service maps size/timeouts to canonical error envelopes
+  integration:
+    - HTTP and STDIO parity for meta.execution/meta.idempotency on success and error
+    - Envelope validation passes with enriched metadata
+  e2e:
+    - Cache hit/miss scenarios produce expected telemetry
+    - Oversized input/output and long-running tool trigger canonical errors and logs
+  property_based: []
+
+ci:
+  matrix:
+    python: ["3.11", "3.12"]
+    os: [ubuntu-latest]
+  gates:
+    - ruff
+    - mypy
+    - pytest -q
+    - python scripts/diff_mcp_server_logs.py
+
+actions:
+  - stage: executor_impl
+    summary: Implement ExecutionStats and measurement hooks
+    tasks:
+      - Add monotonic timing and byte accounting; set cacheHit when serving from deterministic cache
+      - Expose last_run_stats() and reset semantics
+  - stage: service_enforcement
+    summary: Apply limits/timeouts and canonical errors
+    tasks:
+      - Before finalise, if input > maxInputBytes -> INVALID_INPUT; if output > maxOutputBytes -> INVALID_OUTPUT
+      - If runtime exceeds timeoutMs -> TIMEOUT
+      - Populate meta.execution + meta.idempotency for all outcomes
+  - stage: transport_parity
+    summary: Unify HTTP/STDIO envelope assembly & logging
+    tasks:
+      - Thread ExecutionStats into envelope meta
+      - Ensure STDIO JSON-RPC error path mirrors HTTP canonical mapping
+  - stage: tests_make_green
+    summary: Satisfy Part A
+    tasks:
+      - Make failing tests pass; refresh goldens with approved allowlist
+      - Run DeepDiff log checks in CI
+
+acceptance:
+  - All Part A tests pass with unchanged required fields and allowed volatility
+  - HTTP/STDIO parity confirmed by integration tests
+  - Log diff gate passes against baseline with only allowlisted differences
+  - TIMEOUT/INVALID_INPUT/INVALID_OUTPUT are returned with meta.execution present
