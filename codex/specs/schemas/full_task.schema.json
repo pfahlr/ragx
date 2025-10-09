@@ -1,0 +1,702 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/pfahlr/ragx/codex/specs/schemas/full_task.schema.json",
+  "title": "RAGX Task Spec",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version",
+    "id",
+    "title",
+    "summary",
+    "description",
+    "metadata",
+    "strategy",
+    "scope",
+    "structured_logging_contract",
+    "ci",
+    "actions",
+    "acceptance"
+  ],
+  "properties": {
+    "version": { "type": "integer", "minimum": 1 },
+    "id": { "type": "string", "pattern": "^[A-Za-z0-9._-]+$" },
+    "title": { "type": "string", "minLength": 1 },
+    "summary": { "type": "string", "minLength": 1 },
+    "description": { "type": "string", "minLength": 1 },
+
+    "diff_analysis": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "comparisons": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["from", "to", "git_diff", "commentary"],
+            "properties": {
+              "from": { "type": "string" },
+              "to": { "type": "string" },
+              "git_diff": { "type": "string" },
+              "commentary": { "type": "string" }
+            }
+          }
+        },
+        "summary_of_findings": {
+          "type": "object",
+          "properties": {
+            "common_flaws": { "type": "array", "items": { "type": "string" } },
+            "unique_strengths": { "type": "array", "items": { "type": "string" } },
+            "critical_gaps": { "type": "array", "items": { "type": "string" } }
+          }
+        }
+      }
+    },
+
+    "metadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["owners", "labels", "priority", "risk", "last_updated"],
+      "properties": {
+        "owners": { "const": ["pfahlr@gmail.com"] },
+        "labels": {
+          "type": "array",
+          "items": { "type": "string", "pattern": "^[a-z0-9-]+$" },
+          "minItems": 1
+          },
+        "priority": { "enum": ["P0", "P1", "P2", "P3"] },
+        "risk": { "enum": ["low", "medium", "high"] },
+        "last_updated": { "type": "string", "format": "date" },
+        "links": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["type", "url"],
+            "properties": {
+              "type": { "type": "string" },
+              "url": { "type": "string", "format": "uri" }
+            }
+          }
+        },
+        "tickets": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+
+    "strategy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["tests_first", "deterministic", "golden_management"],
+      "properties": {
+        "tests_first": { "type": "boolean" },
+        "deterministic": { "type": "boolean" },
+        "golden_management": { "enum": ["manual", "label-gated"] }
+      }
+    },
+
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["goals", "non_goals"],
+      "properties": {
+        "goals": {
+          "type": "array",
+          "items": { "type": "string" },
+          "minItems": 1
+        },
+        "non_goals": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+
+    "assumptions": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "constraints": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+
+    "component_ids": {
+      "type": "array",
+      "items": { "type": "string" },
+      "minItems": 1
+    },
+    "depends_on": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "arg_spec": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+
+    "config_flags": {
+      "type": "array",
+      "description": "List of CLI/config flags (choose your own; schema enforces shape only).",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "type", "desc"],
+        "properties": {
+          "name": { "type": "string", "minLength": 1 },
+          "env": { "type": ["string", "null"] },
+          "default": {},
+          "type": { "enum": ["str", "int", "bool", "path"] },
+          "desc": { "type": "string" }
+        }
+      }
+    },
+
+    "observability_requirements": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+
+    "x-volatile-fields": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "x-log-event-fields": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "x-ci-gates": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "x-python-matrix": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "x-os-matrix": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+
+    "server_contract": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "transports": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "http": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "framework": { "type": "string" },
+                "endpoints": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": ["method", "path", "response"],
+                    "properties": {
+                      "method": { "type": "string" },
+                      "path": { "type": "string" },
+                      "response": {}
+                    }
+                  }
+                },
+                "shutdown": { "type": "string" }
+              }
+            },
+            "stdio": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "protocol": { "type": "string" },
+                "lifecycle": {
+                  "type": "array",
+                  "items": { "type": "string" }
+                },
+                "control": {
+                  "type": "array",
+                  "items": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "shared_service": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "class": { "type": "string" },
+            "methods": {
+              "type": "array",
+              "items": { "type": "string" }
+            },
+            "behavior": {
+              "type": "array",
+              "items": { "type": "string" }
+            }
+          }
+        },
+        "cli": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "command": { "type": "string" },
+            "flags": {
+              "type": "array",
+              "items": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
+
+    "classes_contract": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "language": { "type": "string" },
+        "classes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["name"],
+            "properties": {
+              "name": { "type": "string" },
+              "responsibilities": {
+                "type": "array",
+                "items": { "type": "string" }
+              },
+              "methods": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "signature": { "type": "string" },
+                    "raises": {
+                      "type": "array",
+                      "items": { "type": "string" }
+                    },
+                    "invariants": {
+                      "type": "array",
+                      "items": { "type": "string" }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+
+    "interfaces_contract": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "protocols": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["name", "methods"],
+            "properties": {
+              "name": { "type": "string" },
+              "methods": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["name"],
+                  "properties": {
+                    "name": { "type": "string" },
+                    "params": {
+                      "type": "array",
+                      "items": { "type": "string" }
+                    },
+                    "returns": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+
+    "cli_contract": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "program": { "type": "string" },
+        "commands": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["name"],
+            "properties": {
+              "name": { "type": "string" },
+              "flags": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["name", "type"],
+                  "properties": {
+                    "name": { "type": "string" },
+                    "type": { "type": "string" },
+                    "required": { "type": "boolean" }
+                  }
+                }
+              },
+              "exit_codes": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["code", "meaning"],
+                  "properties": {
+                    "code": { "type": "integer" },
+                    "meaning": { "type": "string" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+
+    "schema_contract": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "draft": { "type": ["string", "number"] },
+        "files": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["path", "kind"],
+            "properties": {
+              "path": { "type": "string" },
+              "kind": { "enum": ["input", "output"] },
+              "required_fields": {
+                "type": "array",
+                "items": { "type": "string" }
+              }
+            }
+          }
+        }
+      }
+    },
+
+    "toolpack_contract": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "manifests": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "deterministic": { "type": "boolean" }
+      }
+    },
+
+    "datastore_contract": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "engine": { "enum": ["sqlite", "postgres"] },
+        "schemas": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["name", "columns"],
+            "properties": {
+              "name": { "type": "string" },
+              "columns": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["name", "type"],
+                  "properties": {
+                    "name": { "type": "string" },
+                    "type": { "type": "string" },
+                    "pk": { "type": "boolean" }
+                  }
+                }
+              },
+              "indexes": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["fields"],
+                  "properties": {
+                    "fields": {
+                      "type": "array",
+                      "items": { "type": "string" }
+                    },
+                    "unique": { "type": "boolean" }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "migrations_dir": { "type": "string" }
+      }
+    },
+
+    "structured_logging_contract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["format", "storage_path_prefix", "latest_symlink", "retention", "event_fields", "metadata_fields", "volatile_fields"],
+      "properties": {
+        "format": { "const": "jsonl" },
+        "storage_path_prefix": { "type": "string" },
+        "latest_symlink": { "type": "string" },
+        "retention": { "type": "string" },
+        "event_fields": { "type": "array", "items": { "type": "string" } },
+        "metadata_fields": { "type": "array", "items": { "type": "string" } },
+        "volatile_fields": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+
+    "metrics_contract": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "counters": { "type": "array", "items": { "type": "object" } },
+        "histograms": { "type": "array", "items": { "type": "object" } },
+        "gauges": { "type": "array", "items": { "type": "object" } }
+      }
+    },
+
+    "tracing_contract": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "spans": { "type": "array", "items": { "type": "object" } },
+        "propagation": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+
+    "security_privacy": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "data_classification": { "type": "string" },
+        "authn": { "type": "array", "items": { "type": "string" } },
+        "authz": { "type": "array", "items": { "type": "object" } },
+        "pii_redaction": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "denylist_keys": { "type": "array", "items": { "type": "string" } },
+            "policy": { "type": "string" }
+          }
+        }
+      }
+    },
+
+    "log_diff_strategy": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "tool": { "type": "string" },
+        "baseline_path": { "type": "string" },
+        "compatibility_symlink": { "type": "string" },
+        "whitelist_fields": { "type": "array", "items": { "type": "string" } },
+        "notes": { "type": "string" }
+      }
+    },
+
+    "artifacts": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "schemas": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "paths": { "type": "array", "items": { "type": "string" } }
+          }
+        },
+        "toolpacks": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "paths": { "type": "array", "items": { "type": "string" } }
+          }
+        },
+        "python_modules": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "paths": { "type": "array", "items": { "type": "string" } }
+          }
+        },
+        "structured_logs": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "path": { "type": "string" }
+          }
+        },
+        "golden_fixtures": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "paths": { "type": "array", "items": { "type": "string" } }
+          }
+        },
+        "doc_fixtures": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "paths": { "type": "array", "items": { "type": "string" } }
+          }
+        },
+        "documentation": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "path": { "type": "string" }
+          }
+        },
+        "log_diff_script": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "path": { "type": "string" }
+          }
+        }
+      }
+    },
+
+    "test_matrix": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "python": { "type": "array", "items": { "type": "string" } },
+        "os": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+
+    "test_plan": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "unit": { "type": "array", "items": { "type": "string" } },
+        "integration": { "type": "array", "items": { "type": "string" } },
+        "e2e": { "type": "array", "items": { "type": "string" } },
+        "property_based": { "type": "array", "items": { "type": "string" } },
+        "fixtures": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+
+    "ci": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["xfail_marker", "workflows"],
+      "properties": {
+        "xfail_marker": { "type": "string" },
+        "workflows": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["name", "gates"],
+            "properties": {
+              "name": { "type": "string" },
+              "gates": { "type": "array", "items": { "type": "string" } },
+              "artifacts": { "type": "array", "items": { "type": "string" } },
+              "cache_dependency_paths": { "type": "array", "items": { "type": "string" } }
+            }
+          }
+        }
+      }
+    },
+
+    "actions": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["stage", "summary", "tasks"],
+        "properties": {
+          "stage": { "type": "string" },
+          "summary": { "type": "string" },
+          "tasks": { "type": "array", "items": { "type": "string" } }
+        }
+      }
+    },
+
+    "rollout_plan": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "phases": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["name", "exit_criteria"],
+            "properties": {
+              "name": { "type": "string" },
+              "exit_criteria": { "type": "array", "items": { "type": "string" } }
+            }
+          }
+        }
+      }
+    },
+
+    "rollback_strategy": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "steps": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+
+    "operational_runbooks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "steps"],
+        "properties": {
+          "name": { "type": "string" },
+          "steps": { "type": "array", "items": { "type": "string" } }
+        }
+      }
+    },
+
+    "maintenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "deprecation_policy": { "type": "string" },
+        "upgrade_notes": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+
+    "acceptance": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "type": "string" }
+    }
+  }
+}
