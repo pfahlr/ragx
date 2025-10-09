@@ -143,9 +143,6 @@ class JsonRpcStdioServer:
     def _build_response(self, envelope) -> dict[str, Any]:
         payload = envelope.model_dump(by_alias=True)
         response: dict[str, Any]
-        meta = payload.get("meta")
-        if isinstance(meta, dict):
-            meta["transport"] = "http"
         if envelope.error is not None:
             try:
                 error_payload = CanonicalError.to_jsonrpc_error(envelope.error.code)

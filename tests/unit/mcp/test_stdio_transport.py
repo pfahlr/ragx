@@ -45,6 +45,7 @@ def test_stdio_discover(server: JsonRpcStdioServer) -> None:
     assert response["id"] == "req-1"
     assert response["result"]["ok"] is True
     assert response["result"]["data"]["prompts"]
+    assert response["result"]["meta"]["transport"] == "stdio"
 
 
 def test_stdio_tool_invoke(server: JsonRpcStdioServer) -> None:
