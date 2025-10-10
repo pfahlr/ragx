@@ -310,7 +310,9 @@ class McpService:
             schema_version=schema_version,
             deterministic=deterministic_logs,
         )
-        validation_registry = SchemaRegistry()
+        validation_registry = SchemaRegistry(
+            envelope_schema_path=schema_dir / "envelope.schema.json"
+        )
         validation_log = EnvelopeValidationLogManager(
             log_dir=log_dir,
             schema_version=schema_version,
