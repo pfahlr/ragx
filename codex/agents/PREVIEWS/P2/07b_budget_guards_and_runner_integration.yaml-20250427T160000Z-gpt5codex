@@ -1,0 +1,30 @@
+plan_preview:
+  branch_reuse:
+    codex/integrate-budget-guards-with-runner:
+      - Preserve adapter/policy orchestration entrypoints and baseline acceptance fixtures to ensure FlowRunner remains runnable while budgets are refactored.
+    codex/integrate-budget-guards-with-runner-zwi2ny:
+      - Adopt `BudgetSpec`, `CostSnapshot`, and `BudgetChargeOutcome` value objects plus the pluggable `TraceWriter` interface for deterministic trace emission.
+    codex/integrate-budget-guards-with-runner-pbdel9:
+      - Reuse structured `BudgetCharge` payloads with `remaining`/`overages` accounting for richer diagnostics.
+    codex/implement-budget-guards-with-test-first-approach:
+      - Integrate the `BudgetManager` preflight/commit lifecycle to coordinate run/node/spec scopes and centralize breach handling.
+    codex/implement-budget-guards-with-test-first-approach-qhq0jq:
+      - Keep `BudgetMode` semantics and preview decision helpers to cleanly separate warn vs hard-stop flows.
+    codex/implement-budget-guards-with-test-first-approach-8wxk32:
+      - Borrow immutable `NodeExecution` records and cost arithmetic helpers after reconciling unit conversions.
+    codex/implement-budget-guards-with-test-first-approach-fa0vm9:
+      - Use the adapter protocol, loop stop signaling, and streaming trace hooks as the execution backbone.
+  conflicts:
+    - Duplicate cost normalization pipelines disagree on units (`seconds` vs `milliseconds`) and metric keys; resolve by creating a single normalization module invoked by BudgetManager before both preview and charge.
+    - Trace schemas differ (bespoke `_record_event`, structured TraceWriter, streaming callbacks); consolidate on the TraceWriter API while adding policy/budget event builders shared across manager and runner.
+    - Soft budget handling varies (immediate raise, silent continue, warning-only); standardize on BudgetMode + breach_action semantics where preview determines stop reason and charge enforces according to spec.
+    - Branches diverge on loop context storage; reconcile by layering 8wxk32 `NodeExecution`/`LoopSummary` on top of fa0vm9’s loop controller, ensuring stack safety and trace fidelity.
+  dsl_engine_redesign:
+    - Refactor BudgetManager to own scope stack state (run → loop → node → spec) and expose explicit hooks to PolicyStack so policy/budget enforcement order is deterministic.
+    - Simplify budget DTO surface by unifying `BudgetChargeOutcome`, `BudgetDecision`, and `BudgetCharge` into a single immutable snapshot with nested spend/remaining/overage metrics.
+    - Extract trace emission into a `TraceEventEmitter` helper that formats policy and budget events against the spec schemas, reducing duplicate logic across branches.
+  open_questions:
+    - Should soft `breach_action: warn` accumulate repeated warnings per loop iteration or deduplicate per scope to avoid trace spam?
+    - Do we need asynchronous adapter hooks in this milestone, or can synchronous protocols satisfy acceptance criteria while leaving async for later tasks?
+    - How should policy violations and budget breaches interact when both occur in the same node—does budget enforcement happen before or after policy stack evaluation?
+    - What is the canonical stop reason payload for loops when a soft warn occurs but the flow voluntarily stops for other reasons?
