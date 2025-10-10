@@ -1,0 +1,81 @@
+summary: Integrate hierarchical budget enforcement with FlowRunner using immutable models and structured traces.
+justification: |
+  Earlier phases identified strong patterns across divergent branches but lacked a cohesive
+  execution path where FlowRunner, BudgetManager, and trace emission collaborate. This plan
+  codifies the selected abstractions (immutable budget models, manager preflight/commit
+  lifecycle, shared trace emitter) into discrete modules with TDD coverage so loop stop
+  behaviour and breach semantics become deterministic and testable.
+steps:
+  - id: domain_models
+    summary: Define immutable budget value objects and metering helpers with consistent unit normalization.
+    details:
+      - Implement BudgetSpec, CostSnapshot, BudgetCharge, and BudgetChargeResult dataclasses with mapping_proxy payloads.
+      - Provide a BudgetMeter that records spend, remaining balances, overages, and breach detection for soft vs hard modes.
+      - Ensure normalization converts seconds to milliseconds and clamps negative limits to zero for stability.
+  - id: manager_orchestration
+    summary: Build BudgetManager orchestration that coordinates multiple scope meters and exposes preflight/commit APIs.
+    details:
+      - Maintain parent/child relationships across run, loop, node, and spec scopes.
+      - Emit BudgetDecision snapshots containing warnings, stop requests, and breach metadata without mutating caller data.
+      - Surface BudgetBreachError for hard budgets while allowing stop-on-breach actions to be consumed by the runner.
+  - id: runner_integration
+    summary: Retrofit FlowRunner skeleton to invoke adapters, enforce policies via BudgetManager, and emit trace events.
+    details:
+      - Drive adapters through estimate/execute hooks, charging budgets on commit and halting loops on stop requests.
+      - Emit budget_charge, budget_breach, and loop_stop events through a shared TraceEventEmitter with immutable payloads.
+      - Capture stop reasons for loop exits (budget stop, max iterations) and expose them via run results for inspection.
+modules:
+  - path: codex/code/07b_budget_guards_and_runner_integration.yaml/__init__.py
+    role: Namespace package marker for task-specific modules.
+  - path: codex/code/07b_budget_guards_and_runner_integration.yaml/budget_models.py
+    role: Budget value objects, normalization helpers, and BudgetMeter implementation.
+  - path: codex/code/07b_budget_guards_and_runner_integration.yaml/budget_manager.py
+    role: Hierarchical BudgetManager coordinating scopes and breach semantics.
+  - path: codex/code/07b_budget_guards_and_runner_integration.yaml/trace.py
+    role: TraceEventEmitter utility ensuring immutable structured payloads.
+  - path: codex/code/07b_budget_guards_and_runner_integration.yaml/flow_runner.py
+    role: FlowRunner orchestration integrating adapters, budget manager, and trace emission.
+tests:
+  - path: codex/code/07b_budget_guards_and_runner_integration.yaml/tests/test_budget_models.py
+    focus: BudgetMeter edge cases (soft/hard breaches, unit normalization, immutable payloads).
+    coverage: ">=90%" of budget_models.py via branch-sensitive scenarios.
+    mocks:
+      - Use deterministic FakeClock to simulate time cost normalization.
+  - path: codex/code/07b_budget_guards_and_runner_integration.yaml/tests/test_budget_manager.py
+    focus: Preflight/commit lifecycle across run/node/loop scopes, stop-request propagation, and exception semantics.
+    coverage: ">=90%" of budget_manager.py using parametrized scenarios.
+    mocks:
+      - Stub trace emitter to capture budget events for assertions.
+  - path: codex/code/07b_budget_guards_and_runner_integration.yaml/tests/test_flow_runner.py
+    focus: Loop stop-on-budget behaviour, trace emission ordering, and policy-safe adapter execution.
+    coverage: ">=85%" of flow_runner.py ensuring loop + run happy path and breach paths.
+    mocks:
+      - Fake adapters returning deterministic cost snapshots and outputs.
+run_order:
+  - Write unit tests for budget models.
+  - Implement budget_models.py until tests pass.
+  - Write tests for budget manager and implement budget_manager.py.
+  - Write flow runner tests followed by trace.py and flow_runner.py implementation.
+interfaces:
+  - BudgetMeter.charge(cost: CostSnapshot) -> BudgetChargeResult
+  - BudgetManager.preflight(scope_id, cost) -> BudgetDecision
+  - BudgetManager.commit(scope_id, cost, *, label, emit_trace) -> BudgetDecision
+  - TraceEventEmitter.emit(event, scope, payload) -> None
+  - FlowRunner.run(plan, *, adapters, budget_manager, trace_emitter) -> FlowResult
+tdd_coverage_targets:
+  budget_models.py: 0.9
+  budget_manager.py: 0.9
+  flow_runner.py: 0.85
+review_checklist:
+  - Budget normalization converts seconds to milliseconds with deterministic rounding.
+  - BudgetManager prevents spend leakage across scopes and returns immutable decision payloads.
+  - FlowRunner halts loops when breach_action=="stop" and raises on hard run-level breaches.
+  - Trace payloads use MappingProxyType to guarantee immutability in tests.
+  - Tests assert both trace content and stop reasons to guard regressions.
+outputs:
+  - plan: codex/agents/TASKS_FINAL/P3/07b_budget_guards_and_runner_integration.yaml-20250509-gpt5codex.yaml
+  - tests: codex/code/07b_budget_guards_and_runner_integration.yaml/tests/
+  - modules: codex/code/07b_budget_guards_and_runner_integration.yaml/
+  - docs_preview: codex/agents/PREVIEW/P3/07b_budget_guards_and_runner_integration.yaml-20250509-gpt5codex.md
+  - docs_review: codex/agents/REVIEW/P3/07b_budget_guards_and_runner_integration.yaml-20250509-gpt5codex.md
+  - docs_postexecution: codex/agents/POSTEXECUTION/P3/07b_budget_guards_and_runner_integration.yaml-20250509-gpt5codex.md
