@@ -325,19 +325,31 @@ class PolicyStack:
         reasons: list[str] = []
 
         if allow_tools is not None or allow_tags is not None:
-            allowed = False
-            if allow_tools is not None and tool_name in allow_tools:
-                allowed = True
-                granted_by = allow_tool_scope
-                reasons.append(f"allow:tool:{tool_name}")
-            if not allowed and allow_tags is not None:
+            allowed = True
+            allow_reasons: list[tuple[str, str | None]] = []
+
+            if allow_tools is not None:
+                if tool_name in allow_tools:
+                    allow_reasons.append((f"allow:tool:{tool_name}", allow_tool_scope))
+                else:
+                    allowed = False
+
+            if allowed and allow_tags is not None:
                 tag_hit = sorted(descriptor.tags & allow_tags)
                 if tag_hit:
-                    allowed = True
                     matched_tags.extend(tag_hit)
-                    granted_by = allow_tag_scope
-                    reasons.append(f"allow:tag:{tag_hit[0]}")
-            if not allowed:
+                    allow_reasons.append((f"allow:tag:{tag_hit[0]}", allow_tag_scope))
+                else:
+                    allowed = False
+
+            if allowed:
+                for reason_entry, scope in allow_reasons:
+                    reasons.append(reason_entry)
+                    if scope is not None:
+                        granted_by = scope
+                if granted_by is None:
+                    granted_by = allow_tag_scope or allow_tool_scope
+            else:
                 reasons.append("not_in_allowlist")
 
         if allowed:

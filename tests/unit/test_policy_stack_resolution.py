@@ -77,3 +77,18 @@ def test_policy_stack_detects_cycles() -> None:
     cyclic_sets = {"a": ["b"], "b": ["a"]}
     with pytest.raises(PolicyError, match="cycle detected"):
         PolicyStack(tools=TOOLS, tool_sets=cyclic_sets)
+
+
+def test_allow_tags_do_not_bypass_allow_tools_constraints() -> None:
+    stack = _stack()
+    stack.push({"allow_tools": ["analysis_llm"]}, scope="global")
+    stack.push({"allow_tags": ["external"]}, scope="node")
+
+    resolution = stack.effective_allowlist()
+
+    assert "search_api" not in resolution.allowed
+
+    decision = resolution.decisions["search_api"]
+    assert decision.allowed is False
+    assert "not_in_allowlist" in decision.reasons
+    assert "allow:tag:external" not in decision.reasons
