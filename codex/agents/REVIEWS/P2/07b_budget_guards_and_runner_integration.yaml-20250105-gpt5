@@ -1,0 +1,67 @@
+metadata:
+  reviewer: gpt-5-codex
+  role: senior_ai_systems_engineer
+  date: 2025-01-05
+  repo: pfahlr/ragx
+  task_id: 07b_budget_guards_and_runner_integration
+section_a:
+  branch_reviews:
+    - branch: codex/integrate-budget-guards-with-runner
+      findings:
+        - Preserves adapter-driven FlowRunner execution and PolicyStack hooks, giving the most complete end-to-end path but only light budget metering that throws immediately without recorded summaries.
+        - Trace payloads remain minimal (push/pop/resolve) and omit budget context; no loop summaries or breach diagnostics are emitted, so observability is shallow.
+        - Test coverage retains original acceptance cases yet lacks any new scenarios for budget stop reasons, leaving breach_action semantics unverified.
+    - branch: codex/integrate-budget-guards-with-runner-zwi2ny
+      findings:
+        - Introduces immutable BudgetSpec/CostSnapshot dataclasses plus a TraceWriter abstraction, markedly improving cohesion of the budget domain model.
+        - Runner rewrites rely on mocked `_execute_node` helpers, severing adapter integration and bypassing PolicyStack enforcement—scope fidelity is reduced and tool validation regressions appear.
+        - Soft budget handling defaults to "hard" because breach_action is ignored when mode is absent, and there are no loop-stop tests guarding the preview/charge contract.
+    - branch: codex/integrate-budget-guards-with-runner-pbdel9
+      findings:
+        - Adds BudgetCharge objects with remaining/overage snapshots and mapping_proxy payloads, yielding rich diagnostics for traces.
+        - FlowRunner fails to honor `breach_action == "stop"`; loops keep iterating even though BudgetCharge reports breaches, so stop semantics regress sharply.
+        - PolicyStack enforcement is still unplugged and tests lean on synthesized cost payloads, so adapter contracts and policy traces are unvalidated.
+    - branch: codex/implement-budget-guards-with-test-first-approach
+      findings:
+        - Builds a BudgetManager façade with preflight/commit APIs and runner trace recorder concept—strong architectural separation of concerns.
+        - Replaces FlowRunner with stub methods raising NotImplementedError, removing plan/run execution entirely; acceptance suite cannot pass without additional work.
+        - BudgetManager lacks integration tests covering spec/run/loop scopes, and no trace emission assertions exist despite new recorder plumbing.
+    - branch: codex/implement-budget-guards-with-test-first-approach-qhq0jq
+      findings:
+        - Introduces BudgetMode enum, BudgetCheck preview results, and LoopSummary DTOs that clarify soft vs. hard pathways and loop reporting.
+        - Node execution remains mocked; PolicyStack and adapters are disconnected so enforcement and tool validation degrade.
+        - Trace channel only emits coarse run_start/run_end events; no node/budget events means stack safety and event fidelity are still missing from coverage.
+    - branch: codex/implement-budget-guards-with-test-first-approach-8wxk32
+      findings:
+        - Provides NodeExecution records, immutable Cost arithmetic, and injectable clock/id factories—excellent groundwork for deterministic, testable runner behavior.
+        - Continues to fabricate node outputs, bypassing adapters and PolicyStack, so budget charges never see realistic tool interactions.
+        - Test additions are absent; without decision/loop assertions the new data structures remain unverified.
+    - branch: codex/implement-budget-guards-with-test-first-approach-fa0vm9
+      findings:
+        - Formalizes a ToolAdapter protocol plus BudgetBreach metadata with mapping_proxy traces—brings loose coupling and richer observability.
+        - BudgetMeter mutates shared dictionaries when charging, creating stack-safety risks across scopes, and `_LoopStopSignal` introduces bespoke exceptions with little test coverage.
+        - Preview/commit separation is implied but not backed by dedicated tests; budget stop reasoning is still manual and easy to regress.
+  shared_observations:
+    strengths:
+      - All experimental branches attempt to normalize budget datamodels via dataclasses or enums, indicating consensus on immutable DTOs.
+      - Multiple branches (zwi2ny, pbdel9, fa0vm9) pursue trace abstractions that can be reused for a unified sink.
+    weaknesses:
+      - None of the branches preserve full adapter execution plus PolicyStack enforcement while integrating budgets, so spec compliance is fragmented.
+      - Loop stop semantics and soft budget warning pathways diverge widely and lack automated coverage.
+      - Tool validation and trace fidelity tests are consistently missing, especially for combined policy+budget scenarios.
+redundancy_or_hallucination_check:
+  notes:
+    - No branch introduces impossible DSL fields, but several invent bespoke enums/errors overlapping with spec-defined behaviors (BudgetDecision, BudgetExceededError) without schema backing.
+    - Duplicate mock execution layers appear across zwi2ny, qhq0jq, 8wxk32, and fa0vm9; these should be consolidated or dropped in favor of adapters.
+synthesis_rationale:
+  - Use codex/integrate-budget-guards-with-runner for proven adapter + PolicyStack execution baseline.
+  - Adopt CostSnapshot/BudgetSpec immutability and TraceWriter plumbing from codex/integrate-budget-guards-with-runner-zwi2ny while correcting soft-mode defaults.
+  - Integrate remaining/overage reporting and mapping_proxy payloads from codex/integrate-budget-guards-with-runner-pbdel9 but enforce breach_action stop semantics.
+  - Leverage BudgetManager orchestration and recorder concepts from codex/implement-budget-guards-with-test-first-approach, pairing them with fa0vm9 ToolAdapter protocol.
+  - Borrow BudgetMode/BudgetCheck preview handling and LoopSummary DTOs from codex/implement-budget-guards-with-test-first-approach-qhq0jq to cover soft vs hard flows.
+  - Utilize deterministic NodeExecution and Cost dataclasses from codex/implement-budget-guards-with-test-first-approach-8wxk32, ensuring adapters feed them instead of mocks.
+  - Retain structured BudgetBreach metadata from codex/implement-budget-guards-with-test-first-approach-fa0vm9 but rewrite charge mutations to avoid shared-state leaks.
+optional_enhancements:
+  - Add schema-backed validators (jsonschema or TypedDict) for trace payloads to guarantee immutability and contract compliance.
+  - Expand test matrix with decision/loop policy-budget hybrids and breach_action=warn vs stop permutations.
+  - Introduce integration harness fixtures to simulate adapters emitting both estimates and final costs, ensuring preview/commit flows stay in sync.
