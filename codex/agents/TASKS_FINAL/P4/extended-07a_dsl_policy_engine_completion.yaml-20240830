@@ -1,0 +1,109 @@
+meta:
+  code_task: 07a_dsl_policy_engine_completion.yaml
+  repo: pfahlr/
+  last_updated: 2024-08-30
+  phase: P4
+  merged_branch_excluded: true
+branch_ranking:
+  - branch: codex/implement-dsl-policy-engine-in-production
+    rank: 1
+    rationale: "Implements a comprehensive policy stack with scoped directive resolution, immutable snapshots, and thorough unit coverage for resolution and enforcement flows, giving the most production-ready baseline." 
+  - branch: codex/implement-dsl-policy-engine-in-production-p4eaey
+    rank: 2
+    rationale: "Adds richer denial metadata and stricter registry validation, but a faulty isinstance check on tag scalars raises at construction time, blocking execution." 
+  - branch: codex/implement-dsl-policy-engine-in-production-72ua42
+    rank: 3
+    rationale: "Provides denial summaries on snapshots yet omits stack depth and directive diagnostics from resolutions, reducing observability versus the top branch." 
+  - branch: codex/implement-dsl-policy-engine-in-production-5p284m
+    rank: 4
+    rationale: "Requires pre-normalized ToolDescriptor inputs and defaults to implicit denial when no allow directives are present, breaking expected allow-by-default semantics." 
+extended_tasks:
+  - id: harden_tool_registry_normalization
+    description: "Reject scalar tag definitions and non-mapping metadata when materializing ToolDescriptor entries so tool registries are validated up front."
+    source_files: [pkgs/dsl/policy.py, tests/unit/test_policy_stack_resolution.py]
+    adapted_from_branch: codex/implement-dsl-policy-engine-in-production-p4eaey
+    execution_mode: optional
+    reusable: true
+    implementation:
+      python: |
+        # Enforce stricter registry normalization on PolicyStack construction.
+        class PolicyStack:
+            def __init__(self, *, tools: Mapping[str, Mapping[str, object]], tool_sets: Mapping[str, Sequence[str]] | None = None, **kwargs: object) -> None:
+                self._registry: dict[str, ToolDescriptor] = {}
+                for name, meta in tools.items():
+                    if not isinstance(name, str) or not name:
+                        raise PolicyError("tool names must be non-empty strings")
+                    if not isinstance(meta, Mapping):
+                        raise PolicyError(f"tool '{name}' metadata must be a mapping")
+                    tags = meta.get("tags", [])
+                    if isinstance(tags, (str, bytes)) or not isinstance(tags, Iterable):
+                        raise PolicyError(f"tool '{name}' tags must be an iterable of strings")
+                    normalized_tags = {str(tag) for tag in tags}
+                    descriptor = ToolDescriptor(
+                        name=name,
+                        tags=frozenset(normalized_tags),
+                        metadata=mapping_proxy(meta),
+                    )
+                    self._registry[name] = descriptor
+                # retain existing tool_set validation
+                self._tool_sets = {name: tuple(entries) for name, entries in (tool_sets or {}).items()}
+                self._validate_tool_sets()
+    tests:
+      - tests/unit/test_policy_stack_resolution.py::test_registry_rejects_scalar_tags
+    artifacts: []
+  - id: attach_snapshot_to_policy_violation_error
+    description: "Preserve the evaluated snapshot when raising PolicyViolationError so callers can inspect full resolution context after enforcement failures."
+    source_files: [pkgs/dsl/policy.py, tests/unit/test_policy_stack_enforce.py]
+    adapted_from_branch: codex/implement-dsl-policy-engine-in-production-p4eaey
+    execution_mode: optional
+    reusable: true
+    implementation:
+      python: |
+        class PolicyViolationError(PolicyError):
+            def __init__(self, denial: PolicyDenial, snapshot: PolicySnapshot) -> None:
+                super().__init__(f"Tool '{denial.tool}' blocked by policy: {', '.join(denial.reasons)}")
+                self.denial = denial
+                self.snapshot = snapshot
+        class PolicyStack:
+            def enforce(self, tool: str, *, raise_on_violation: bool = True) -> PolicySnapshot:
+                resolution = self._resolve([tool], emit_trace=False)
+                snapshot = self._make_snapshot(resolution)
+                decision = resolution.decisions[tool]
+                if decision.allowed or not raise_on_violation:
+                    return snapshot
+                denial = PolicyDenial(tool=tool, reasons=decision.reasons, decision=decision)
+                _emit_policy_event(...)
+                raise PolicyViolationError(denial, snapshot)
+    tests:
+      - tests/unit/test_policy_stack_enforce.py::test_violation_error_exposes_snapshot
+    artifacts: []
+  - id: expose_denial_snapshots
+    description: "Augment PolicySnapshot with structured denial objects keyed by tool so diagnostics retain reasons, scopes, and matched tags after resolution."
+    source_files: [pkgs/dsl/models.py, pkgs/dsl/policy.py, tests/unit/test_policy_stack_enforce.py]
+    adapted_from_branch: codex/implement-dsl-policy-engine-in-production-72ua42
+    execution_mode: optional
+    reusable: true
+    implementation:
+      python: |
+        @dataclass(frozen=True, slots=True)
+        class PolicySnapshot(PolicyResolution):
+            denials: Mapping[str, PolicyDenial]
+        class PolicyStack:
+            def _make_snapshot(self, resolution: PolicyResolution) -> PolicySnapshot:
+                denial_map = {
+                    tool: PolicyDenial(tool=tool, reasons=decision.reasons, decision=decision)
+                    for tool, decision in resolution.decisions.items()
+                    if not decision.allowed
+                }
+                return PolicySnapshot(
+                    allowed=resolution.allowed,
+                    denied=resolution.denied,
+                    decisions=resolution.decisions,
+                    stack_depth=resolution.stack_depth,
+                    candidates=resolution.candidates,
+                    directives=resolution.directives,
+                    denials=mapping_proxy(denial_map),
+                )
+    tests:
+      - tests/unit/test_policy_stack_enforce.py::test_snapshot_denials_preserve_scope_and_tags
+    artifacts: []
