@@ -1,0 +1,73 @@
+id: dsl_runner
+title: DSL Runner (Flows, Policies, Budgets, Transforms)
+source_of_truth:
+  master_spec: codex/specs/ragx_master_spec.yaml
+scope:
+  purpose: |
+    Execute DSL flows (unit/transform/decision/loop/end) with policy/budget enforcement,
+    templating, caching, and JSONL tracing. Provide “lint” and “run” commands.
+  non_goals:
+    - Real networking or LLM calls (use adapters/mocks in tests).
+contracts:
+  api:
+    functions:
+      - name: FlowRunner.run
+        signature: (spec: dict, vars: dict) -> RunResult
+        io:
+          inputs: { spec: flow.base.schema + patches, vars: free-form }
+          outputs: { run_id: str, status: "ok|error", outputs: dict }
+      - name: FlowRunner.plan
+        signature: (spec: dict, vars: dict) -> dict
+      - name: PolicyStack.effective_allowlist
+        signature: (node: dict) -> set[str]
+      - name: BudgetMeter.can_spend
+        signature: (cost: Cost) -> bool
+      - name: BudgetMeter.charge
+        signature: (cost: Cost) -> None
+    cli:
+      - { cmd: "task-runner run",   flags_ref: task_runner }
+      - { cmd: "task-runner lint",  flags_ref: linter }
+    files_in:
+      - pkgs/dsl/schemas/flow.base.schema.json
+      - pkgs/dsl/schemas/flow.policy.patch.schema.json
+      - pkgs/dsl/schemas/flow.budget.patch.schema.json
+      - pkgs/dsl/schemas/flow.hints.patch.schema.json
+      - flows/example.react_self_refine.yaml
+    files_out:
+      - runs/trace.jsonl
+  behavior:
+    invariants:
+      - Policies compose hierarchically; deny overrides allow on same scope.
+      - Budget mode "hard" blocks execution; "soft" logs warning only.
+      - Transforms are deterministic in CI (no network, fixed seeds).
+    preconditions:
+      - Spec validates against all schemas; linter errors abort run.
+    postconditions:
+      - Each node emits node_start/node_end trace events with cost/call counts.
+    errors:
+      - { code: POLICY_VIOLATION, when: tool not in effective allowlist, shape: {ok:false,errors:[...]}}
+      - { code: BUDGET_EXCEEDED,  when: can_spend()==false }
+      - { code: SPEC_INVALID,     when: schema validation fails }
+  performance:
+    budgets:
+      - Must execute example flow under 2s in CI with adapters mocked.
+acceptance:
+  tests:
+    unit:
+      - dsl_policy_resolution
+      - budget_meter_limits
+    integration:
+      - flow_runs_self_refine_loop_respects_iteration_cap
+      - react_decision_applies_branch_policy
+    e2e:
+      - cli_task_runner_lint_and_run_example_flow
+  fixtures:
+    - tests/fixtures/flows/example.react_self_refine.yaml
+  done_definition: |
+    All tests pass, example flow runs, trace contains expected sequence.
+notes:
+  pitfalls:
+    - Treat missing pricing as error if strict_missing_pricing=true.
+  future_work:
+    - Shell/Python transform sandbox with resource limits.
+

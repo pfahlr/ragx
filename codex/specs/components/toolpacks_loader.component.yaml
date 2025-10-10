@@ -1,0 +1,63 @@
+id: toolpacks_loader
+title: Toolpacks Loader (YAML → validated objects)
+source_of_truth:
+  master_spec: codex/specs/ragx_master_spec.yaml
+  related_specs:
+    - codex/agents/TASKS/05a_toolpacks_loader_minimal.yaml
+    - codex/agents/TASKS/05c_toolpacks_loader_spec_alignment.yaml
+scope:
+  purpose: |
+    Load *.tool.yaml files, enforce spec (camelCase fields), resolve $ref,
+    validate schemas using jsonschema.validator_for(...).check_schema, and
+    construct a strongly-typed Toolpack object.
+  non_goals:
+    - Executing tools (executor handles that).
+contracts:
+  api:
+    functions:
+      - name: ToolpackLoader.load_dir
+        signature: (root: Path) -> dict[str, Toolpack]
+      - name: ToolpackLoader.get
+        signature: (id: str) -> Toolpack
+    cli: []
+    files_in:
+      - apps/mcp_server/toolpacks/**/*.tool.yaml
+      - apps/mcp_server/schemas/tools/*.schema.json
+    files_out: []
+  behavior:
+    invariants:
+      - Required fields: id, version, deterministic, timeoutMs, limits, inputSchema, outputSchema, execution.kind
+      - execution.kind ∈ {python,node,php,cli,http}
+      - Duplicate ids cause ToolpackValidationError
+      - Legacy snake_case keys are translated once and warn (05g shim)
+    preconditions:
+      - Schemas loadable; $ref resolved relative to toolpack file.
+    postconditions:
+      - Returned Toolpack has normalized/canonical camelCase fields only.
+    errors:
+      - { code: TOOLPACK_VALIDATION, when: required missing/unknown kind }
+      - { code: SCHEMA_INVALID,      when: check_schema fails }
+  performance:
+    budgets:
+      - Load ≥ 50 toolpacks under 500ms in CI (no network).
+acceptance:
+  tests:
+    unit:
+      - toolpack_loader_rejects_unknown_kind
+      - toolpack_loader_resolves_nested_refs
+      - toolpack_loader_duplicate_ids_error
+      - toolpack_loader_legacy_snake_case_warns_and_maps
+    integration:
+      - loader_get_returns_same_instance_by_id
+  fixtures:
+    - tests/fixtures/toolpacks/valid_basic.tool.yaml
+    - tests/fixtures/toolpacks/with_refs.tool.yaml
+    - tests/fixtures/schemas/...
+  done_definition: |
+    All unit tests pass; loader returns spec-aligned Toolpack objects; bad packs fail with ToolpackValidationError.
+notes:
+  pitfalls:
+    - Don’t mutate original dicts; deep copy before normalization.
+  future_work:
+    - Deterministic ordering of tools in discover().
+

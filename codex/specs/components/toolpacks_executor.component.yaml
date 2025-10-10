@@ -1,0 +1,62 @@
+id: toolpacks_executor
+title: Toolpacks Executor (python-only P0)
+source_of_truth:
+  master_spec: codex/specs/ragx_master_spec.yaml
+  related_specs:
+    - codex/agents/TASKS/05b_toolpacks_executor_python_only.yaml
+    - codex/agents/TASKS/05d_toolpacks_executor_python_only_plus.yaml
+    - codex/agents/TASKS/05e_toolpacks_tests_completeness.yaml
+scope:
+  purpose: |
+    Execute python-kind toolpacks by importing execution.module (module:callable),
+    validate input/output payloads with jsonschema, and apply deterministic caching.
+  non_goals:
+    - Node/php/cli/http execution (future).
+contracts:
+  api:
+    functions:
+      - name: Executor.run_toolpack
+        signature: (tp: Toolpack, input: dict, *, cache: Cache|None) -> dict
+      - name: Executor.hash_request
+        signature: (tp_id: str, version: str, input: dict) -> str
+    cli: []
+    files_in: []
+    files_out: []
+  behavior:
+    invariants:
+      - execution.kind must equal "python" or raise UnsupportedExecutionKind
+      - execution.module must be "pkg.mod:func" form
+      - Input validated against inputSchema; output validated against outputSchema
+      - Cache uses SHA-256 of (tp.id|version|input JSON canonical) and stores deep copies
+      - If tp.deterministic==false → bypass cache and emit warning
+    preconditions:
+      - Callable may be sync or async; async is executed via asyncio.run
+    postconditions:
+      - Return dict conforming to outputSchema
+    errors:
+      - { code: INPUT_SCHEMA_VIOLATION, when: validation fails }
+      - { code: OUTPUT_SCHEMA_VIOLATION, when: validation fails }
+      - { code: CALL_RESOLUTION_ERROR,   when: module or callable not found }
+  performance:
+    budgets:
+      - Cold call ≤ 50ms on trivial tools in CI; cached call ≤ 5ms
+acceptance:
+  tests:
+    unit:
+      - exec_python_sync_roundtrip_ok
+      - exec_python_async_roundtrip_ok
+      - exec_python_input_schema_error
+      - exec_python_output_schema_error
+      - exec_python_cache_deepcopy_and_determinism
+    integration:
+      - executor_rejects_non_python_kind
+  fixtures:
+    - tests/fixtures/toolpacks/echo.tool.yaml
+    - tests/fixtures/toolpacks/non_deterministic.tool.yaml
+  done_definition: |
+    All tests pass, caching verified, validation enforced, async supported.
+notes:
+  pitfalls:
+    - Ensure json canonicalization (sort_keys=True) for cache hashing.
+  future_work:
+    - Add per-call timeout & output byte cap enforcement.

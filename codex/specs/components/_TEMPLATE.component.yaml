@@ -1,0 +1,34 @@
+id: <component_id>
+title: <Human readable title>
+source_of_truth:
+  master_spec: codex/specs/ragx_master_spec.yaml
+  related_specs: []  # optional
+scope:
+  purpose: |
+    One-paragraph “what this does” in business terms.
+  non_goals:
+    - What this component explicitly will not do.
+contracts:
+  api:
+    functions: []   # list of functions with signatures
+    cli: []         # list of CLI commands + flags_ref keys
+    files_in: []    # input file formats / schemas
+    files_out: []   # output file formats / schemas
+  behavior:
+    invariants: []  # always true statements
+    preconditions: []
+    postconditions: []
+    errors: []      # {code, when, shape}
+  performance:
+    budgets: []     # simple expectations, e.g. N docs/sec on CI fixtures
+acceptance:
+  tests:
+    unit: []
+    integration: []
+    e2e: []
+  fixtures: []      # stable files under tests/fixtures/
+  done_definition: |
+    Text explaining when Codex can mark this “complete”.
+notes:
+  pitfalls: []
+  future_work: []

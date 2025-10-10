@@ -1,0 +1,42 @@
+id: vector_db_core
+title: Vector DB Core (Interfaces + Sharding + Merge)
+source_of_truth:
+  master_spec: codex/specs/ragx_master_spec.yaml
+scope:
+  purpose: |
+    Provide Backend/Handle protocols, registry, CLI wrapper, shard build & merge,
+    and CPU-serializable index contract. Accept PDFs and Markdown (with optional
+    frontmatter) as inputs for indexing.
+contracts:
+  api:
+    functions:
+      - Backend.build(spec) -> Handle
+      - Handle.add(xb: np.ndarray) -> None
+      - Handle.search(q: np.ndarray, k:int) -> SearchResult
+      - Handle.serialize_cpu() -> bytes
+      - Handle.merge_with(other: Handle) -> Handle
+    cli:
+      - { cmd: "vectordb-builder build", flags_ref: vectordb_builder }
+      - { cmd: "vectordb-builder merge", flags_ref: vectordb_builder }
+    files_in:
+      - corpus.jsonl (id,text,metadata)
+      - *.pdf (optional)
+      - *.md  (optional; YAML/TOML/“key:value” frontmatter supported)
+    files_out:
+      - index_dir/index.bin
+      - index_dir/index_spec.json
+      - index_dir/docmap.json
+      - index_dir/shards/shard_*/(index.bin, docmap.json)
+  behavior:
+    invariants:
+      - Build proceeds in shards; partial progress is durable.
+      - GPU is optional: use if available for train/add/search; always serialize CPU.
+      - Markdown ingestion extracts frontmatter into metadata; body to text.
+    errors:
+      - { code: MERGE_INCOMPATIBLE, when: codebooks or params mismatch (IVF/PQ) }
+acceptance:
+  tests:
+    e2e:
+      - vectordb_build_and_search_small_fixture
+      - vectordb_resume_after_partial_build
+      - vectordb_ingest_markdown_with_frontmatter

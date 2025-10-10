@@ -1,0 +1,292 @@
+flow_runner_spec:
+  component: FlowRunner
+  phase: P0
+  purpose: >
+    Execute a declarative DSL flow as a graph with nodes (unit/transform/decision/end) and
+    control (loop). Resolve templates, enforce policy/budget guards, coordinate tool/LLM calls,
+    manage caching/retries, and emit structured traces/artifacts.
+
+  high_level_api:
+    python:
+      class: FlowRunner
+      ctor:
+        params:
+          cache_mode: { type: enum, values: [off, read, readwrite], default: readwrite }
+          max_concurrency: { type: int, default: 4 }
+          fail_fast: { type: bool, default: false }
+          trace_path: { type: path, default: "runs/trace.jsonl" }
+          artifacts_dir: { type: path, default: "runs/{RUN_ID}" }
+      methods:
+        - name: plan
+          args: [spec: dict, vars: dict]
+          returns: { plan: { nodes: [string], control: [string] } }
+          doc: "Validate and produce a lightweight execution plan (no side effects)."
+        - name: run
+          args: [spec: dict, vars: dict]
+          returns: RunResult
+          doc: "Execute the flow end-to-end with budgets/policies/caching/traces."
+      dataclasses:
+        - name: RunResult
+          fields:
+            run_id: string
+            status: { enum: [ok, error, halted] }
+            outputs: { type: object, doc: "Map: node_id -> node_outputs (structured)" }
+
+  inputs_outputs_contract:
+    inputs:
+      spec: "Flow YAML/JSON already parsed into a dict; validated by JSON Schemas."
+      vars: "Runtime variables under 'root', available to templates as ${root.*}."
+    outputs:
+      by_node: "Runner stores outputs at outputs[node_id] under declared output names."
+      artifacts: "Optional persisted files in artifacts_dir with node_id/iteration layout."
+      traces: "JSONL at trace_path; one event per lifecycle transition."
+    context_visibility:
+      template_scope: ["root vars", "outputs from prior nodes", "runner metadata (run_id, iter)"]
+
+  lifecycle:
+    phases:
+      - parse_and_validate_schema
+      - initialize_run_id_and_trace
+      - construct_global_context:
+          - load_tool_registry
+          - compose_policy_stack (globals)
+          - instantiate_budget_meters (run-level)
+          - initialize_cache (per cache_mode)
+      - execute_graph:
+          - topological_traversal_with_control_nodes
+          - per_node_execution (unit/transform/decision/end)
+          - handle_loops (iterate target_subgraph with stop conditions)
+      - finalize_run:
+          - flush_traces
+          - persist_artifacts_index
+          - return_RunResult
+
+  execution_semantics:
+    policy_resolution:
+      source_scopes: [globals, loop, decision_option, node]
+      algorithm: >
+        Start with all tools in registry; intersect with allow_* and remove deny_* at each scope
+        (nearest scope wins on conflict); result is the effective allowlist for the node.
+      on_violation: >
+        If node.spec.tool_ref not allowed, try spec.fallback.try filtered by allowlist;
+        if none allowed: error (or decision default path if applicable).
+    budget_enforcement:
+      meters:
+        - run_meter: from globals.run_budget (hard/soft)
+        - loop_stop_meter: from control.stop.budget (halting condition)
+        - node_meter: from node.budget (hard/soft; node scope)
+        - unit_soft: from node.spec.budget (advisory)
+      cost_model_inputs: ["tool pricing", "tokens_in", "tokens_out", "per_call", "calls"]
+      breach_behavior:
+        hard: "fail fast or halt loop (breach_action: stop)"
+        soft: "warn; attempt cheaper fallback if configured; otherwise continue"
+    caching:
+      key: >
+        hash(tool_ref, model, prompts/args after templating, selected policy digest,
+             normalized inputs, runner version)
+      store: "content-addressed; includes cost+token counters for replay summaries"
+      modes:
+        off: "no read/no write"
+        read: "read-only; miss triggers live call; no writes"
+        readwrite: "read and write"
+    retries_backoff:
+      defaults: { max_retries: 2, backoff: "exponential jitter 200–2000ms" }
+      retry_on: ["http 429/5xx", "tool transient", "rate_limit"]
+      non_retryable: ["policy_violation", "budget_hard_breach", "schema_validation_error"]
+
+  data_models:
+    node_record:
+      id: string
+      kind: { enum: [unit, transform, decision, end] }
+      inputs: object
+      outputs: [string]
+      policy: policy_object?
+      budget: budget_object?
+      hints: { min_tokens_in?: int, min_tokens_out?: int }
+      spec:
+        when_kind_unit:
+          type: { enum: [llm, tool] }
+          tool_ref: string
+          system?: string
+          prompt?: string
+          args?: object
+          budget?: budget_soft_object
+          fallback?: { try?: [string], on_fail?: "error|skip|default_branch:<id>" }
+        when_kind_transform:
+          language: { enum: [jinja, python, shell] }
+          template?: string
+          code?: string
+        when_kind_decision:
+          options: [{ key: string, when: string, goto: string, policy?: policy_object }]
+          default?: string
+    loop_record:
+      id: string
+      kind: loop
+      policy?: policy_object
+      target_subgraph: [string]
+      stop:
+        max_iterations?: int
+        budget?: budget_stop_object
+        until_llm?:
+          tool_ref: string
+          prompt: string
+          check_path: string
+
+  per_node_algorithm:
+    unit_pseudocode: |
+      def execute_unit(node):
+        allow = policy.effective_allowlist(node)
+        tool_chain = [node.spec.tool_ref] + node.spec.fallback.try
+        tool_chain = [t for t in tool_chain if t in allow]
+
+        rendered = render_prompts_and_args(node, scope=templates_scope())
+        est_cost = estimate_min_cost(tool_chain[0], rendered, node.hints)
+
+        if not run_meter.can_spend(est_cost) or not node_meter.can_spend(est_cost):
+          raise BudgetBreachHard(node.id, 'preflight')
+
+        # cache check
+        key = cache_key(tool_chain[0], rendered, allow)
+        if cache_mode in ('read','readwrite'):
+          if cache.has(key):
+            res = cache.get(key)
+            trace('cache_hit', node.id, res.cost)
+            return res.outputs
+
+        # attempt calls with fallback
+        last_err = None
+        for t in tool_chain:
+          try:
+            res = call_adapter(t, rendered)
+            charge_all_meters(res.cost)
+            if cache_mode == 'readwrite': cache.put(key, res)
+            return res.outputs
+          except Transient as e:
+            last_err = e; backoff_retry()
+          except PolicyViolation as e:
+            last_err = e; continue  # try next fallback
+        raise last_err or RuntimeError("unit failed")
+
+    transform_pseudocode: |
+      def execute_transform(node):
+        if node.spec.language == 'jinja':
+          return {"result": render(node.spec.template, templates_scope())}
+        if node.spec.language == 'python':
+          return sandbox.run_python(node.spec.code, inputs=materialize_inputs(node))
+        if node.spec.language == 'shell':
+          assert policy.permits_shell()
+          return sandbox.run_shell(node.spec.code, env=limited_env, stdin=json_inputs)
+
+    decision_pseudocode: |
+      def execute_decision(node):
+        env = {"inputs": materialize_inputs(node)}
+        for opt in node.spec.options:
+          if render_bool(opt.when, env):
+            policy.push(opt.policy); goto = opt.goto; break
+        else:
+          goto = node.spec.default
+        record_branch(node.id, goto)
+        return {"choice": goto}
+
+  loop_execution:
+    algorithm: |
+      def execute_loop(loop):
+        policy.push(loop.policy)
+        iter = 0
+        while True:
+          if loop.stop.max_iterations and iter >= loop.stop.max_iterations:
+            break
+          run_subgraph(loop.target_subgraph)
+          iter += 1
+          if loop.stop.budget and loop_meter.exceeded():
+            if loop.stop.budget.breach_action == 'stop': break
+            else: raise BudgetBreachHard(loop.id, 'loop')
+          if loop.stop.until_llm and llm_says_stop(): break
+        policy.pop(loop.policy)
+
+  trace_events:
+    schema:
+      common_fields: [ts, event, run_id, node_id?, loop_id?, iter?]
+    events:
+      - run_start
+      - node_start
+      - node_end
+      - decision_taken
+      - loop_iter
+      - policy_applied
+      - budget_charge
+      - budget_breach
+      - cache_hit
+      - cache_store
+      - error
+      - run_end
+    example:
+      jsonl: |
+        {"ts": "...", "event": "node_end", "run_id": "r1", "node_id": "final_answer",
+         "cost": {"usd": 0.012, "tok_in": 420, "tok_out": 210}, "status": "ok"}
+
+  config_bindings:
+    from_cli_flags:
+      "--workflow": maps_to: spec_path
+      "--var": maps_to: vars_inline
+      "--vars-file": maps_to: vars_file
+      "--trace": maps_to: trace_path
+      "--artifacts-dir": maps_to: artifacts_dir
+      "--cache": maps_to: cache_mode
+      "--max-concurrency": maps_to: max_concurrency
+      "--fail-fast": maps_to: fail_fast
+      "--dry-run": maps_to: dry_run
+      "--policy-mode": maps_to: policy_mode
+      "--usd-cap": maps_to: globals.run_budget.max_usd override
+      "--otel-endpoint": maps_to: telemetry.otel.endpoint
+      "--mcp-url": maps_to: adapters.mcp.base_url
+
+  error_model:
+    classes:
+      - name: PolicyViolation
+        when: "No allowed tools for node; or tool blocked by scope policy."
+      - name: BudgetBreachHard
+        when: "Hard cap exceeded at run/node/loop scopes."
+      - name: SchemaValidationError
+        when: "Spec or tool IO schema mismatch."
+      - name: AdapterError
+        when: "Tool/LLM transport error; retryable if transient."
+    fail_fast_behavior:
+      on: ["PolicyViolation", "BudgetBreachHard", "SchemaValidationError"]
+      unless: "decision default provides alternative path"
+
+  concurrency_model:
+    overview: >
+      Default sequential per plan; optional limited parallelism for independent nodes
+      (future P1). Loop subgraphs execute serially within iteration; safe parallelism
+      requires side-effect free nodes and policy allowance.
+    max_concurrency: "Upper bound on in-flight tool calls; used by adapters."
+
+  testing_contract:
+    unit_checks:
+      - resolves_effective_allowlist_correctly
+      - blocks_unreachable_tools
+      - enforces_node_and_run_budgets
+      - honors_soft_budget_with_warning
+      - produces_cache_hits_with_stable_keys
+      - emits_required_trace_events
+      - executes_loop_stop_conditions (max_iterations, budget, until_llm)
+    e2e_checks:
+      - example.react_self_refine_yaml_completes_ok
+      - policy_branching_changes_tool_allowlist
+      - budget_loop_halts_on_breach_action_stop
+
+  minimal_usage_example:
+    code: |
+      runner = FlowRunner(cache_mode="readwrite", max_concurrency=4, fail_fast=True)
+      spec = yaml.safe_load(open("flows/example.react_self_refine.yaml").read())
+      vars = {"question": "How do heat pumps work?", "task": "Write a short explainer."}
+      result = runner.run(spec, vars)
+      assert result.status == "ok"
+
+  notes_for_implementers:
+    - "FlowRunner does not mutate spec; treat as immutable input."
+    - "Always render templates late (just-in-time) with current outputs scope."
+    - "Record both estimated and actual cost/tokens; actuals supersede estimates for meters."
+    - "Cache entries must include policy digest to avoid cross-policy leakage."
+    - "Transforms run with network disabled by default; enable only via explicit policy."

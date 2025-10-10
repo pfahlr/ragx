@@ -1,0 +1,32 @@
+id: mcp_server
+title: MCP Server (HTTP + STDIO, Envelope)
+source_of_truth:
+  master_spec: codex/specs/ragx_master_spec.yaml
+scope:
+  purpose: |
+    Expose discovery/prompt registry/tool execution via uniform envelope with schema validation,
+    over HTTP and STDIO transports.
+contracts:
+  api:
+    functions:
+      - McpService.discover() -> dict
+      - McpService.get_prompt(domain:str, name:str, major:int) -> {body,spec}
+      - McpService.invoke_tool(tool_name:str, input:dict) -> Envelope
+    cli:
+      - { cmd: "mcp-server", flags_ref: mcp_server }
+    files_in:
+      - apps/mcp_server/toolpacks/**/*.tool.yaml
+      - apps/mcp_server/prompts/**/*.spec.yaml
+      - apps/mcp_server/schemas/envelope.schema.json
+  behavior:
+    invariants:
+      - All responses wrapped in Envelope{ok,data,meta,errors[]}
+      - Enforce max input/output bytes (64KB/256KB default) and 30s default timeout
+      - Deterministic cache key: sha256(tool + "\n" + json.dumps(input, sort_keys=True))
+    errors:
+      - { code: INVALID_INPUT, NOT_FOUND, TIMEOUT, RATE_LIMIT, UNAVAILABLE, INTERNAL }
+acceptance:
+  tests:
+    e2e:
+      - mcp_http_and_stdio_conformance
+
