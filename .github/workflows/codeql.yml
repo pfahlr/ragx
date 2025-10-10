@@ -1,0 +1,58 @@
+name: codeql
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  schedule:
+    - cron: '0 6 * * 0'
+
+jobs:
+  analyze:
+    name: Analyze
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Python build dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pybind11
+
+      - name: Compute pybind11 CMake directory
+        run: echo "pybind11_DIR=$(python -m pybind11 --cmakedir)" >> "$GITHUB_ENV"
+
+      - name: Install native build tooling
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: python, cpp
+
+      - name: Configure CMake build
+        run: |
+          cmake -S cpp -B build -G Ninja \
+            -Dpybind11_DIR="$pybind11_DIR" \
+            -DPYBIND11_FINDPYTHON=ON
+
+      - name: Build native extensions
+        run: cmake --build build --config Release
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
