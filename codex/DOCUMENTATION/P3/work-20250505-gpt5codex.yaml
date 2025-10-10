@@ -1,0 +1,54 @@
+component: budget_guard_runner_phase3
+purpose: |
+  Provide canonical budget data models, a scope-aware BudgetManager, and an adapter-backed FlowRunner that integrates
+  budget enforcement with policy checks while emitting immutable trace events.
+cli_usage:
+  description: Execute targeted validation for budget guards.
+  command: pytest codex/code/work/tests -q
+public_interfaces:
+  - name: codex.code.work.dsl.budget_models.CostSnapshot
+    description: Normalised cost record supporting additive arithmetic and payload serialisation.
+  - name: codex.code.work.dsl.budget_models.BudgetSpec
+    description: Declarative budget definition including scope, limits, and breach semantics.
+  - name: codex.code.work.dsl.budget_models.BudgetDecision
+    description: Aggregates outcomes for a scope and identifies blocking breaches.
+  - name: codex.code.work.dsl.budget_manager.BudgetManager
+    description: Coordinates scope lifecycle, preview/commit flows, and breach telemetry.
+  - name: codex.code.work.dsl.flow_runner.FlowRunner
+    description: Executes flow nodes via adapters with integrated policy and budget enforcement.
+extension_hooks:
+  - hook: BudgetManager.record_breach
+    extension: Attach alternative emitters or sinks before raising stop errors.
+  - hook: TraceEventEmitter.attach_sink
+    extension: Forward immutable trace events to structured logging systems.
+configurable_options:
+  - name: BudgetSpec.mode
+    values: [hard, soft]
+    default: hard
+  - name: BudgetSpec.breach_action
+    values: [stop, warn]
+    default: stop
+automation_triggers:
+  - trigger: PolicyStack.enforce
+    outcome: Ensures policy validation precedes adapter execution.
+error_contracts:
+  - name: BudgetBreachError
+    raised_when: Hard-stop or stop-configured budgets breach during preview/commit.
+    payload: scope metadata and breached BudgetChargeOutcome.
+  - name: BudgetError
+    raised_when: Inconsistent manager state (e.g., missing blocking outcome).
+serialization:
+  trace_payloads: Immutable mapping proxies containing cost, totals, remaining, and overage metrics.
+  cost_snapshot: Dict with time_ms (float) and tokens (int).
+lifecycle:
+  - enter_scope -> preview_charge -> record_breach (optional) -> commit_charge -> exit_scope
+  - FlowRunner orchestrates run scope, per-node scopes, and adapter execution results.
+typing:
+  language: Python 3.12
+  typing: dataclasses with type annotations; Protocol for ToolAdapter.
+security:
+  - Ensure adapters are trusted; FlowRunner does not sandbox execution.
+  - Trace payloads redact nothing by default—route through trusted sinks only.
+performance:
+  - Cost computations operate on simple floats/ints; negligible overhead for preview/commit loops.
+  - Trace emission is synchronous; attach asynchronous sink if high volume expected.

@@ -1,0 +1,67 @@
+summary: Reinstate adapter-backed FlowRunner with BudgetManager integration and immutable traces
+justification: |
+  Phase 2 synthesis selected immutable budget models, the BudgetManager orchestration, and adapter-driven FlowRunner execution.
+  This plan codifies those choices into a focused implementation that maximises reuse, restores policy enforcement, and
+  validates stop/warn semantics across run/node/loop scopes with trace schema alignment.
+steps:
+  - name: budget_models
+    description: Consolidate typed budget DTOs with normalization helpers and structured charge outcomes.
+  - name: trace_emitter
+    description: Provide immutable trace emitter shared by budget and policy integrations.
+  - name: budget_manager
+    description: Implement scope-aware BudgetManager orchestrating preflight/commit across scopes with trace hooks.
+  - name: flow_runner
+    description: Wire FlowRunner to adapters, BudgetManager, and PolicyStack enforcing stop semantics and trace emission.
+modules:
+  - path: codex/code/work/dsl/budget_models.py
+    role: Canonical budget value objects and helpers adopted across manager and runner.
+  - path: codex/code/work/dsl/trace.py
+    role: Shared TraceEventEmitter producing immutable payloads for policy and budget traces.
+  - path: codex/code/work/dsl/budget_manager.py
+    role: Scope-aware orchestration layer coordinating budgets, traces, and breach outcomes.
+  - path: codex/code/work/dsl/flow_runner.py
+    role: Adapter-backed runner enforcing policies and budgets with deterministic traces.
+  - path: codex/code/work/tests/__init__.py
+    role: Test package initialiser.
+  - path: codex/code/work/__init__.py
+    role: Package initialiser for module discovery.
+tests:
+  - path: codex/code/work/tests/test_budget_models.py
+    coverage: cost normalization, charge outcome remaining/overage math, immutability guards.
+    mocks: none (pure data models).
+  - path: codex/code/work/tests/test_budget_manager.py
+    coverage: preflight vs commit, soft/hard breach actions, trace emission.
+    mocks: FakeTraceEmitter for deterministic capture.
+  - path: codex/code/work/tests/test_flow_runner_budget_integration.py
+    coverage: FlowRunner adapter orchestration, policy enforcement, loop stop vs warn semantics, trace ordering.
+    mocks: Fake adapters, in-memory policy stack fixtures, FakeTraceEmitter.
+run_order:
+  - pytest codex/code/work/tests/test_budget_models.py
+  - pytest codex/code/work/tests/test_budget_manager.py
+  - pytest codex/code/work/tests/test_flow_runner_budget_integration.py
+interfaces:
+  budget_models: [CostSnapshot, BudgetSpec, BudgetCharge, BudgetChargeOutcome, BudgetDecision]
+  budget_manager: [BudgetManager.enter_scope, BudgetManager.exit_scope, BudgetManager.preview_charge, BudgetManager.commit_charge]
+  flow_runner: [FlowRunner.run, FlowRunner._execute_node]
+  trace: [TraceEventEmitter.emit, TraceEventEmitter.attach_sink]
+tdd_coverage_targets:
+  codex/code/work/dsl/budget_models.py: 95
+  codex/code/work/dsl/budget_manager.py: 90
+  codex/code/work/dsl/flow_runner.py: 85
+review_checklist:
+  - Ensure CostSnapshot normalizes seconds to milliseconds and preserves integer tokens.
+  - Confirm BudgetManager differentiates warn vs stop actions and records breaches in traces.
+  - Validate FlowRunner enforces PolicyStack decisions before adapter execution.
+  - Verify trace payloads use mapping proxies (immutable) and maintain schema-aligned fields.
+  - Check tests cover both happy path and breach scenarios with deterministic adapters.
+outputs:
+  plan: codex/agents/TASKS_FINAL/P3/07b_budget_guards_and_runner_integration.yaml-20250505-gpt5codex.yaml
+  tests: codex/code/work/tests
+  implementation: codex/code/work/dsl
+  documentation:
+    preview: codex/agents/PREVIEW/P3/07b_budget_guards_and_runner_integration.yaml-20250505-gpt5codex.md
+    review: codex/agents/REVIEW/P3/07b_budget_guards_and_runner_integration.yaml-20250505-gpt5codex.md
+    postexecution: codex/agents/POSTEXECUTION/P3/07b_budget_guards_and_runner_integration.yaml-20250505-gpt5codex.md
+    metadata: codex/DOCUMENTATION/P3/work-20250505-gpt5codex.yaml
+  missing_tests: codex/TESTS/P3/work-20250505-gpt5codex.yaml
+  optional_runner: codex/code/07b_budget_guards_and_runner_integration.yaml/phase3_runner.py
