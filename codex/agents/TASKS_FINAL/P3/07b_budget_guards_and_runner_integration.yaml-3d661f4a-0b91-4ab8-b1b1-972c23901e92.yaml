@@ -1,0 +1,98 @@
+summary: >
+  Implement cohesive budget manager and FlowRunner integration using immutable cost
+  models, shared trace emission, and adapter-driven execution with PolicyStack checks.
+justification: |
+  Prior phase reviews highlighted the need to merge immutable budget models (zwi2ny),
+  structured remaining/overage reporting (pbdel9), BudgetManager preflight/commit orchestration
+  (test-first), and adapter-oriented FlowRunner execution (fa0vm9) without losing policy traces.
+  This plan builds modular components that can be lifted into pkgs.dsl.* while remaining testable
+  inside the sandbox.
+steps:
+  - name: define_domain_models
+    description: >
+      Create canonical budget dataclasses and normalization helpers that convert raw cost metrics
+      into immutable snapshots with arithmetic helpers.
+  - name: implement_budget_manager
+    description: >
+      Build a BudgetManager that manages hierarchical scopes (run, loop, node, spec),
+      performs preview/commit charges, and emits structured trace events for charges and breaches.
+  - name: implement_trace_emitter
+    description: >
+      Provide a TraceEventEmitter wrapper around recorders/sinks so policy and budget layers can share
+      immutable payload emission with deterministic ordering.
+  - name: implement_flow_runner
+    description: >
+      Wire a FlowRunner that orchestrates ToolAdapters, enforces PolicyStack decisions,
+      collaborates with BudgetManager for preview/commit, and emits loop summaries plus combined traces.
+  - name: expand_tests
+    description: >
+      Cover BudgetManager arithmetic, soft vs hard breach semantics, FlowRunner execution order,
+      policy enforcement, trace emissions, and warning propagation.
+modules:
+  - path: codex/code/phase3-budget-runner-71d5/budgeting.py
+    role: Immutable cost models, BudgetManager orchestration, normalization helpers.
+  - path: codex/code/phase3-budget-runner-71d5/trace.py
+    role: Shared trace emitter abstraction with recorder integration.
+  - path: codex/code/phase3-budget-runner-71d5/adapters.py
+    role: ToolAdapter protocol and deterministic fakes used in tests.
+  - path: codex/code/phase3-budget-runner-71d5/runner.py
+    role: FlowRunner implementation integrating PolicyStack, BudgetManager, and trace emitter.
+tests:
+  - path: codex/code/phase3-budget-runner-71d5/tests/test_budget_manager.py
+    coverage: >
+      Validate normalization, multi-scope charging, remaining/overage accounting, and soft/hard breach actions.
+    mocks: []
+  - path: codex/code/phase3-budget-runner-71d5/tests/test_trace_emitter.py
+    coverage: >
+      Ensure trace emitter produces immutable payloads, recorder capture, and sink delegation order.
+    mocks: []
+  - path: codex/code/phase3-budget-runner-71d5/tests/test_flow_runner.py
+    coverage: >
+      Exercise adapter-driven execution, policy enforcement, budget stop logic, warning traces, and loop summaries.
+    mocks:
+      - Fake adapters implementing ToolAdapter protocol for deterministic costs.
+run_order:
+  - tests/test_budget_manager.py
+  - tests/test_trace_emitter.py
+  - tests/test_flow_runner.py
+interfaces:
+  budget_manager:
+    inputs:
+      - scope transitions (enter/exit) from FlowRunner
+      - cost snapshots from adapters (estimate/execute)
+    outputs:
+      - BudgetChargeOutcome snapshots
+      - breach warnings/stops surfaced to FlowRunner
+  trace_emitter:
+    inputs:
+      - structured events from policy stack and budget manager
+    outputs:
+      - recorder storage
+      - external sink callbacks
+  flow_runner:
+    inputs:
+      - flow plan (sequence of node definitions and optional loop metadata)
+      - tool adapters mapping
+      - policy stack for enforcement
+    outputs:
+      - RunResult containing node executions, warnings, and stop reason
+      - trace events emitted via TraceEventEmitter
+tdd_coverage_targets:
+  budgeting.py: 0.9
+  trace.py: 0.9
+  runner.py: 0.85
+review_checklist:
+  - BudgetMode and breach_action semantics match merged branch decisions (hard stop, soft warn+stop).
+  - Cost normalization converts seconds to milliseconds once and preserves immutable payloads.
+  - Trace events use mapping_proxy and are emitted in deterministic order.
+  - FlowRunner enforces PolicyStack decisions before adapter execution.
+  - Loop summaries aggregate per-iteration spend and propagate warnings.
+outputs:
+  code_root: codex/code/phase3-budget-runner-71d5
+  documentation:
+    preview: PREVIEW/P3/07b_budget_guards_and_runner_integration.yaml-3d661f4a-0b91-4ab8-b1b1-972c23901e92.md
+    review: REVIEW/P3/07b_budget_guards_and_runner_integration.yaml-3d661f4a-0b91-4ab8-b1b1-972c23901e92.md
+    postexecution: POSTEXECUTION/P3/07b_budget_guards_and_runner_integration.yaml-3d661f4a-0b91-4ab8-b1b1-972c23901e92.md
+  metadata: codex/DOCUMENTATION/P3/phase3-budget-runner-71d5-3d661f4a-0b91-4ab8-b1b1-972c23901e92.yaml
+  missing_tests: codex/TESTS/P3/phase3-budget-runner-71d5-3d661f4a-0b91-4ab8-b1b1-972c23901e92.yaml
+  optional_runner: codex/code/phase3-budget-runner-71d5/phase3_runner.py

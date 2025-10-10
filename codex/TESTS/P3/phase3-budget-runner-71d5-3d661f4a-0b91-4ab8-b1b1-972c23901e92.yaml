@@ -1,0 +1,15 @@
+missing_tests:
+  task_id: 07b_budget_guards_and_runner_integration.yaml
+  proposed_tests:
+    - name: test_budget_manager_handles_spec_scope
+      rationale: Ensure BudgetManager aggregates charges across explicit spec scopes in addition to run/loop/node.
+      source_module: budgeting.py
+      priority: medium
+    - name: test_flow_runner_policy_violation_trace_order
+      rationale: Validate FlowRunner correctly emits policy_violation traces before budget events when PolicyStack blocks tools.
+      source_module: runner.py
+      priority: high
+    - name: test_trace_emitter_sink_error_handling
+      rationale: Verify TraceEventEmitter surfaces meaningful errors when policy events provide non-mapping payloads.
+      source_module: trace.py
+      priority: low

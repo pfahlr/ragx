@@ -1,0 +1,93 @@
+component:
+  name: phase3-budget-runner-71d5
+  purpose: >-
+    Provide a sandbox implementation of immutable budget management, trace emission, and a PolicyStack-aware
+    FlowRunner suitable for integration into pkgs.dsl modules.
+cli_usage: []
+public_interfaces:
+  - name: phase3_budget_runner_71d5.budgeting.CostSnapshot
+    type: dataclass
+    description: Immutable cost container with normalization helpers and arithmetic.
+    methods:
+      - name: from_raw
+        summary: Build a normalized snapshot converting seconds to milliseconds.
+      - name: add
+        summary: Return a new CostSnapshot representing the sum of metrics.
+      - name: subtract
+        summary: Produce a snapshot subtracting another snapshot's metrics.
+      - name: as_dict
+        summary: Expose metrics as a plain dictionary for serialization.
+  - name: phase3_budget_runner_71d5.budgeting.BudgetManager
+    type: class
+    description: Coordinates budget scopes, preview/commit cycles, and trace emission.
+    methods:
+      - name: enter_scope
+        summary: Register a scope with optional parent and spec before charging costs.
+      - name: preview
+        summary: Simulate a charge without mutating state, returning BudgetChargeResult.
+      - name: commit
+        summary: Persist a charge, update spent totals, and emit traces.
+      - name: snapshot
+        summary: Provide the latest BudgetChargeOutcome for an active scope.
+  - name: phase3_budget_runner_71d5.trace.TraceEventEmitter
+    type: class
+    description: Emits immutable trace events to recorders and sinks; bridges PolicyStack events.
+    methods:
+      - name: emit
+        summary: Emit a trace event with sanitized payload.
+      - name: policy_sink
+        summary: Adapter returning a callable suitable for PolicyStack event_sink wiring.
+  - name: phase3_budget_runner_71d5.runner.FlowRunner
+    type: class
+    description: Executes FlowPlan steps through ToolAdapters with PolicyStack enforcement and budget checks.
+    methods:
+      - name: run
+        summary: Execute the flow, returning a RunResult with executions, warnings, and stop reason.
+      - name: _execute_loop
+        summary: Iterate over LoopPlan bodies, emitting loop summaries and responding to stop signals.
+      - name: _execute_node
+        summary: Orchestrate estimate/execute lifecycle for a single node.
+  - name: phase3_budget_runner_71d5.adapters.ToolAdapter
+    type: protocol
+    description: Defines the estimate/execute contract expected by FlowRunner.
+    methods:
+      - name: estimate
+        summary: Produce a CostSnapshot forecast for the node.
+      - name: execute
+        summary: Execute the tool and return ToolExecutionResult.
+base_classes: []
+extension_hooks:
+  - name: ToolAdapter
+    description: Implementations can extend adapter behavior by providing deterministic estimate/execute logic.
+configurable_options:
+  - name: BudgetSpec.mode
+    type: enum
+    values: [hard, soft]
+    default: hard
+    description: Controls whether breaches stop execution immediately or warn.
+  - name: BudgetSpec.breach_action
+    type: enum
+    values: [stop, warn]
+    default: stop
+    description: Secondary action applied when soft budgets breach.
+automation_triggers: []
+error_contracts:
+  - condition: Unknown tool adapter requested
+    raises: KeyError
+    message: "unknown tool adapter '<name>'"
+serialization:
+  - component: TraceEventEmitter
+    format: mapping-proxy payloads suitable for JSON serialization after dict conversion.
+lifecycle:
+  setup:
+    - Call BudgetManager.enter_scope for run/loop/node scopes before preview/commit.
+    - Wire PolicyStack event_sink to TraceEventEmitter.policy_sink for consistent traces.
+  teardown:
+    - Ensure FlowRunner exits scopes (run, loop, node) to avoid stale state in BudgetManager.
+typing_notes:
+  - All public classes use typing annotations compatible with Python 3.11+ and rely on MappingProxyType for immutability.
+security_notes:
+  - No network access; all operations deterministic and in-memory.
+performance_notes:
+  - CostSnapshot arithmetic operates on small dictionaries; complexity is linear in metric count.
+  - Trace emission sanitization converts lists to tuples to guarantee immutability with minimal overhead.
