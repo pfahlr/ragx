@@ -1,0 +1,97 @@
+summary: Phase 3 implementation to integrate budget guards with FlowRunner while preserving policy enforcement and trace fidelity.
+justification: Builds on phase 2 architecture alignment to deliver executable code with unified budget models, manager orchestration, and TDD-backed coverage.
+steps:
+  - id: plan
+    description: Finalize module boundaries, test focus areas, and execution order based on phase 2 synthesis.
+  - id: tests
+    description: Author pytest suites covering budget manager decisions, FlowRunner stop semantics, and trace emissions before implementation.
+  - id: implement
+    description: Fill modules with immutable budget models, manager orchestration, trace emitter, and FlowRunner integration until tests pass.
+  - id: docs
+    description: Produce preview, review, and postexecution artifacts summarizing scope, verification, and follow-ups.
+modules:
+  - path: codex/code/task_07b_budget_guards_and_runner_integration/budget_models.py
+    role: Define immutable budget domain dataclasses and enums for specs, decisions, snapshots, and breaches.
+  - path: codex/code/task_07b_budget_guards_and_runner_integration/trace_emitter.py
+    role: Provide a reusable emitter that records ordered trace events for budget and policy actions.
+  - path: codex/code/task_07b_budget_guards_and_runner_integration/budget_manager.py
+    role: Implement BudgetManager with preflight/commit APIs, scope registration, and breach resolution logic.
+  - path: codex/code/task_07b_budget_guards_and_runner_integration/policy_stack.py
+    role: Supply minimal PolicyStack facade to evaluate node executions and emit policy decisions.
+  - path: codex/code/task_07b_budget_guards_and_runner_integration/flow_runner.py
+    role: Orchestrate FlowRunner execution integrating adapters, BudgetManager, PolicyStack, and trace emission.
+  - path: codex/code/task_07b_budget_guards_and_runner_integration/__init__.py
+    role: Expose public interfaces for module consumption during tests.
+tests:
+  - file: codex/code/task_07b_budget_guards_and_runner_integration/tests/test_budget_manager.py
+    coverage_targets: [budget_models.py, budget_manager.py]
+    focuses:
+      - preview vs commit decisions for hard/soft budgets and breach actions.
+      - snapshot immutability and arithmetic edge cases (zero, overage, negative).
+    mocks:
+      - use in-memory trace emitter fixture to avoid filesystem interactions.
+  - file: codex/code/task_07b_budget_guards_and_runner_integration/tests/test_flow_runner.py
+    coverage_targets: [flow_runner.py, trace_emitter.py, policy_stack.py]
+    focuses:
+      - FlowRunner stop semantics for budgets and policy denials.
+      - Trace ordering and payload contents for run/node/budget events.
+      - Multi-scope accounting (run + loop) with warnings vs stops.
+    mocks:
+      - Fake ToolAdapter implementations returning deterministic costs and outputs.
+run_order:
+  - Write unit tests under tests/ according to focuses.
+  - Implement budget domain modules (models, manager, policy stack, trace emitter).
+  - Implement FlowRunner orchestration tying modules together.
+  - Run pytest focused on new tests, then full suite if feasible.
+interfaces:
+  BudgetManager:
+    methods:
+      - register_scope(scope_id: str, spec: BudgetSpec) -> None
+      - preview(scope_id: str, estimated_cost: CostAmount) -> BudgetCheck
+      - commit(scope_id: str, actual_cost: CostAmount) -> BudgetCharge
+      - summary(scope_id: str) -> LoopSummary
+  TraceEventEmitter:
+    methods:
+      - emit(event: str, *, scope_type: str, scope_id: str, payload: Mapping[str, Any]) -> None
+      - get_events() -> Sequence[TraceEvent]
+  FlowRunner:
+    methods:
+      - run(nodes: Sequence[FlowNode], *, run_scope: str, budget_specs: Mapping[str, BudgetSpec]) -> RunResult
+  PolicyStack:
+    methods:
+      - evaluate(node: FlowNode) -> PolicyDecision
+      - record(node: FlowNode, decision: PolicyDecision, emitter: TraceEventEmitter) -> None
+  ToolAdapter protocol:
+    methods:
+      - estimate(node: FlowNode) -> CostAmount
+      - execute(node: FlowNode) -> NodeExecution
+      - identify(node: FlowNode) -> str
+      - describe(node: FlowNode) -> Mapping[str, Any]
+tdd_coverage_targets:
+  budget_models.py: 0.9
+  budget_manager.py: 0.9
+  trace_emitter.py: 0.85
+  policy_stack.py: 0.85
+  flow_runner.py: 0.85
+review_checklist:
+  - Budget decisions honor mode+breach_action combinations for all tests.
+  - FlowRunner emits traces in policy-before-budget order per spec references.
+  - Policy denials stop execution before budget commit.
+  - Soft budgets log warnings without stopping loops.
+  - Public APIs documented in PREVIEW artifact.
+outputs:
+  plan: codex/agents/TASKS_FINAL/P3/07b_budget_guards_and_runner_integration.yaml-20250518T120000Z-gpt5codex.yaml
+  tests:
+    - codex/code/task_07b_budget_guards_and_runner_integration/tests/test_budget_manager.py
+    - codex/code/task_07b_budget_guards_and_runner_integration/tests/test_flow_runner.py
+  modules:
+    - codex/code/task_07b_budget_guards_and_runner_integration/budget_models.py
+    - codex/code/task_07b_budget_guards_and_runner_integration/trace_emitter.py
+    - codex/code/task_07b_budget_guards_and_runner_integration/budget_manager.py
+    - codex/code/task_07b_budget_guards_and_runner_integration/policy_stack.py
+    - codex/code/task_07b_budget_guards_and_runner_integration/flow_runner.py
+    - codex/code/task_07b_budget_guards_and_runner_integration/__init__.py
+  docs:
+    - codex/agents/PREVIEW/P3/07b_budget_guards_and_runner_integration.yaml-20250518T120000Z-gpt5codex.md
+    - codex/agents/REVIEW/P3/07b_budget_guards_and_runner_integration.yaml-20250518T120000Z-gpt5codex.md
+    - codex/agents/POSTEXECUTION/P3/07b_budget_guards_and_runner_integration.yaml-20250518T120000Z-gpt5codex.md
