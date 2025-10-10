@@ -1,0 +1,141 @@
+plan_preview:
+  branch_inclusions:
+    - codex/integrate-budget-guards-with-runner-zwi2ny: BudgetSpec/CostSnapshot value objects and TraceWriter contract.
+    - codex/integrate-budget-guards-with-runner-pbdel9: Remaining/overage accounting exposed via BudgetCharge snapshots.
+    - codex/implement-budget-guards-with-test-first-approach: BudgetManager preflight/commit flow for node execution.
+    - codex/implement-budget-guards-with-test-first-approach-qhq0jq: BudgetMode enum and loop summary reporting.
+    - codex/implement-budget-guards-with-test-first-approach-8wxk32: NodeExecution records and injectable clock/id factories.
+    - codex/implement-budget-guards-with-test-first-approach-fa0vm9: ToolAdapter protocol and structured BudgetBreach metadata.
+  conflict_resolution:
+    - Normalize BudgetMeter APIs around CostSnapshot + BudgetCharge outcome; adapt remaining branch logic via adapters.
+    - Merge TraceWriter/RunnerTraceRecorder concepts into a single pluggable recorder emitting immutable payloads.
+    - Ensure loop stop semantics honour both breach_action "stop" and hard raise pathways without silent overrides.
+    - Reintroduce PolicyStack enforcement hooks around node execution before applying budget charges.
+  exclusions:
+    - Drop mocked `_execute_node` implementations that bypass adapters; rely on ToolAdapter interface instead.
+    - Avoid branch-specific stop reason enums that duplicate FlowRunner status payloads; consolidate on loop summaries.
+  open_questions:
+    - Should BudgetManager expose async-safe hooks for future concurrency, or remain synchronous for now?
+    - Do we persist traces via TraceWriter sink only, or also return them on RunResult for compatibility?
+refinement_opportunities:
+  - Factor budget validation (unknown metrics, negative limits) into a dedicated validator to reuse across loaders.
+  - Introduce structured dataclasses for trace payloads to enforce schema consistency at emit time.
+shared_blocks:
+  - name: budget_types
+    implementation: |
+      @dataclass(frozen=True, slots=True)
+      class CostSnapshot:
+          usd: float = 0.0
+          calls: int = 0
+          tokens_in: int = 0
+          tokens_out: int = 0
+          seconds: float = 0.0
+
+          @property
+          def tokens_total(self) -> int:
+              return self.tokens_in + self.tokens_out
+
+      @dataclass(frozen=True, slots=True)
+      class BudgetCharge:
+          cost: CostSnapshot
+          remaining: Mapping[str, float | int | None]
+          overages: Mapping[str, float | int]
+          breached: bool
+          breach_kind: str | None
+  - name: trace_emitter
+    implementation: |
+      def emit_trace_event(recorder, sink, *, event: str, scope_type: str | None, scope_id: str | None, payload: Mapping[str, object]):
+          record = RunnerTraceEvent(event=event, scope_type=scope_type, scope_id=scope_id, data=mapping_proxy(payload))
+          if recorder is not None:
+              recorder.record(record)
+          if sink is not None:
+              sink(record)
+          return record
+  - name: loop_summary_builder
+    implementation: |
+      @dataclass(frozen=True, slots=True)
+      class LoopSummary:
+          loop_id: str
+          iterations: int
+          stop_reason: str
+          breaches: tuple[BudgetBreach, ...]
+
+      def summarize_loop(loop_id: str, iterations: int, *, stop_reason: str, breaches: Sequence[BudgetBreach]) -> LoopSummary:
+          return LoopSummary(loop_id=loop_id, iterations=iterations, stop_reason=stop_reason, breaches=tuple(breaches))
+
+tasks:
+  - id: consolidate_budget_domain
+    execution_mode: always
+    reusable: true
+    description: >
+      Unify BudgetMeter, BudgetSpec, CostSnapshot, and BudgetCharge across pkgs/dsl/budget.py with consistent hard/soft semantics,
+      incorporating remaining/overage reporting and BudgetMode enum support.
+    source_files:
+      - pkgs/dsl/budget.py
+    adapted_from_branch: codex/integrate-budget-guards-with-runner-zwi2ny
+    implementation_ref: budget_types
+    tests:
+      - name: test_budget_meter_limits.py
+        file: tests/unit/test_budget_meter_limits.py
+      - name: test_budget_manager_preflight.py
+        file: tests/unit/test_budget_manager_preflight.py
+  - id: stitch_trace_and_manager
+    execution_mode: always
+    reusable: true
+    description: >
+      Merge TraceWriter/RunnerTraceRecorder concepts, expose BudgetManager preflight/commit APIs, and ensure trace emission covers
+      budget_charge and budget_breach with immutable payloads.
+    source_files:
+      - pkgs/dsl/trace.py
+      - pkgs/dsl/budget.py
+    adapted_from_branch: codex/implement-budget-guards-with-test-first-approach
+    implementation_ref: trace_emitter
+    dependencies: [consolidate_budget_domain]
+  - id: integrate_runner_with_policies_and_budgets
+    execution_mode: always
+    reusable: false
+    description: >
+      Rebuild FlowRunner to execute ToolAdapter-driven nodes, call PolicyStack.enforce() before execution, charge unified BudgetMeters,
+      and emit LoopSummary records and RunResult traces.
+    source_files:
+      - pkgs/dsl/runner.py
+    adapted_from_branch: codex/implement-budget-guards-with-test-first-approach-8wxk32
+    implementation:
+      python: |
+        @dataclass(frozen=True, slots=True)
+        class RunResult:
+            run_id: str
+            status: str
+            outputs: Mapping[str, Mapping[str, object]]
+            trace: Sequence[Mapping[str, object]]
+            loop_summaries: Sequence[LoopSummary]
+    dependencies: [stitch_trace_and_manager]
+    tests:
+      - name: test_flow_runner_budget_manager.py
+        file: tests/unit/test_flow_runner_budget_manager.py
+      - name: test_runner_budget_stop.py
+        file: tests/e2e/test_runner_budget_stop.py
+  - id: enforce_policy_traces
+    execution_mode: optional
+    reusable: true
+    description: Ensure PolicyStack push/pop/resolution events propagate during runner execution and surface in traces for auditing.
+    source_files:
+      - pkgs/dsl/policy.py
+      - pkgs/dsl/runner.py
+    adapted_from_branch: codex/integrate-budget-guards-with-runner
+    dependencies: [integrate_runner_with_policies_and_budgets]
+    artifacts:
+      - name: policy_trace_contract
+        file: codex/specs/schemas/policy_trace_event.schema.json
+handoff_contract:
+  expected_consumer: gpt-5-codex
+  input_format: schema://codex/specs/schemas/full_task.schema.json
+  output_type: executable-python+unit-tests
+codex_directives:
+  must:
+    - attribute reused logic to specific branches in code comments or PR summary.
+    - emit budget_charge and budget_breach traces with immutable payloads.
+    - cover PolicyViolationError pathways in unit tests.
+  do_not:
+    - regress existing PolicyStack trace semantics.
+    - rely on mocked node execution costs outside ToolAdapter estimate_cost.

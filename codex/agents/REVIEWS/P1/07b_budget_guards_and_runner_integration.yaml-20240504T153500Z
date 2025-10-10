@@ -1,0 +1,183 @@
+metadata:
+  last_updated: 2024-05-04
+  repo: pfahlr/ragx
+  tags: [dsl, codex_task, policy_engine, traceability, refactor]
+  execution_mode: plan_synthesis
+analysis:
+  branch_diffs:
+    - from: codex/integrate-budget-guards-with-runner
+      to: codex/integrate-budget-guards-with-runner-zwi2ny
+      git_diff: |
+        diff --git a/pkgs/dsl/runner.py b/pkgs/dsl/runner.py
+        index 0f8509b..cb5f6ce 100644
+        --- a/pkgs/dsl/runner.py
+        +++ b/pkgs/dsl/runner.py
+        @@ -1,261 +1,285 @@
+        +"""Minimal FlowRunner implementation with budget integration."""
+        +
+        -import json
+        +import time
+         import uuid
+        -from collections.abc import Callable, Mapping
+        -from dataclasses import dataclass, field
+        -from pathlib import Path
+        +from collections.abc import Callable, Mapping, MutableMapping, Sequence
+        +from dataclasses import asdict, dataclass
+        +from types import MappingProxyType
+        -from .budget import BudgetBreachError, BudgetMeter
+        +from .budget import (
+        +    BudgetBreachHard,
+        +    BudgetChargeOutcome,
+        +    BudgetMeter,
+        +    BudgetRemaining,
+        +    BudgetSpec,
+        +    CostSnapshot,
+        +)
+        +from .trace import InMemoryTraceWriter, TraceWriter
+      commentary: |
+        Replaces ad-hoc loop handling with a richer budget domain model (`BudgetSpec`, `CostSnapshot`, `BudgetChargeOutcome`) and defers trace publishing to an injectable `TraceWriter`. Loop enforcement now breaks on deferred hard stops by emitting `budget_breach` events rather than throwing immediately, but `BudgetMeter.mode` defaults to "hard" even when only a `breach_action` is present, leaving soft budgets inert. The mocked `_execute_node` removes adapter integration, so runner/tool wiring regresses.
+    - from: codex/integrate-budget-guards-with-runner
+      to: codex/integrate-budget-guards-with-runner-pbdel9
+      git_diff: |
+        diff --git a/pkgs/dsl/budget.py b/pkgs/dsl/budget.py
+        index c734767..d04b74c 100644
+        --- a/pkgs/dsl/budget.py
+        +++ b/pkgs/dsl/budget.py
+        @@ -1,223 +1,199 @@
+        +"""Budget metering utilities for the FlowRunner."""
+        +
+        -from collections.abc import Mapping
+        +from collections.abc import Callable, Mapping
+         from dataclasses import dataclass
+        -from types import MappingProxyType
+        -from typing import SupportsFloat
+        +from typing import Any
+        +
+        +from .models import mapping_proxy
+        
+        __all__ = [
+            "BudgetError",
+        -    "BudgetBreachError",
+        -    "BudgetWarning",
+        -    "BudgetChargeResult",
+        +    "BudgetBreachHard",
+        +    "BudgetCharge",
+            "BudgetMeter",
+        ]
+      commentary: |
+        Introduces per-scope meters constructed with explicit `kind`/`subject` identifiers and emits immutable snapshots via `mapping_proxy`. However, loop stop semantics degrade: `BudgetMeter.charge()` suppresses exceptions when `breach_action == "stop"` yet the runner never inspects `BudgetCharge.breached`, so loops with stop-on-breach budgets continue executing silently. Trace payloads are richer, but adapter orchestration is still synchronous and lacks policy enforcement.
+    - from: codex/integrate-budget-guards-with-runner
+      to: codex/implement-budget-guards-with-test-first-approach
+      git_diff: |
+        diff --git a/pkgs/dsl/runner.py b/pkgs/dsl/runner.py
+        index 0f8509b..5ad9c60 100644
+        --- a/pkgs/dsl/runner.py
+        +++ b/pkgs/dsl/runner.py
+        @@ -1,261 +1,75 @@
+        -import json
+        -import uuid
+        -from collections.abc import Callable, Mapping
+        -from dataclasses import dataclass, field
+        -from pathlib import Path
+        -from typing import Any
+        -
+        -from .budget import BudgetBreachError, BudgetMeter
+        +"""FlowRunner scaffolding with budget integration hooks."""
+        +
+        +from collections.abc import Mapping
+        +
+        +from .budget import BudgetManager
+        +from .trace import RunnerTraceRecorder
+      commentary: |
+        Replaces the working runner with a skeletal façade that only exposes accessors for a new `BudgetManager` and `RunnerTraceRecorder`. The budget module blossoms into a full manager/preflight/commit pipeline, yet FlowRunner.run/plan now raise `NotImplementedError`, and none of the existing budget or trace tests could pass without additional harness changes.
+    - from: codex/integrate-budget-guards-with-runner
+      to: codex/implement-budget-guards-with-test-first-approach-qhq0jq
+      git_diff: |
+        diff --git a/pkgs/dsl/runner.py b/pkgs/dsl/runner.py
+        index 0f8509b..f4d767a 100644
+        --- a/pkgs/dsl/runner.py
+        +++ b/pkgs/dsl/runner.py
+        @@ -1,261 +1,364 @@
+        +from collections.abc import Callable, Mapping, Sequence
+        +from dataclasses import dataclass, field
+        +
+        -from .budget import BudgetBreachError, BudgetMeter
+        +from .budget import (
+        +    BudgetCharge,
+        +    BudgetCheck,
+        +    BudgetExceededError,
+        +    BudgetMeter,
+        +    BudgetMode,
+        +    Cost,
+        +)
+      commentary: |
+        Adds layered loop iteration records (`LoopIterationContext`, `LoopSummary`) and hard/soft budget classification via a new `BudgetMode` enum. `BudgetMeter.from_spec()` normalizes runtime metrics, but the runner fabricates placeholder outputs and lacks adapter execution. Exceptions short-circuit into `last_error`, yet the trace sink only records coarse `run_start/run_end` envelopes—node-level tracing is absent.
+    - from: codex/integrate-budget-guards-with-runner
+      to: codex/implement-budget-guards-with-test-first-approach-8wxk32
+      git_diff: |
+        diff --git a/pkgs/dsl/runner.py b/pkgs/dsl/runner.py
+        index 0f8509b..eff772b 100644
+        --- a/pkgs/dsl/runner.py
+        +++ b/pkgs/dsl/runner.py
+        @@ -1,261 +1,396 @@
+        +import math
+        +import time
+        +from collections.abc import Callable, Iterable, Mapping, Sequence
+        +
+        -from .budget import BudgetBreachError, BudgetMeter
+        +from .budget import BudgetDecision, BudgetExceededError, BudgetMeter, Cost
+        +
+        +@dataclass(frozen=True, slots=True)
+        +class NodeExecution:
+        +    node_id: str
+        +    outputs: Mapping[str, object]
+        +    cost: Cost
+      commentary: |
+        Pursues an object-oriented runner with explicit `NodeExecution` records, configurable clock/id factories, and `Cost` arithmetic for incremental spend. Budgets now yield `BudgetDecision` snapshots and raise a custom `BudgetExceededError`. Unfortunately, the runner still mocks node execution, and neither traces nor policy enforcement are wired through, so integration coverage remains theoretical.
+    - from: codex/integrate-budget-guards-with-runner
+      to: codex/implement-budget-guards-with-test-first-approach-fa0vm9
+      git_diff: |
+        diff --git a/pkgs/dsl/runner.py b/pkgs/dsl/runner.py
+        index 0f8509b..1d3feb5 100644
+        --- a/pkgs/dsl/runner.py
+        +++ b/pkgs/dsl/runner.py
+        @@ -1,261 +1,418 @@
+        +from typing import Any, Protocol
+        +from uuid import uuid4
+        +
+        -from .budget import BudgetBreachError, BudgetMeter
+        +from .budget import BudgetBreach, BudgetCharge, BudgetExceededError, BudgetMeter
+        +
+        +class ToolAdapter(Protocol):
+        +    def estimate_cost(self, node: Mapping[str, Any], inputs: Mapping[str, Any]) -> Mapping[str, float | int]:
+        +        ...
+      commentary: |
+        Introduces a `ToolAdapter` protocol to mediate estimation and execution, along with `_LoopStopSignal` to unwind loop control. Budgets emit structured `BudgetBreach` metadata, and the runner aggregates traces in-memory before streaming to an optional sink. However, cost estimation relies on adapter stubs that tests would need to provide, and `BudgetMeter.charge()` uses mutable dictionaries, risking shared-state leakage across scopes.
+  summary_of_findings:
+    common_flaws:
+      - None of the branches reconnect the runner to `PolicyStack.enforce()`, so tool allow/deny enforcement and `policy_resolved` tracing remain untested.
+      - Several implementations drop deterministic adapter execution in favour of mocked cost payloads, undermining integration realism required by the spec.
+      - Test coverage regresses from the base branch; rewritten runners often invalidate `tests/unit/test_budget_meter_limits.py` without equivalent replacements.
+    unique_strengths:
+      - `codex/integrate-budget-guards-with-runner-zwi2ny` offers reusable `BudgetSpec`/`CostSnapshot` value objects and a `TraceWriter` abstraction we can compose.
+      - `codex/integrate-budget-guards-with-runner-pbdel9` surfaces per-meter `remaining`/`overages` snapshots suitable for observability dashboards.
+      - `codex/implement-budget-guards-with-test-first-approach` provides a `BudgetManager` facade with preflight/commit hooks aligned to future runner orchestration.
+      - `codex/implement-budget-guards-with-test-first-approach-qhq0jq` captures loop summaries and normalizes budget modes via an enum, improving reporting fidelity.
+      - `codex/implement-budget-guards-with-test-first-approach-8wxk32` models node executions and costs with immutable dataclasses and injectable clocks for determinism.
+      - `codex/implement-budget-guards-with-test-first-approach-fa0vm9` formalizes adapter contracts and breach metadata, easing downstream tool integration.
+    critical_gaps:
+      - Soft budget semantics diverge: some branches never surface warnings, others auto-raise even when `breach_action == "stop"`, so unified handling is missing.
+      - Loop stop reasons and trace payload schemas differ, requiring reconciliation before merging into the runner contract.
+      - No branch validates tool-set expansion or policy traces alongside budgets, so cross-cutting diagnostics remain unsatisfied.
+confidence_notes:
+  - area: loop stop semantics
+    confidence: medium
+    reason: Competing implementations disagree on when to raise versus record stop reasons.
+coverage_gaps:
+  - missing: regression tests asserting `budget_breach` trace emission for soft loop budgets.
+  - missing: unit coverage for BudgetManager/BudgetMeter integration under concurrent node execution.
+traceability_checklist:
+  - must-emit: push
+  - must-emit: pop
+  - must-emit: policy_resolved
+  - must-raise: PolicyViolationError
