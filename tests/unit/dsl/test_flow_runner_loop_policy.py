@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Callable
+from collections.abc import Callable
 
 import pytest
 
@@ -102,7 +102,10 @@ def test_loop_scope_stop_emits_trace_and_breaks_iterations(
 
     events = [(evt.event, evt.scope_type) for evt in trace_emitter.events]
     assert ("loop_start", "loop") in events
-    assert any(evt.event == "loop_stop" and evt.scope_id == "loop-1" for evt in trace_emitter.events)
+    assert any(
+        evt.event == "loop_stop" and evt.scope_id == "loop-1"
+        for evt in trace_emitter.events
+    )
     assert adapter.executed.count("node-a@1") == 1
 
 

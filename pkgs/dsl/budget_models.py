@@ -33,24 +33,24 @@ class CostSnapshot:
     time_ms: float = 0.0
     tokens: int = 0
 
-    def __add__(self, other: "CostSnapshot") -> "CostSnapshot":
+    def __add__(self, other: CostSnapshot) -> CostSnapshot:
         return CostSnapshot(
             time_ms=self.time_ms + other.time_ms,
             tokens=self.tokens + other.tokens,
         )
 
-    def __sub__(self, other: "CostSnapshot") -> "CostSnapshot":
+    def __sub__(self, other: CostSnapshot) -> CostSnapshot:
         return CostSnapshot(
             time_ms=max(0.0, self.time_ms - other.time_ms),
             tokens=max(0, self.tokens - other.tokens),
         )
 
     @classmethod
-    def zero(cls) -> "CostSnapshot":
+    def zero(cls) -> CostSnapshot:
         return cls()
 
     @classmethod
-    def from_raw(cls, raw: Mapping[str, Any] | None) -> "CostSnapshot":
+    def from_raw(cls, raw: Mapping[str, Any] | None) -> CostSnapshot:
         if raw is None:
             return cls.zero()
         time_ms = float(raw.get("time_ms", 0.0))
@@ -121,7 +121,7 @@ class BudgetChargeOutcome:
         spec: BudgetSpec,
         prior: CostSnapshot,
         cost: CostSnapshot,
-    ) -> "BudgetChargeOutcome":
+    ) -> BudgetChargeOutcome:
         new_total = prior + cost
         remaining_time = spec.limit.time_ms - new_total.time_ms
         remaining_tokens = spec.limit.tokens - new_total.tokens
@@ -181,7 +181,7 @@ class BudgetDecision:
         scope: ScopeKey,
         cost: CostSnapshot,
         outcomes: Iterable[BudgetChargeOutcome],
-    ) -> "BudgetDecision":
+    ) -> BudgetDecision:
         materialized = tuple(outcomes)
         blocking = next((out for out in materialized if out.should_stop), None)
         return cls(scope=scope, cost=cost, outcomes=materialized, blocking=blocking)

@@ -8,7 +8,11 @@ from pkgs.dsl.policy import PolicyStack
 
 
 class FakeAdapter(ToolAdapter):
-    def __init__(self, cost_by_node: dict[str, dict[str, float]], results: dict[str, object]) -> None:
+    def __init__(
+        self,
+        cost_by_node: dict[str, dict[str, float]],
+        results: dict[str, object],
+    ) -> None:
         self._cost_by_node = cost_by_node
         self._results = results
         self.executed: list[str] = []
@@ -54,7 +58,11 @@ def budget_manager(trace_emitter: TraceEventEmitter) -> BudgetManager:
 
 
 @pytest.fixture()
-def flow_runner(budget_manager: BudgetManager, policy_stack: PolicyStack, trace_emitter: TraceEventEmitter) -> FlowRunner:
+def flow_runner(
+    budget_manager: BudgetManager,
+    policy_stack: PolicyStack,
+    trace_emitter: TraceEventEmitter,
+) -> FlowRunner:
     adapters = {"echo": FakeAdapter(cost_by_node={}, results={})}
     return FlowRunner(
         adapters=adapters,
