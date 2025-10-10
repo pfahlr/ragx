@@ -1,0 +1,15 @@
+missing_tests:
+  task_id: 07b_budget_guards_and_runner_integration.yaml
+  proposed_tests:
+    - name: test_budget_manager_handles_estimate_actual_delta
+      rationale: Ensure commit recomputes projected spend when actual costs differ from estimates, preventing silent drift.
+      source_module: dsl/budget.py
+      priority: medium
+    - name: test_flow_runner_emits_combined_policy_budget_traces
+      rationale: Validate ordering when a policy violation occurs after a soft warning within the same run, covering trace interleaving.
+      source_module: dsl/runner.py
+      priority: medium
+    - name: test_trace_writer_snapshot_returns_deeply_immutable_payloads
+      rationale: Guard against future regressions where nested payloads become mutable.
+      source_module: dsl/trace.py
+      priority: low

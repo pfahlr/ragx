@@ -1,0 +1,79 @@
+summary: Align budget guards with FlowRunner + PolicyStack using immutable models and shared tracing.
+justification: >-
+  Phase 2 analyses highlight strengths in specific experimental branches. We combine the
+  adapter-driven runner from codex/integrate-budget-guards-with-runner and codex/implement-budget-guards-with-test-first-approach-fa0vm9,
+  the immutable budget models from codex/integrate-budget-guards-with-runner-zwi2ny, and the
+  structured breach accounting from codex/integrate-budget-guards-with-runner-pbdel9/qhq0jq to
+  deliver deterministic budget enforcement with trace parity.
+steps:
+  - id: cost_normalization
+    desc: Reconcile divergent unit handling by introducing a canonical cost normalization helper inspired by 8wxk32/fa0vm9 branches.
+  - id: budget_manager
+    desc: Implement immutable budget specs, charge outcomes, and a BudgetManager orchestrating preflight/commit per scope (zwi2ny + pbdel9 + qhq0jq).
+  - id: trace_bridge
+    desc: Build a TraceEventEmitter layering zwi2ny TraceWriter semantics with pbdel9 overage payloads and ensure policy_resolved traces per P1 reviews.
+  - id: runner_integration
+    desc: Retrofit FlowRunner loop execution (fa0vm9 adapter protocol + baseline runner) to invoke BudgetManager and emit budget/policy traces deterministically.
+  - id: verification
+    desc: Author unit/integration tests covering soft/hard budgets, breach actions, trace ordering, and policy enforcement before implementation.
+modules:
+  - path: codex/code/phase3-budget-runner-4f72/dsl/costs.py
+    role: Cost normalization utilities reused by budgets and runner.
+  - path: codex/code/phase3-budget-runner-4f72/dsl/budget.py
+    role: Budget domain models and BudgetManager orchestration.
+  - path: codex/code/phase3-budget-runner-4f72/dsl/trace.py
+    role: TraceWriter protocol and TraceEventEmitter bridging policy/budget events.
+  - path: codex/code/phase3-budget-runner-4f72/dsl/policy.py
+    role: Lightweight PolicyStack enforcement with trace hooks per 07a dependencies.
+  - path: codex/code/phase3-budget-runner-4f72/dsl/runner.py
+    role: FlowRunner orchestrating adapters, policies, and budgets.
+tests:
+  - path: codex/code/phase3-budget-runner-4f72/tests/test_costs_normalization.py
+    coverage: Ensure seconds→milliseconds conversion and immutable payloads for normalized costs.
+    mocks: None (pure functions).
+  - path: codex/code/phase3-budget-runner-4f72/tests/test_budget_manager.py
+    coverage: BudgetManager preflight/commit outcomes for soft/hard modes, remaining/overages math, trace emissions.
+    mocks: Fake TraceWriter to capture events.
+  - path: codex/code/phase3-budget-runner-4f72/tests/test_flow_runner_integration.py
+    coverage: FlowRunner executing adapters with policy enforcement, verifying stop reasons, policy_resolved traces, and budget breach handling.
+    mocks: Deterministic ToolAdapter doubles providing estimate/execute results.
+run_order:
+  - cost_normalization
+  - budget_manager
+  - trace_bridge
+  - runner_integration
+  - verification
+interfaces:
+  - name: TraceWriter
+    contract: emit(event: str, payload: Mapping[str, object]) -> None; snapshot() -> Sequence[Mapping[str, object]]
+  - name: BudgetManager
+    contract: preflight(scope, scope_type, spec, cost) -> BudgetDecision; commit(decision) -> BudgetChargeOutcome
+  - name: FlowRunner
+    contract: run(flow, context) -> RunResult including traces and loop summaries
+  - name: PolicyStack
+    contract: check(node_id, adapter) -> PolicyDecision raising on violation while emitting traces
+  - name: ToolAdapter
+    contract: estimate(context) -> CostSnapshot; execute(context) -> NodeExecution
+tdd_coverage_targets:
+  - module: dsl/costs.py
+    minimum: 0.9
+  - module: dsl/budget.py
+    minimum: 0.9
+  - module: dsl/runner.py
+    minimum: 0.85
+review_checklist:
+  - Tests cover soft/hard budget paths and policy trace emission (policy_resolved) per POSTEXECUTION directives.
+  - Budget normalization converts seconds→milliseconds exactly once and returns immutable payloads.
+  - FlowRunner stops deterministically on hard breaches and continues on soft warnings.
+  - TraceWriter usage avoids mutable payload leaks (mapping_proxy enforced).
+  - Documentation attributes reused logic to specific branches.
+outputs:
+  plan_yaml: codex/agents/TASKS_FINAL/P3/07b_budget_guards_and_runner_integration.yaml-565941d2177b4311b170222d4ecb5029.yaml
+  tests_root: codex/code/phase3-budget-runner-4f72/tests/
+  code_root: codex/code/phase3-budget-runner-4f72/
+  preview_doc: codex/agents/PREVIEW/P3/07b_budget_guards_and_runner_integration.yaml-565941d2177b4311b170222d4ecb5029.md
+  review_doc: codex/agents/REVIEW/P3/07b_budget_guards_and_runner_integration.yaml-565941d2177b4311b170222d4ecb5029.md
+  postexecution_doc: codex/agents/POSTEXECUTION/P3/07b_budget_guards_and_runner_integration.yaml-565941d2177b4311b170222d4ecb5029.md
+  metadata_doc: codex/DOCUMENTATION/P3/phase3-budget-runner-4f72-565941d2177b4311b170222d4ecb5029.yaml
+  missing_tests_doc: codex/TESTS/P3/phase3-budget-runner-4f72-565941d2177b4311b170222d4ecb5029.yaml
+  optional_runner: codex/code/phase3-budget-runner-4f72/phase3_runner.py
