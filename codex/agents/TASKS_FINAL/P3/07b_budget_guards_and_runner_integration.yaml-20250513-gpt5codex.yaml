@@ -1,0 +1,107 @@
+summary: Integrate typed budget management and traceable FlowRunner collaboration for Phase 3
+justification: |
+  Phase 2 converged on typed budget models, a reusable BudgetManager, and adapter-driven FlowRunner
+  orchestration. Phase 3 needs executable code plus coverage that proves run/node/spec/loop budgets
+  and trace emissions behave deterministically. The plan lifts the synthesised architecture into a
+  small, testable code surface that mirrors the branch synthesis decisions while remaining sandbox
+  friendly.
+steps:
+  - id: design_budget_models
+    description: Port immutable budget data models with normalization helpers and arithmetic.
+  - id: implement_budget_manager
+    description: Build BudgetManager preflight/commit orchestration enforcing scope budgets.
+    depends_on: [design_budget_models]
+  - id: implement_trace_emitter
+    description: Provide schema-enforced trace emitter for policy and budget events.
+    depends_on: [design_budget_models]
+  - id: integrate_flow_runner
+    description: Wire FlowRunner to adapters, policy stack, and BudgetManager with trace outputs.
+    depends_on: [implement_budget_manager, implement_trace_emitter]
+modules:
+  - path: codex/code/07b_budget_guards_and_runner_integration.yaml/budget_models.py
+    role: Canonical budget value objects
+    responsibilities:
+      - Normalize cost inputs to milliseconds and expose arithmetic helpers.
+      - Represent BudgetSpec, BudgetDecision, and BudgetBreach snapshots immutably.
+  - path: codex/code/07b_budget_guards_and_runner_integration.yaml/budget_manager.py
+    role: Scope-aware budget enforcement
+    responsibilities:
+      - Register scopes for run/node/spec/loop budgets.
+      - Provide preflight and commit evaluations returning immutable decisions and breaches.
+  - path: codex/code/07b_budget_guards_and_runner_integration.yaml/trace_emitter.py
+    role: Schema-validated trace bridge
+    responsibilities:
+      - Emit policy and budget trace events with deterministic payloads.
+      - Validate payload schema at emit time for observability parity.
+  - path: codex/code/07b_budget_guards_and_runner_integration.yaml/flow_runner.py
+    role: Adapter-driven FlowRunner integration point
+    responsibilities:
+      - Execute nodes using adapters while consulting BudgetManager.
+      - Coordinate policy stack traces and propagate breach decisions into stop reasons.
+      - Surface run results with warnings and stop diagnostics.
+tests:
+  - path: codex/code/07b_budget_guards_and_runner_integration.yaml/tests/test_budget_models.py
+    targets: [budget_models]
+    coverage: 0.9
+    mocks: []
+  - path: codex/code/07b_budget_guards_and_runner_integration.yaml/tests/test_budget_manager.py
+    targets: [budget_manager, budget_models]
+    coverage: 0.9
+    mocks: []
+  - path: codex/code/07b_budget_guards_and_runner_integration.yaml/tests/test_flow_runner.py
+    targets: [flow_runner, budget_manager, trace_emitter]
+    coverage: 0.85
+    mocks:
+      - Fake adapters implementing estimate_cost/execute
+      - In-memory TraceEventEmitter spy
+run_order:
+  - codex/code/07b_budget_guards_and_runner_integration.yaml/tests/test_budget_models.py
+  - codex/code/07b_budget_guards_and_runner_integration.yaml/tests/test_budget_manager.py
+  - codex/code/07b_budget_guards_and_runner_integration.yaml/tests/test_flow_runner.py
+interfaces:
+  - name: CostSnapshot
+    inputs: duration_ms|duration_seconds|cost_payload
+    outputs: immutable cost values with arithmetic helpers
+  - name: BudgetManager
+    inputs: scope registrations, preflight/commit requests with CostSnapshot
+    outputs: BudgetDecision outcomes, BudgetBreach metadata
+  - name: TraceEventEmitter
+    inputs: event_type, payload dicts
+    outputs: ordered immutable trace payloads, validation errors on schema drift
+  - name: FlowRunner
+    inputs: flow specification, adapters, budget manager, trace emitter, policy stack
+    outputs: RunResult with nodes executed, warnings, stop_reason, trace emissions
+tdd_coverage_targets:
+  - module: budget_models
+    minimum: 0.9
+  - module: budget_manager
+    minimum: 0.9
+  - module: trace_emitter
+    minimum: 0.85
+  - module: flow_runner
+    minimum: 0.85
+review_checklist:
+  - Budget normalization matches milliseconds-only contract.
+  - Hard vs soft breach actions propagate correctly to run results and traces.
+  - Trace payloads satisfy schema validation for policy and budget events.
+  - FlowRunner preserves adapter execution order when budgets permit.
+  - Warnings accumulate deterministically without duplicate emissions.
+outputs:
+  - artifact: implementation_plan
+    path: codex/agents/TASKS_FINAL/P3/07b_budget_guards_and_runner_integration.yaml-20250513-gpt5codex.yaml
+  - artifact: budget_models_module
+    path: codex/code/07b_budget_guards_and_runner_integration.yaml/budget_models.py
+  - artifact: budget_manager_module
+    path: codex/code/07b_budget_guards_and_runner_integration.yaml/budget_manager.py
+  - artifact: trace_emitter_module
+    path: codex/code/07b_budget_guards_and_runner_integration.yaml/trace_emitter.py
+  - artifact: flow_runner_module
+    path: codex/code/07b_budget_guards_and_runner_integration.yaml/flow_runner.py
+  - artifact: unit_tests
+    path: codex/code/07b_budget_guards_and_runner_integration.yaml/tests
+  - artifact: preview_doc
+    path: codex/agents/PREVIEW/P3/07b_budget_guards_and_runner_integration.yaml-20250513-gpt5codex.md
+  - artifact: review_doc
+    path: codex/agents/REVIEW/P3/07b_budget_guards_and_runner_integration.yaml-20250513-gpt5codex.md
+  - artifact: postexecution_doc
+    path: codex/agents/POSTEXECUTION/P3/07b_budget_guards_and_runner_integration.yaml-20250513-gpt5codex.md
