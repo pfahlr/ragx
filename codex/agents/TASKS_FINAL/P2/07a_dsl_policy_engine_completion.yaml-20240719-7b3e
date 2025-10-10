@@ -1,0 +1,100 @@
+version: 1
+id: 07a_dsl_policy_engine_completion
+title: Merge policy stack resolution, enforcement, and trace fidelity
+summary: Consolidate the DSL policy engine by unifying validated stack semantics with enforcement and trace diagnostics from the four Codex variants.
+description: |
+  Implement a production-ready policy engine that preserves the baseline branch's validation and trace schema, integrates
+  reclz1's metadata-rich frames for linter analysis, and adopts yp01n0's enforcement contract plus violation sink while
+  salvaging 81p0id's candidate diagnostics without its FIFO regression. The work must reinstate nearest-scope precedence,
+  emit the full trace contract (`policy_push`, `policy_resolved`, `policy_violation`, `policy_pop`), and extend the linter
+  and unit tests to cover decision/loop scopes and fallback reachability.
+metadata:
+  owners: [pfahlr@gmail.com]
+  labels: [dsl, policy-engine, tracing]
+  priority: P1
+  risk: high
+  last_updated: 2024-07-19
+strategy:
+  tests_first: true
+  deterministic: true
+  golden_management: manual
+scope:
+  goals:
+    - Restore nearest-scope policy resolution with validated tool/tool-set expansion and scope-safe stack operations.
+    - Provide an `enforce()` API emitting structured `policy_violation` events and raising `PolicyViolationError` on disallowed tools.
+    - Emit deterministic policy trace events covering push, resolved snapshots, violations, and pop with shared serialization logic.
+    - Update the DSL linter and unit tests to exercise decision branches, loops, fallback paths, and trace sequencing.
+  non_goals:
+    - Modifying runner execution semantics beyond the policy stack contract.
+    - Implementing budget enforcement or non-policy observability features.
+assumptions:
+  - Tool registries follow the spec-defined schema and expose tags required for allow/deny evaluation.
+  - Existing DSL node definitions remain unchanged; only policy enforcement layers require updates.
+constraints:
+  - Preserve backward-compatible trace payload keys for existing downstream consumers while adding new diagnostics under gated keys.
+  - Keep the policy engine free of network or filesystem dependencies to maintain deterministic tests.
+component_ids:
+  - pkgs.dsl.policy
+  - pkgs.dsl.linter
+  - tests.unit.policy_stack
+structured_logging_contract:
+  format: jsonl
+  storage_path_prefix: logs/policy_engine
+  latest_symlink: logs/policy_engine/latest
+  retention: 14d
+  event_fields:
+    - event
+    - scope
+    - payload.allowed_tools
+    - payload.denied_tools
+    - payload.candidates
+    - payload.scope_stack
+    - payload.reason
+  metadata_fields:
+    - run_id
+    - graph_id
+    - node_id
+  volatile_fields:
+    - payload.latency_ms
+    - payload.timestamp
+observability_requirements:
+  - Maintain per-event correlation IDs so traces can be joined to runner node executions.
+  - Surface denial provenance (scope and directive) within violation events for debugging unreachable nodes.
+ci:
+  xfail_marker: policy_engine_known_issue
+  workflows:
+    - name: ensure_green
+      gates:
+        - scripts/ensure_green.sh
+      artifacts:
+        - tests/unit/test_policy_stack_resolution.py
+        - tests/unit/test_linter_unreachable_tools.py
+actions:
+  - stage: stabilize_harness
+    summary: Backfill regression coverage before refactors.
+    tasks:
+      - Author unit tests for decision-branch overrides, loop scope unwinding, fallback exhaustion, and trace ordering (push -> resolved -> violation -> pop).
+      - Add fixture coverage for tool-set cycle detection and unknown tool rejection.
+  - stage: unify_policy_stack
+    summary: Merge validated stack semantics with metadata-rich frames.
+    tasks:
+      - Refactor `PolicyStack` to use `_PolicyFrame` descriptors while preserving validated push/pop, tool expansion, and LIFO evaluation.
+      - Collapse `PolicyResolution` and `PolicySnapshot` into an immutable snapshot carrying allowed/denied sets, candidate list, and provenance metadata.
+      - Implement a shared trace emitter that records to the baseline recorder and optional sinks with deterministic payload keys.
+  - stage: enforcement_and_linter
+    summary: Deliver enforcement API and align linter diagnostics.
+    tasks:
+      - Implement `enforce()` using cached snapshots, raising `PolicyViolationError`, and emitting `policy_violation` events with denial provenance.
+      - Update the DSL linter to consume enriched diagnostics, ensuring unreachable tool detection across decision and loop scopes.
+      - Document and validate the trace schema via a JSON schema artifact (`codex/specs/schemas/policy_trace_event.schema.json`).
+  - stage: integration_ci
+    summary: Ensure repository health and documentation.
+    tasks:
+      - Update developer docs outlining the policy trace contract and enforcement usage.
+      - Run `scripts/ensure_green.sh` and address lint/type/test failures.
+      - Capture changelog notes referencing branch contributions (baseline, reclz1, yp01n0, 81p0id).
+acceptance:
+  - tests/unit/test_policy_stack_resolution.py passes with new decision/loop cases.
+  - tests/unit/test_linter_unreachable_tools.py covers unreachable fallback and branch contexts.
+  - Policy trace fixtures assert push/resolved/violation/pop sequencing with deterministic payload keys.
+  - `scripts/ensure_green.sh` succeeds locally prior to submission.

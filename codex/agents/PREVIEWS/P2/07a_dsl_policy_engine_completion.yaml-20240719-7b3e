@@ -1,0 +1,27 @@
+plan_preview:
+  reuse_logic:
+    - branch: codex/implement-dsl-policy-engine-in-yaml
+      notes:
+        - Keep `PolicyDefinition` parsing, tool-set expansion safeguards, and scope-validated push/pop with `PolicyTraceRecorder` wiring as the backbone.
+    - branch: codex/implement-dsl-policy-engine-in-yaml-reclz1
+      notes:
+        - Adopt `_PolicyFrame` / `ToolDescriptor` modeling for richer metadata and branch/loop context cloning for the linter.
+    - branch: codex/implement-dsl-policy-engine-in-yaml-yp01n0
+      notes:
+        - Reuse the `enforce()` surface, `PolicySnapshot`/`PolicyDenial` schema, and optional event sink plumbing for violations.
+    - branch: codex/implement-dsl-policy-engine-in-yaml-81p0id
+      notes:
+        - Salvage candidate-tracking diagnostics so snapshots can report evaluated tool IDs without reintroducing mutable state.
+  conflicts:
+    - 81p0id/yp01n0 iterate policies FIFO while baseline/reclz1 expect LIFO; need a single resolver that enforces nearest-scope-wins with tests.
+    - reclz1 drops push/pop scope validation whereas baseline/yp01n0 rely on it; we must restore guard rails while supporting optional policies.
+    - All branches diverge on trace schemas (`policy_resolved` vs. `policy_allowlist` vs. violation events); unify on baseline schema plus violation events and ensure deterministic payload keys.
+    - Tool validation paths differ: baseline validates eagerly, variants skip; consolidate onto baseline behavior while keeping reclz1 descriptors.
+  redesign_targets:
+    - Rebuild `PolicyResolution`/`PolicySnapshot` into a single immutable snapshot containing per-tool provenance, candidate list, and denial metadata to satisfy both observability and enforcement.
+    - Extract a shared trace emitter that can fan out to recorder + optional sink, preventing drift across branches.
+    - Simplify linter integration by wrapping stack evaluations in helper methods that inject branch/loop context without exposing raw frames.
+  open_questions:
+    - How aggressively should we cache snapshots (per evaluation vs. per node) before invalidating after stack mutations?
+    - Should optional/None policies be allowed at the API surface (reclz1 style) or must callers guard them to preserve trace completeness?
+    - Do we expose candidate diagnostics externally or keep them internal to observability tooling?
