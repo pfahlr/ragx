@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
+from copy import deepcopy
 from dataclasses import dataclass
 
 __all__ = ["CanonicalError"]
@@ -57,4 +58,4 @@ class CanonicalError:
         value = cls._lookup(code, cls._JSONRPC_ERROR_MAP, context="JSON-RPC error")
         if not isinstance(value, dict):  # pragma: no cover - defensive
             raise TypeError("JSON-RPC mapping must be a dictionary")
-        return value.copy()
+        return deepcopy(value)

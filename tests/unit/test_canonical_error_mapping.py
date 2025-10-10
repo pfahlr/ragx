@@ -62,3 +62,15 @@ def test_unknown_mappings_raise_key_error_when_missing(code: str) -> None:
     """Stubs should clearly communicate missing mappings during development."""
     with pytest.raises(KeyError):
         CanonicalError._lookup(code, mapping={})
+
+
+def test_jsonrpc_payload_mutations_do_not_persist() -> None:
+    """Mutating a returned payload must not corrupt the canonical mapping."""
+
+    payload = CanonicalError.to_jsonrpc_error("INVALID_INPUT")
+    payload["data"]["details"] = {"foo": "bar"}
+    payload["custom"] = True
+
+    subsequent = CanonicalError.to_jsonrpc_error("INVALID_INPUT")
+    assert "details" not in subsequent["data"]
+    assert "custom" not in subsequent
