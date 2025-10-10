@@ -44,6 +44,7 @@ jobs:
         uses: github/codeql-action/init@v3
         with:
           languages: python, cpp
+          build-mode: manual
 
       - name: Configure CMake build
         run: |
