@@ -1,0 +1,18 @@
+post_execution_feedback:
+  was_successful: null
+  failed_tasks: []
+  recommended_revisions: []
+  synthesis_notes:
+    - reason: opportunity to consolidate trace emission logic across branches
+      recommendation: extract shared `trace_event_emitter` to shared module
+handoff_contract:
+  expected_consumer: gpt-5-codex
+  input_format: schema://codex/specs/schemas/full_task.schema.json
+  output_type: executable-python+unit-tests
+codex_directives:
+  must:
+    - reference branch contributions precisely
+    - verify all traceability expectations
+  do_not:
+    - hallucinate trace events
+    - assume success without validation

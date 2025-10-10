@@ -1,0 +1,22 @@
+plan_preview: |
+  Reused logic/structures per branch:
+  - Base (`codex/implement-dsl-policy-engine-in-yaml`): keep tool/ tool-set normalization, cycle-safe `_expand_tool_refs`, and the trace recorder scaffold as the foundation for stack correctness.
+  - `-reclz1`: adopt `ToolDescriptor` modeling, per-tool `PolicyDecision` metadata, and stack cloning strategy for linter contexts.
+  - `-81p0id`: salvage candidate-scoped evaluation (passing explicit candidate lists, denial reason capture) and richer trace payload structure.
+  - `-yp01n0`: port the `PolicySnapshot`/`enforce()` contract and structured `PolicyDenial` wiring so runtime enforcement emits violations consistently.
+
+  Conflicts & planned resolutions:
+  - Frame iteration order: both `-81p0id` and `-yp01n0` walk oldest→newest; I will rebase their candidate/denial logic onto the base branch’s newest→oldest traversal so nearest scope wins.
+  - Trace schemas differ (`PolicyTraceEvent` vs. `PolicyEvent`); I will standardize on the base recorder but expand payload fields to include candidate lists and denial metadata without renaming events.
+  - Registry ownership: `-reclz1` delegates tool validation to callers, conflicting with base guarantees. I will keep registry ownership inside `PolicyStack` while still allowing descriptor views for consumers.
+  - Linter entry points differ (function vs. class). I’ll consolidate around a single `lint_unreachable_tools` facade backed by a reusable analyzer that supports loops/decisions/fallbacks.
+
+  Redesign/simplification targets:
+  - Rework `_tools_with_tags_mapping` to record nearest-scope tag overrides rather than first-match wins.
+  - Unify policy push/pop APIs so scope names and optional sources are always captured; empty policies should still emit traces but short-circuit evaluation work.
+  - Extract a shared trace emitter used by both policy evaluation and linter/enforcement to avoid duplicated event formatting.
+
+  Open questions / trade-offs:
+  - Do we need to persist full `PolicySnapshot` objects for every enforcement call, or can we stream violations via iterators to reduce recomputation cost?
+  - How far should the linter simulate decision paths (e.g., cross-product of nested loops) without exploding runtime—should we cap at a configurable breadth?
+  - Should fallback validation treat non-existent tools as policy violations or defer to schema validation elsewhere?
