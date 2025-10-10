@@ -1,0 +1,153 @@
+plan_preview:
+  branch_inclusions:
+    - codex/integrate-budget-guards-with-runner: canonical PolicyStack + mapping_proxy snapshots.
+    - codex/integrate-budget-guards-with-runner-zwi2ny: TraceWriter abstraction and loop iteration telemetry.
+    - codex/integrate-budget-guards-with-runner-pbdel9: immutable run outputs and stop-reason schema.
+    - codex/implement-budget-guards-with-test-first-approach-qhq0jq: budget preview (`BudgetCheck`) and mode-aware breaches.
+    - codex/implement-budget-guards-with-test-first-approach-8wxk32: adapter-driven node execution and node-level meters.
+    - codex/implement-budget-guards-with-test-first-approach-fa0vm9: adapter protocol, loop-context stack, and trace-rich budget enforcement.
+  conflict_resolution:
+    - Normalise run_id lifecycle so the same identifier threads through trace, result, and policy events (fa0vm9 currently regenerates ids).
+    - Merge budget meter APIs by retaining fa0vm9 charge semantics while exposing qhq0jq-style preview checks; deprecate duplicate dataclasses.
+    - Align trace payloads with the spec contract (`push`, `policy_resolved`, `violation`, `pop`) while preserving pbdel9 mapping_proxy immutability.
+  exclusions:
+    - Do not adopt the unfinished BudgetManager scaffolding from codex/implement-budget-guards-with-test-first-approach (no executable runner).
+    - Drop bespoke loop stop enums that lack spec parity; fold into unified stop reason vocabulary.
+  open_questions:
+    - Should trace emission remain in-memory (zwi2ny) or support pluggable sinks (fa0vm9) for streaming observability?
+    - How should PolicyStack errors propagate when runner adapters batch multiple tool invocations inside a node?
+refinement_opportunities:
+  - Refine BudgetMeter limits parsing into dedicated normalisers shared between preview/charge to avoid drift across branches.
+  - Introduce PolicyStack-aware node descriptors so unknown tools are rejected before budget preview.
+  - Consolidate trace schemas into a dataclass or TypedDict to guarantee contract stability.
+shared_blocks:
+  - name: budget_meter_core
+    implementation: |
+      class BudgetMeter:
+          def __init__(self, *, scope: str, config: Mapping[str, object] | None = None, default_mode: str = "hard") -> None:
+              self.scope = scope
+              normalized = dict(config or {})
+              self.mode = _normalize_mode(normalized.get("mode", default_mode))
+              self.breach_action = normalized.get("breach_action", "error")
+              self._limits = _normalize_limits(normalized)
+              self._spent: dict[str, float] = {key: 0.0 for key in self._limits}
+          def preview(self, cost: Mapping[str, float | int]) -> BudgetCheck:
+              return _preview_charge(self.scope, self.mode, self._limits, self._spent, cost)
+          def charge(self, cost: Mapping[str, float | int]) -> BudgetCharge:
+              result = _apply_charge(self.scope, self.mode, self.breach_action, self._limits, self._spent, cost)
+              self._spent.update(result.spent)
+              return result
+  - name: trace_event_emitter
+    implementation: |
+      class PolicyTraceEmitter:
+          def __init__(self, recorder: PolicyTraceRecorder | None, sink: Callable[[PolicyTraceEvent], None] | None) -> None:
+              self._recorder = recorder
+              self._sink = sink
+          def emit(self, event: str, scope: str, payload: Mapping[str, object]) -> None:
+              record = PolicyTraceEvent(event=event, scope=scope, data=mapping_proxy(payload))
+              if self._recorder is not None:
+                  self._recorder.record(record)
+              if self._sink is not None:
+                  self._sink(record)
+          def scoped(self, scope: str) -> ContextManager[None]:
+              self.emit("push", scope, {"stack_depth": "pending"})
+              try:
+                  yield
+              finally:
+                  self.emit("pop", scope, {"stack_depth": "pending"})
+      
+      def emit_policy_resolution(emitter: PolicyTraceEmitter, resolution: PolicyResolution) -> None:
+          emitter.emit(
+              "policy_resolved",
+              "stack",
+              {
+                  "allowed": sorted(resolution.allowed),
+                  "denied": {name: list(reasons) for name, reasons in resolution.denied.items()},
+                  "stack_depth": resolution.stack_depth,
+              },
+          )
+
+      def emit_policy_violation(emitter: PolicyTraceEmitter, denial: PolicyDenial) -> None:
+          emitter.emit(
+              "policy_violation",
+              denial.decision.denied_by or "stack",
+              {"tool": denial.tool, "reasons": list(denial.reasons)},
+          )
+      
+      
+      class BudgetTraceEmitter:
+          def __init__(self, sink: Callable[[Mapping[str, object]], None] | None) -> None:
+              self._sink = sink
+              self._buffer: list[dict[str, object]] = []
+          def record(self, payload: Mapping[str, object]) -> None:
+              event = dict(payload)
+              self._buffer.append(event)
+              if self._sink is not None:
+                  self._sink(event)
+          @property
+          def events(self) -> tuple[Mapping[str, object], ...]:
+              return tuple(MappingProxyType(item) for item in self._buffer)
+          def reset(self) -> None:
+              self._buffer.clear()
+tasks:
+  - id: reconcile_policy_stack
+    execution_mode: always
+    reusable: true
+    description: Align PolicyStack with shared PolicyTraceEmitter, preserving nearest-scope-wins resolution and cycle detection.
+    adapted_from_branch: codex/integrate-budget-guards-with-runner
+    source_files:
+      - pkgs/dsl/policy.py
+      - pkgs/dsl/models.py
+    implementation_ref: trace_event_emitter
+  - id: unify_budget_meter
+    execution_mode: always
+    reusable: true
+    description: Merge fa0vm9 charge semantics with qhq0jq preview checks into a single BudgetMeter implementation.
+    adapted_from_branch: codex/implement-budget-guards-with-test-first-approach-fa0vm9
+    dependencies: [reconcile_policy_stack]
+    source_files:
+      - pkgs/dsl/budget.py
+    implementation_ref: budget_meter_core
+  - id: integrate_runner_execution
+    execution_mode: always
+    reusable: false
+    description: Implement FlowRunner with adapter protocol, loop stack management, and budget enforcement aligned to unified meter/trace APIs.
+    adapted_from_branch: codex/implement-budget-guards-with-test-first-approach-fa0vm9
+    dependencies: [unify_budget_meter]
+    source_files:
+      - pkgs/dsl/runner.py
+    tests:
+      - name: test_budget_soft_vs_hard_modes
+        file: tests/unit/test_dsl_runner_budget_modes.py
+      - name: test_policy_violation_blocks_tool
+        file: tests/unit/test_dsl_policy_enforce.py
+  - id: augment_trace_schema
+    execution_mode: always
+    reusable: true
+    description: Ensure runner emits policy and budget events to a pluggable sink using pbdel9 mapping_proxy conventions.
+    adapted_from_branch: codex/integrate-budget-guards-with-runner-pbdel9
+    dependencies: [integrate_runner_execution]
+    source_files:
+      - pkgs/dsl/runner.py
+      - pkgs/dsl/policy.py
+      - pkgs/dsl/trace.py
+  - id: add_acceptance_tests
+    execution_mode: always
+    reusable: false
+    description: Backfill acceptance coverage for budget stop conditions and policy enforcement in the runner.
+    adapted_from_branch: codex/integrate-budget-guards-with-runner-zwi2ny
+    dependencies: [integrate_runner_execution]
+    source_files:
+      - tests/e2e/test_dsl_runner_acceptance.py
+      - tests/acceptance/test_dsl_runner.py
+handoff_contract:
+  expected_consumer: gpt-5-codex
+  input_format: schema://codex/specs/schemas/full_task.schema.json
+  output_type: executable-python+unit-tests
+codex_directives:
+  must:
+    - attribute reused logic to specific branches
+    - emit `policy_resolved` trace
+  do_not:
+    - invent tools or APIs not seen in diffs
+    - reuse test logic without attribution

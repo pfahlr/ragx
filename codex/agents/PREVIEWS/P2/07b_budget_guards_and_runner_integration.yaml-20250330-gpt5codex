@@ -1,0 +1,30 @@
+plan_preview:
+  reuse:
+    - branch: codex/integrate-budget-guards-with-runner-pbdel9
+      rationale: Preserve adapter-driven runner execution, stop-reason handling, and timestamped tracing as the backbone for integration.
+    - branch: codex/integrate-budget-guards-with-runner-zwi2ny
+      rationale: Reuse immutable BudgetSpec/CostSnapshot models and the TraceWriter contract for consistent data and observability plumbing.
+    - branch: codex/implement-budget-guards-with-test-first-approach
+      rationale: Port the BudgetManager preflight/commit orchestration to centralize scope enforcement while keeping runner logic intact.
+    - branch: codex/implement-budget-guards-with-test-first-approach-fa0vm9
+      rationale: Adopt BudgetBreach metadata and budget_factory injection to expose diagnostics and maintain loose coupling.
+    - branch: codex/implement-budget-guards-with-test-first-approach-8wxk32
+      rationale: Integrate arithmetic helpers from BudgetDecision/Cost after unit normalization to support predictive decisions without side effects.
+  conflicts:
+    - description: Cost units diverge (seconds vs milliseconds vs mixed tokens) and preview/charge APIs disagree on return types.
+      resolution: Introduce a canonical CostSnapshot with explicit unit normalization, then adapt each borrowed helper through lightweight converters.
+    - description: Trace emission occurs through multiple bespoke recorders.
+      resolution: Standardize on zwi2ny TraceWriter interface, providing shims for policy trace expectations and enforcing schema validation at emit time.
+    - description: Manager-centric branches remove adapter execution while adapter-centric branches ignore manager semantics.
+      resolution: Layer BudgetManager as an injectable collaborator invoked by the existing FlowRunner, ensuring scope stack safety before/after adapter calls.
+  redesign_targets:
+    - name: budget_scope_registry
+      intent: Centralize run/node/loop/spec budget preparation with immutable configs and sharing logic between manager and runner.
+    - name: breach_action_pipeline
+      intent: Harmonize soft/hard stop semantics so that warnings propagate via traces while stop actions translate into deterministic runner control flow.
+    - name: policy_budget_trace_bridge
+      intent: Ensure policy push/pop and budget charge/breach events share a sink schema without duplicating recorder logic.
+  open_questions:
+    - "Should BudgetManager expose async hooks for future concurrency, or can synchronous execution cover current acceptance scope?"
+    - "How should simultaneous policy violations and budget breaches be ordered in traces and exceptions to maintain deterministic replay?"
+    - "Do we emit summarized overage telemetry on RunResult or rely solely on trace sinks to avoid bloating outputs?"

@@ -1,0 +1,77 @@
+metadata:
+  last_updated: 2024-10-10
+  repo: pfahlr/ragx
+  tags: [dsl, codex_task, policy_engine, traceability, refactor]
+  execution_mode: plan_synthesis
+analysis:
+  branch_diffs:
+    - from: codex/integrate-budget-guards-with-runner
+      to: codex/integrate-budget-guards-with-runner-zwi2ny
+      git_diff: |
+        (no diff; DSL policy engine files are byte-identical)
+      commentary: |
+        zwi2ny is a direct copy of integrate-budget-guards-with-runner. The PolicyStack,
+        datamodels, and absence of tests are unchanged, so there is no divergent behavior to reconcile.
+    - from: codex/integrate-budget-guards-with-runner
+      to: codex/integrate-budget-guards-with-runner-pbdel9
+      git_diff: |
+        (no diff; DSL policy engine files are byte-identical)
+      commentary: |
+        pbdel9 mirrors the same implementation. There are no additional safeguards or tests beyond
+        what the base branch already provides.
+    - from: codex/integrate-budget-guards-with-runner
+      to: codex/implement-budget-guards-with-test-first-approach
+      git_diff: |
+        (no diff; DSL policy engine files are byte-identical)
+      commentary: |
+        Despite the branch name, this variant ships the same PolicyStack module and likewise omits
+        any budget-policy integration tests.
+    - from: codex/integrate-budget-guards-with-runner
+      to: codex/implement-budget-guards-with-test-first-approach-qhq0jq
+      git_diff: |
+        (no diff; DSL policy engine files are byte-identical)
+      commentary: |
+        qhq0jq contributes no functional divergence. Policy resolution and tracing semantics remain
+        identical to the base branch.
+    - from: codex/integrate-budget-guards-with-runner
+      to: codex/implement-budget-guards-with-test-first-approach-8wxk32
+      git_diff: |
+        (no diff; DSL policy engine files are byte-identical)
+      commentary: |
+        8wxk32 is another carbon copy; there are no incremental fixes or regressions to highlight.
+    - from: codex/integrate-budget-guards-with-runner
+      to: codex/implement-budget-guards-with-test-first-approach-fa0vm9
+      git_diff: |
+        (no diff; DSL policy engine files are byte-identical)
+      commentary: |
+        fa0vm9 matches the base implementation verbatim. No additional coverage, validation, or API
+        work is present.
+  summary_of_findings:
+    common_flaws:
+      - Missing test coverage for PolicyStack enforcement, trace emission, and tool-set validation.
+      - FlowRunner never consults PolicyStack, so runner integration is functionally absent.
+      - PolicyTraceRecorder is only used by tests (which are missing), leaving tracing unverified.
+    unique_strengths:
+      - The shared PolicyStack emits push/pop/resolution/violation events and validates tool-set cycles.
+      - PolicyDecision records allow/deny provenance, which is useful for future diagnostics.
+    critical_gaps:
+      - No branch enforces policy budgets within FlowRunner; tools can run without policy checks.
+      - Tool registry normalization lacks schema validation beyond tag iterability.
+      - No branch exercises enforce() raising PolicyViolationError, so regressions would go unnoticed.
+confidence_notes:
+  - area: enforce() semantics
+    confidence: medium
+    reason: Implementation appears sound, but the lack of tests and runner wiring leaves behavior unproven.
+  - area: runner-policy integration
+    confidence: low
+    reason: Runner never calls PolicyStack, so intent is unclear and requires design confirmation.
+coverage_gaps:
+  - missing: unit test for policy_resolved trace payload shape and content.
+  - missing: validation test for tool_set cycle detection and unknown tool references.
+  - missing: integration test covering FlowRunner invoking PolicyStack.enforce().
+traceability_checklist:
+  - must-emit: push
+  - must-emit: pop
+  - must-emit: policy_resolved
+  - must-emit: violation
+  - must-raise: PolicyViolationError

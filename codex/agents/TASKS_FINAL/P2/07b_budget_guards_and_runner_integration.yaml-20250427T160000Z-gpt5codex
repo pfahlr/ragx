@@ -1,0 +1,115 @@
+version: 1
+id: 07b_budget_guards_and_runner_integration_P2
+title: Budget guards integrated in FlowRunner
+summary: Unify budget metering, manager orchestration, and runner traceability by merging the strongest concepts from divergent Codex branches into a cohesive FlowRunner implementation.
+description: >-
+  Reconcile the competing budget guard implementations by standardising cost normalization, adopting a reusable BudgetManager,
+  and wiring FlowRunner to emit schema-compliant policy and budget traces. The plan keeps adapters and PolicyStack integration
+  from the baseline while reusing structured telemetry and breach handling from the alternative branches.
+metadata:
+  owners: [pfahlr@gmail.com]
+  labels: [dsl, flow-runner, budget-guards]
+  priority: P2
+  risk: medium
+  last_updated: 2025-04-27
+  links:
+    - type: spec
+      url: https://github.com/pfahlr/ragx/blob/main/codex/specs/flow_runner_spec.yaml
+    - type: spec
+      url: https://github.com/pfahlr/ragx/blob/main/codex/specs/flow_runner_spec_ext.yaml
+strategy:
+  tests_first: true
+  deterministic: true
+  golden_management: manual
+scope:
+  goals:
+    - Normalise budget cost schemas and breach semantics across run, loop, node, and spec scopes.
+    - Integrate BudgetManager preflight/commit lifecycle with FlowRunner while preserving adapter and PolicyStack wiring.
+    - Emit deterministic budget and policy trace events that satisfy the DSL structured logging contract.
+    - Restore and extend automated tests covering budget meter limits, loop stop behaviour, and trace payload fidelity.
+  non_goals:
+    - Introducing asynchronous adapter execution or speculative concurrency features.
+    - Extending PolicyStack feature set beyond enforcing existing allowlist/denylist semantics.
+assumptions:
+  - Existing FlowRunner adapters remain synchronous and provide both estimate and execute hooks.
+  - Trace consumers expect JSONL payloads with immutable mappings as per current spec guidance.
+constraints:
+  - Preserve compatibility with `tests/e2e/test_runner_budget_stop.py` and related fixtures.
+  - Avoid altering CLI or configuration surfaces outside the DSL runner scope.
+component_ids:
+  - pkgs.dsl.budget
+  - pkgs.dsl.runner
+  - pkgs.dsl.trace
+  - tests.unit.budget
+  - tests.e2e.runner
+depends_on:
+  - 07a_policy_stack_refinement
+arg_spec:
+  - flow_id
+  - run_id
+config_flags:
+  - name: enforce_budgets
+    type: bool
+    default: true
+    desc: Toggle FlowRunner budget enforcement for diagnostic runs.
+    env: FLOW_RUNNER_ENFORCE_BUDGETS
+observability_requirements:
+  - Emit `budget_charge`, `budget_breach`, `policy_resolved`, and `policy_violation` events with immutable payloads.
+  - Capture loop iteration stop reasons and breach metadata in traces for postmortem analysis.
+structured_logging_contract:
+  format: jsonl
+  storage_path_prefix: logs/flow_runner/budgets
+  latest_symlink: logs/flow_runner/latest
+  retention: 30d
+  event_fields:
+    - event
+    - scope
+    - run_id
+    - node_id
+    - loop_iteration
+    - cost
+    - remaining
+    - overages
+    - stop_reason
+    - policy_stack_depth
+    - timestamp
+  metadata_fields:
+    - flow_id
+    - run_id
+    - environment
+    - tenant_id
+  volatile_fields:
+    - timestamp
+    - duration_ms
+ci:
+  xfail_marker: budget_guard_integration
+  workflows:
+    - name: ensure_green
+      gates:
+        - ./scripts/ensure_green.sh
+      artifacts:
+        - logs/flow_runner/budgets
+actions:
+  - stage: domain_model_alignment
+    summary: Consolidate budget cost models, breach outcomes, and supporting utilities into a single canonical module before wiring higher-level orchestration.
+    tasks:
+      - Refactor `pkgs/dsl/budget.py` to expose unified `BudgetSpec`, `CostSnapshot`, and `BudgetCharge` dataclasses adapted from codex/integrate-budget-guards-with-runner-zwi2ny and codex/integrate-budget-guards-with-runner-pbdel9.
+      - Extract a shared normalization helper (e.g., `pkgs/dsl/costs.py`) that converts seconds to milliseconds and validates metric keys, resolving conflicts across pbdel9, 8wxk32, and fa0vm9 branches.
+      - Reinstate deterministic soft/hard breach handling using `BudgetMode` semantics from codex/implement-budget-guards-with-test-first-approach-qhq0jq.
+  - stage: manager_and_trace_integration
+    summary: Introduce a cohesive BudgetManager and trace emission layer that coordinates scopes and reuses TraceWriter abstractions.
+    tasks:
+      - Implement BudgetManager preflight/commit lifecycle by adapting codex/implement-budget-guards-with-test-first-approach while storing scope state and remaining budgets via immutable snapshots.
+      - Create a shared `TraceEventEmitter` that wraps the TraceWriter from codex/integrate-budget-guards-with-runner-zwi2ny and enriches payloads with pbdel9 overage data.
+      - Add unit tests for BudgetManager, covering run/node/loop/spec scopes and soft-warning traces, extending `tests/unit/test_budget_meter_limits.py` and new fixtures as needed.
+  - stage: runner_execution_and_policy_wiring
+    summary: Rewire FlowRunner to consume the canonical BudgetManager, enforce policies, and emit end-to-end traces.
+    tasks:
+      - Integrate fa0vm9’s adapter protocol and loop stop signalling into the existing FlowRunner, ensuring stack safety and compatibility with PolicyStack enforcement from the baseline branch.
+      - Emit budget and policy trace events through the shared emitter, guaranteeing `policy_resolved`, `budget_charge`, and stop-reason events align with the structured logging contract.
+      - Restore end-to-end acceptance coverage by updating `tests/e2e/test_runner_budget_stop.py` and introducing regression tests for simultaneous policy violation and budget breach scenarios.
+acceptance:
+  - tests/unit/test_budget_meter_limits.py passes
+  - tests/unit/test_flow_runner_budget_manager.py passes
+  - tests/e2e/test_runner_budget_stop.py passes
+  - Structured traces validated against the TraceEventEmitter contract

@@ -1,0 +1,131 @@
+plan_preview:
+  branch_inclusions:
+    - codex/integrate-budget-guards-with-runner: retain adapter-driven FlowRunner execution and baseline acceptance coverage.
+    - codex/integrate-budget-guards-with-runner-zwi2ny: adopt `BudgetSpec`/`CostSnapshot` typing and trace-writer abstraction.
+    - codex/integrate-budget-guards-with-runner-pbdel9: reuse adapter contract and timestamped tracing for richer observability.
+    - codex/implement-budget-guards-with-test-first-approach: integrate `BudgetManager` orchestrator and immutable trace payloads.
+    - codex/implement-budget-guards-with-test-first-approach-qhq0jq: fold in preview/charge separation with `BudgetMode` semantics.
+    - codex/implement-budget-guards-with-test-first-approach-8wxk32: leverage immutable `Cost`/`BudgetDecision` arithmetic helpers.
+    - codex/implement-budget-guards-with-test-first-approach-fa0vm9: keep concise `BudgetBreach` diagnostics for warnings/errors.
+  conflict_resolution:
+    - Normalize budgets around a single `BudgetSpec` + `Cost` model that supports preview snapshots while preserving adapter-based cost ingestion.
+    - Centralize breach handling inside `BudgetManager` so FlowRunner only reacts to manager outcomes instead of bespoke loop checks.
+    - Use one trace contract (`RunnerTraceRecorder`) that can emit to the existing trace sink while still supporting streaming writers.
+  exclusions:
+    - Drop mock-cost execution paths that bypass adapters (e.g., `_execute_node` synthesized costs).
+    - Avoid bespoke trace timestamping until a schema is formalized; stick to deterministic payloads for testing.
+  open_questions:
+    - How should `breach_action="warn"` interact with loop stop conditions when both run and loop meters overrun simultaneously?
+    - Do we need to emit combined policy+budget traces, or can budgets rely on the Runner trace channel only?
+    - Should soft budgets accumulate warnings per charge or throttle repeated emissions per scope?
+refinement_opportunities:
+  - Introduce a shared `BudgetEvent` schema to serialize trace payloads for downstream tooling.
+  - Factor policy and budget trace recorders to share a common sink interface for future aggregation.
+shared_blocks:
+  - name: budget_models
+    implementation: |
+      @dataclass(frozen=True, slots=True)
+      class Cost:
+          usd: float = 0.0
+          tokens: int = 0
+          calls: int = 0
+          time_ms: float = 0.0
+
+          def __add__(self, other: "Cost") -> "Cost":
+              return Cost(
+                  usd=self.usd + other.usd,
+                  tokens=self.tokens + other.tokens,
+                  calls=self.calls + other.calls,
+                  time_ms=self.time_ms + other.time_ms,
+              )
+
+      @dataclass(frozen=True, slots=True)
+      class BudgetSpec:
+          scope: str
+          mode: str = "hard"
+          breach_action: str | None = None
+          max_usd: float | None = None
+          max_tokens: int | None = None
+          max_calls: int | None = None
+          time_limit_ms: float | None = None
+  - name: trace_recorder_integration
+    implementation: |
+      def emit_budget_event(recorder: RunnerTraceRecorder | None,
+                            sink: Callable[[RunnerTraceEvent], None] | None,
+                            *,
+                            event: str,
+                            scope_type: str,
+                            scope_id: str,
+                            payload: Mapping[str, object]) -> RunnerTraceEvent:
+          return emit_trace_event(
+              recorder,
+              sink,
+              event=event,
+              scope_type=scope_type,
+              scope_id=scope_id,
+              payload=payload,
+          )
+tasks:
+  - id: consolidate_budget_models
+    execution_mode: always
+    reusable: true
+    description: >
+      Define unified `Cost`, `BudgetSpec`, and `BudgetDecision` data classes plus helpers that combine the typed specs from zwi2ny and immutable arithmetic from 8wxk32 while retaining breach metadata from fa0vm9.
+    source_files:
+      - pkgs/dsl/budget.py
+    adapted_from_branch: codex/integrate-budget-guards-with-runner-zwi2ny
+    implementation_ref: budget_models
+  - id: implement_budget_manager_core
+    execution_mode: always
+    reusable: true
+    description: Implement a `BudgetManager` that offers preflight/commit APIs for run/node/spec/loop scopes, emits trace events via `RunnerTraceRecorder`, and resolves preview/charge semantics consistently.
+    dependencies: [consolidate_budget_models]
+    source_files:
+      - pkgs/dsl/budget.py
+      - pkgs/dsl/trace.py
+    adapted_from_branch: codex/implement-budget-guards-with-test-first-approach
+    implementation:
+      python: |
+        class BudgetManager:
+            def preflight_node(self, node_id: str, cost: Mapping[str, object]) -> BudgetPreflightResult:
+                ...
+  - id: wire_flow_runner_with_manager
+    execution_mode: always
+    reusable: false
+    description: Update FlowRunner to construct the `BudgetManager`, forward adapter costs through manager previews/commits, and preserve baseline adapter/trace behavior.
+    dependencies: [implement_budget_manager_core]
+    source_files:
+      - pkgs/dsl/runner.py
+      - tests/e2e/test_runner_budget_stop.py
+    adapted_from_branch: codex/integrate-budget-guards-with-runner-pbdel9
+    implementation:
+      python: |
+        manager = self._budget_manager
+        preflight = manager.preflight_node(node_id, cost)
+        warnings.extend(preflight.warnings)
+        commit = manager.commit_node(node_id, cost)
+        warnings.extend(commit.warnings)
+  - id: harden_trace_and_tests
+    execution_mode: always
+    reusable: true
+    description: Extend unit/e2e tests to cover preview vs commit flows, ensure `policy_resolved` traces remain intact, and verify stop reasons plus warnings for both hard and soft budgets.
+    dependencies: [wire_flow_runner_with_manager]
+    source_files:
+      - tests/unit/test_budget_meter_limits.py
+      - tests/unit/test_flow_runner_budget_manager.py
+      - tests/e2e/test_runner_budget_stop.py
+    adapted_from_branch: codex/implement-budget-guards-with-test-first-approach
+    tests:
+      - name: test_loop_budget_stop_reason_includes_soft_warning
+        file: tests/e2e/test_runner_budget_stop.py
+handoff_contract:
+  expected_consumer: gpt-5-codex
+  input_format: schema://codex/specs/schemas/full_task.schema.json
+  output_type: executable-python+unit-tests
+codex_directives:
+  must:
+    - attribute reused logic to specific branches in PR descriptions and docstrings.
+    - emit `policy_resolved` trace events alongside new budget traces.
+  do_not:
+    - remove adapter-based execution paths or invent unsupported DSL schema fields.
+    - reuse mock-cost fixtures without routing through adapters and `BudgetManager` previews.

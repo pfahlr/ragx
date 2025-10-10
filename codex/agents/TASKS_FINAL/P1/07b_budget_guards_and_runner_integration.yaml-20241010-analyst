@@ -1,0 +1,73 @@
+plan_preview:
+  branch_inclusions:
+    - codex/integrate-budget-guards-with-runner: canonical PolicyStack, trace emission, and enforce() contract.
+    - codex/implement-budget-guards-with-test-first-approach: identical datamodel exports and registry normalization.
+  conflict_resolution:
+    - Preserve shared PolicyStack logic but extend with runner hooks rather than duplicating policy pushes per loop.
+    - Introduce real tests to lock trace payloads before refactoring enforcement semantics.
+  exclusions:
+    - Skip budget meter refactors; focus solely on policy/runner glue.
+    - Do not add new tool registry schema fields beyond those already present.
+  open_questions:
+    - How should FlowRunner acquire per-scope policies (flow spec vs external source)?
+    - Should trace events stream via callback or remain recorder-only for now?
+refinement_opportunities:
+  - Extract PolicyStack trace emission into a dedicated PolicyEventEmitter helper for reuse in runner diagnostics.
+  - Layer schema validation for tool metadata using existing validation utilities once available.
+shared_blocks:
+  - name: policy_event_emitter
+    implementation: |
+      def emit_event(emitter, *, event, scope, **payload):
+          record = PolicyTraceEvent(event=event, scope=scope, data=mapping_proxy(payload))
+          emitter(record)
+  - name: policy_resolution_helper
+    implementation: |
+      def resolve_policy(stack, candidates):
+          snapshot = stack.snapshot(candidates=candidates)
+          return snapshot.decisions
+tasks:
+  - id: harden_policy_core
+    execution_mode: always
+    reusable: true
+    description: >-
+      Strengthen PolicyStack with explicit tool-set validation errors, richer trace payloads, and docstrings without altering semantics.
+    adapted_from_branch: codex/integrate-budget-guards-with-runner
+    source_files:
+      - pkgs/dsl/policy.py
+      - pkgs/dsl/models.py
+    implementation_ref: policy_event_emitter
+    tests:
+      - name: test_policy_trace_contract
+        file: tests/unit/dsl/test_policy_traces.py
+  - id: wire_runner_enforcement
+    execution_mode: always
+    reusable: false
+    description: Integrate PolicyStack.enforce() into FlowRunner execution path with deterministic trace coupling.
+    adapted_from_branch: codex/integrate-budget-guards-with-runner
+    dependencies: [harden_policy_core]
+    source_files:
+      - pkgs/dsl/runner.py
+      - pkgs/dsl/policy.py
+    tests:
+      - name: test_runner_policy_violation
+        file: tests/unit/dsl/test_runner_policy.py
+  - id: add_policy_budget_tests
+    execution_mode: always
+    reusable: true
+    description: Create unit and integration tests covering allow/deny decisions, trace sequencing, and FlowRunner enforcement outcomes.
+    adapted_from_branch: codex/implement-budget-guards-with-test-first-approach
+    dependencies: [wire_runner_enforcement]
+    source_files:
+      - tests/unit/dsl/test_policy_traces.py
+      - tests/unit/dsl/test_runner_policy.py
+handoff_contract:
+  expected_consumer: gpt-5-codex
+  input_format: schema://codex/specs/schemas/full_task.schema.json
+  output_type: executable-python+unit-tests
+codex_directives:
+  must:
+    - attribute reused logic to specific branches in code comments or commit messages.
+    - emit policy_resolved trace events with deterministic payload ordering.
+  do_not:
+    - invent new DSL fields without updating the spec first.
+    - bypass PolicyViolationError raising path when violations occur.

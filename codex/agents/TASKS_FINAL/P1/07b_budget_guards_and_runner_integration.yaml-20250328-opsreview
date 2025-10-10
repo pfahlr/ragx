@@ -1,0 +1,112 @@
+plan_preview:
+  branch_inclusions:
+    - codex/integrate-budget-guards-with-runner: keep proven `PolicyStack` enforcement contract and runner trace event schema.
+    - codex/integrate-budget-guards-with-runner-zwi2ny: adopt `BudgetSpec`, `CostSnapshot`, and trace-writer abstraction.
+    - codex/integrate-budget-guards-with-runner-pbdel9: preserve `breach_action` semantics and loop stop reason accounting.
+    - codex/implement-budget-guards-with-test-first-approach: reuse `BudgetManager` orchestration pattern for run/loop/node scopes.
+    - codex/implement-budget-guards-with-test-first-approach-8wxk32: leverage additive `Cost` helpers and `BudgetDecision` snapshots.
+    - codex/implement-budget-guards-with-test-first-approach-fa0vm9: extract `BudgetBreach` telemetry payload for observability.
+  conflict_resolution:
+    - Normalize budget limit fields to a single canonical schema (`max_usd`, `max_tokens`, `max_calls`, `time_limit_sec`) and provide converters for ms-based specs.
+    - Ensure `BudgetMeter.charge` validates thresholds before mutating spend counters to avoid irreversible state.
+    - Route `breach_action` handling through `BudgetManager` so loops honor `stop` without losing hard exception semantics.
+    - Centralize trace emission (policy + budget) via a shared writer to prevent duplicate events across `_reported_breaches` sets.
+  exclusions:
+    - Drop stubbed runner APIs (`plan`, unused cache knobs) introduced in unfinished branches until concrete requirements exist.
+    - Avoid speculative loop cost hinting until budget predictors have acceptance tests.
+  open_questions:
+    - Should soft-breach warnings be escalated to runner outputs or only to traces?
+    - How should policy violations interact with budget breaches when both occur in the same node?
+    - Do we need persistence for trace events beyond the in-memory writer used in tests?
+refinement_opportunities:
+  - Introduce a `BudgetTelemetry` dataclass encapsulating breach and remaining headroom for consistent logging.
+  - Refactor `FlowRunner` node execution into strategy objects to decouple adapters from enforcement pipelines.
+  - Extend `BudgetManager` with context managers for plan/run phases once requirements stabilize.
+shared_blocks:
+  - name: budget_domain_model
+    implementation: |
+      @dataclass(frozen=True, slots=True)
+      class CostSnapshot:
+          usd: float = 0.0
+          tokens: int = 0
+          calls: int = 0
+          seconds: float = 0.0
+  - name: trace_event_emitter
+    implementation: |
+      class PolicyTraceWriter:
+          def __init__(self, sink: Callable[[PolicyTraceEvent], None] | None = None):
+              self._sink = sink or (lambda event: None)
+              self._events: list[PolicyTraceEvent] = []
+          def emit(self, event: PolicyTraceEvent) -> None:
+              self._events.append(event)
+              self._sink(event)
+tasks:
+  - id: consolidate_policy_stack_and_tracing
+    execution_mode: always
+    reusable: true
+    description: Ensure `PolicyStack` API, trace events, and violation errors remain intact and gain typed writer support.
+    source_files:
+      - pkgs/dsl/policy.py
+      - pkgs/dsl/models.py
+    adapted_from_branch: codex/integrate-budget-guards-with-runner
+    implementation_ref: trace_event_emitter
+    tests:
+      - name: test_policy_traces_cover_all_events
+        file: tests/unit/test_policy_stack.py
+  - id: normalize_budget_domain_model
+    execution_mode: always
+    reusable: true
+    description: Merge `BudgetSpec`, `CostSnapshot`, `BudgetDecision`, and breach payloads into a single cohesive module with pre-validation.
+    dependencies: [consolidate_policy_stack_and_tracing]
+    source_files:
+      - pkgs/dsl/budget.py
+    adapted_from_branch: codex/integrate-budget-guards-with-runner-zwi2ny
+    implementation_ref: budget_domain_model
+    tests:
+      - name: test_budget_meter_prevents_mutating_on_failure
+        file: tests/unit/test_budget_meter.py
+  - id: implement_budget_manager_pipeline
+    execution_mode: always
+    reusable: true
+    description: Build a `BudgetManager` that instantiates run/loop/node meters, enforces `breach_action`, and emits telemetry without double-reporting.
+    dependencies: [normalize_budget_domain_model]
+    source_files:
+      - pkgs/dsl/budget.py
+      - pkgs/dsl/runner.py
+    adapted_from_branch: codex/implement-budget-guards-with-test-first-approach
+    tests:
+      - name: test_budget_manager_halts_loop_on_stop
+        file: tests/unit/test_budget_manager.py
+  - id: integrate_runner_with_budgets_and_policy
+    execution_mode: always
+    reusable: false
+    description: Wire `FlowRunner` to invoke `BudgetManager` and `PolicyStack.enforce`, preserving loop stop reasons and structured traces.
+    dependencies: [implement_budget_manager_pipeline]
+    source_files:
+      - pkgs/dsl/runner.py
+      - pkgs/dsl/policy.py
+    adapted_from_branch: codex/integrate-budget-guards-with-runner-pbdel9
+    tests:
+      - name: test_flow_runner_budget_and_policy_violation
+        file: tests/acceptance/test_dsl_runner.py
+  - id: add_e2e_budget_policy_coverage
+    execution_mode: optional
+    reusable: false
+    description: Create end-to-end scenarios that exercise simultaneous run, loop, and node budgets with policy violations to validate trace ordering.
+    dependencies: [integrate_runner_with_budgets_and_policy]
+    source_files:
+      - tests/e2e/test_dsl_runner_acceptance.py
+    adapted_from_branch: codex/implement-budget-guards-with-test-first-approach-fa0vm9
+handoff_contract:
+  expected_consumer: gpt-5-codex
+  input_format: schema://codex/specs/schemas/full_task.schema.json
+  output_type: executable-python+unit-tests
+codex_directives:
+  must:
+    - attribute reused logic to specific branches in PR descriptions and code comments where appropriate.
+    - emit `policy_resolved` trace events in every enforcement path.
+    - cover soft and hard budget breaches with unit and acceptance tests.
+  do_not:
+    - mutate budget meters on failed charges.
+    - remove existing policy validation for unknown tools or cycles.
+    - introduce new CLI flags without spec updates.

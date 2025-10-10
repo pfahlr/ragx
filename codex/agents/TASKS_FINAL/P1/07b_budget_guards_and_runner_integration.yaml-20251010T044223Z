@@ -1,0 +1,121 @@
+plan_preview:
+  branch_inclusions:
+    - codex/integrate-budget-guards-with-runner: PolicyStack implementation, hierarchical resolution, runner loop skeleton, and baseline BudgetMeter semantics.
+    - codex/integrate-budget-guards-with-runner-zwi2ny: reusable TraceWriter/TraceEvent abstractions for shared observability.
+    - codex/integrate-budget-guards-with-runner-pbdel9: aggregated overage reporting to improve breach diagnostics.
+    - codex/implement-budget-guards-with-test-first-approach: BudgetManager orchestration concept and DI-friendly runner setup.
+    - codex/implement-budget-guards-with-test-first-approach-qhq0jq: BudgetMode enum/Cost breakdown ergonomics for clarity.
+    - codex/implement-budget-guards-with-test-first-approach-8wxk32: detailed loop/node tracing, stop-reason semantics, and execution context snapshots.
+    - codex/implement-budget-guards-with-test-first-approach-fa0vm9: adapter protocol with preflight/commit separation and MappingProxy trace payloads.
+  conflict_resolution:
+    - Normalize budget APIs around a single `BudgetMeter` supporting preflight checks, aggregated overages, and mode-aware breach actions; expose adapter protocol via BudgetManager facade.
+    - Align runner spec consumption to `graph.control`/`graph.nodes` while preserving stop reasons; integrate policy enforcement before adapter invocation.
+    - Unify tracing through shared Policy/Runner event schema using TraceWriter emitter; ensure policy and runner share sink plumbing.
+  exclusions:
+    - Drop branch-specific helper types (`BudgetDecision`, `LoopIterationOutcome`) unless demanded by master spec.
+    - Avoid bespoke cost hint heuristics that rely on undocumented spec fields.
+  open_questions:
+    - Should policy and runner share a single trace sink interface (same dataclass) or remain separate but compatible payload shapes?
+    - Are loop-level soft breaches allowed to continue with warnings, or must they halt immediately when `breach_action=stop` is absent?
+    - Do adapters need asynchronous support in this milestone, or can synchronous Protocol cover acceptance scope?
+refinement_opportunities:
+  - Refactor PolicyStack tracing to delegate to a shared TraceWriter implementation and avoid duplicate recorder logic.
+  - Replace ad-hoc mapping conversions with frozen dataclasses backed by MappingProxy for deterministic payloads.
+shared_blocks:
+  - name: trace_event_emitter
+    implementation: |
+      def emit_trace_event(writer: TraceWriter | None, *, event: str, scope: str, payload: Mapping[str, object]) -> None:
+          if writer is None:
+              return
+          writer.emit(event, {"scope": scope, **payload})
+  - name: budget_overage_report
+    implementation: |
+      def summarize_overages(overages: Mapping[str, float]) -> dict[str, float]:
+          return {metric: float(value) for metric, value in overages.items() if value > 0}
+  - name: policy_enforcement_hook
+    implementation: |
+      def enforce_tool(policy: PolicyStack, tool: str, *, raise_on_violation: bool = True) -> PolicySnapshot:
+          snapshot = policy.enforce(tool, raise_on_violation=raise_on_violation)
+          return snapshot
+tasks:
+  - id: harmonize_policy_core
+    execution_mode: always
+    reusable: true
+    description: >
+      Consolidate PolicyStack, PolicyTraceRecorder, and enforce()/snapshot APIs with shared trace emitter plumbing.
+    adapted_from_branch: codex/integrate-budget-guards-with-runner
+    source_files:
+      - pkgs/dsl/policy.py
+      - pkgs/dsl/models.py
+    implementation_ref: policy_enforcement_hook
+    tests:
+      - name: test_policy_stack_traces
+        file: tests/unit/test_policy_stack_traces.py
+  - id: establish_budget_runtime
+    execution_mode: always
+    reusable: true
+    description: >
+      Implement a unified BudgetMeter/BudgetManager pair that supports mode-aware preflight, aggregated overages, and breach actions, exposing adapter-friendly APIs.
+    adapted_from_branch: codex/implement-budget-guards-with-test-first-approach-qhq0jq
+    dependencies: [harmonize_policy_core]
+    source_files:
+      - pkgs/dsl/budget.py
+      - pkgs/dsl/__init__.py
+    implementation_ref: budget_overage_report
+    tests:
+      - name: test_budget_meter_modes
+        file: tests/unit/test_budget_meter_modes.py
+      - name: test_budget_manager_preflight
+        file: tests/unit/test_budget_manager_preflight.py
+  - id: instrument_runner_with_guards
+    execution_mode: always
+    reusable: false
+    description: >
+      Integrate BudgetManager and PolicyStack into FlowRunner, ensuring preflight checks, enforce() gating, loop/node stop reasons, and trace emission via TraceWriter.
+    adapted_from_branch: codex/implement-budget-guards-with-test-first-approach-8wxk32
+    dependencies: [establish_budget_runtime]
+    source_files:
+      - pkgs/dsl/runner.py
+      - pkgs/dsl/trace.py
+    implementation:
+      python: |
+        class FlowRunner:
+            def __init__(self, *, adapters: Mapping[str, ToolAdapter], trace: TraceWriter | None = None, policy: PolicyStack | None = None) -> None:
+                self._adapters = dict(adapters)
+                self._trace = trace
+                self._policy = policy
+                self._budget_manager = BudgetManager(trace=trace)
+      shared_refs:
+        - trace_event_emitter
+        - policy_enforcement_hook
+    tests:
+      - name: test_runner_budget_stop
+        file: tests/e2e/test_runner_budget_stop.py
+      - name: test_runner_policy_violation_halts
+        file: tests/unit/test_runner_policy_violation.py
+  - id: finalize_trace_contract
+    execution_mode: optional
+    reusable: true
+    description: >
+      Define unified trace schema, align PolicyTraceEvent and RunnerTraceEvent payloads, and document schema contract.
+    adapted_from_branch: codex/integrate-budget-guards-with-runner-zwi2ny
+    dependencies: [instrument_runner_with_guards]
+    source_files:
+      - pkgs/dsl/trace.py
+      - docs/dsl/trace_contract.md
+    implementation_ref: trace_event_emitter
+    artifacts:
+      - name: trace_schema
+        file: codex/specs/schemas/dsl_trace_event.schema.json
+handoff_contract:
+  expected_consumer: gpt-5-codex
+  input_format: schema://codex/specs/schemas/full_task.schema.json
+  output_type: executable-python+unit-tests
+codex_directives:
+  must:
+    - attribute reused logic to specific branches in docstrings or comments
+    - emit `policy_resolved` trace and propagate through runner trace sink
+    - keep adapter protocol synchronous but extensible for async follow-ups
+  do_not:
+    - introduce undocumented spec fields
+    - bypass BudgetManager when charging loop or node scopes
