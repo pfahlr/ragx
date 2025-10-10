@@ -239,10 +239,10 @@ class FlowRunner:
             node_decision = self._apply_budget(
                 node_scope, cost_snapshot, commit=False
             )
-            self._budgets.commit_charge(run_decision)
+            self._budgets.commit_charge(node_decision)
             if loop_decision is not None:
                 self._budgets.commit_charge(loop_decision)
-            self._budgets.commit_charge(node_decision)
+            self._budgets.commit_charge(run_decision)
             result = adapter.execute(node_payload)
             record = NodeExecution(
                 node_id=node_id,

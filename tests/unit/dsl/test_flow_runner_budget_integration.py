@@ -94,6 +94,36 @@ def test_hard_node_breach_stops_execution(
     assert any(evt.event == "budget_breach" and evt.scope_type == "node" for evt in events)
 
 
+def test_run_budget_not_charged_when_node_rejected(
+    budget_manager: BudgetManager,
+    policy_stack: PolicyStack,
+    trace_emitter: TraceEventEmitter,
+) -> None:
+    adapter = FakeAdapter(
+        cost_by_node={
+            "n1": {"time_ms": 40},
+            "n2": {"time_ms": 60},
+        },
+        results={"n1": "ok", "n2": "skip"},
+    )
+    runner = FlowRunner(
+        adapters={"echo": adapter},
+        budget_manager=budget_manager,
+        policy_stack=policy_stack,
+        trace=trace_emitter,
+    )
+    nodes = [
+        {"id": "n1", "tool": "echo", "params": {}},
+        {"id": "n2", "tool": "echo", "params": {}},
+    ]
+    with pytest.raises(BudgetBreachError):
+        runner.run(flow_id="flow-1", run_id="run-1", nodes=nodes)
+
+    run_scope = bm.ScopeKey(scope_type="run", scope_id="run-1")
+    spent = budget_manager.spent(run_scope, "run-soft")
+    assert spent.time_ms == pytest.approx(40.0)
+
+
 def test_soft_run_breach_warns_but_allows_completion(
     trace_emitter: TraceEventEmitter,
 ) -> None:
