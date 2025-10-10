@@ -14,6 +14,22 @@ from .policy import (  # noqa: F401
     PolicyTraceRecorder,
     PolicyViolationError,
 )
+from .budget import (  # noqa: F401
+    BudgetBreachError,
+    BudgetDecision,
+    BudgetMeter,
+    BudgetMode,
+    BudgetSpec,
+    CostSnapshot,
+)
+from .budget_manager import BudgetManager, BudgetScope  # noqa: F401
+from .runner import (  # noqa: F401
+    FlowRunner,
+    RunResult,
+    ToolAdapter,
+    ToolExecutionResult,
+)
+from .trace import TraceEvent, TraceEventEmitter  # noqa: F401
 
 __all__ = [
     "PolicyDecision",
@@ -26,4 +42,18 @@ __all__ = [
     "PolicyTraceRecorder",
     "PolicyViolationError",
     "ToolDescriptor",
+    "BudgetBreachError",
+    "BudgetDecision",
+    "BudgetMeter",
+    "BudgetMode",
+    "BudgetSpec",
+    "BudgetManager",
+    "BudgetScope",
+    "CostSnapshot",
+    "FlowRunner",
+    "RunResult",
+    "ToolAdapter",
+    "ToolExecutionResult",
+    "TraceEvent",
+    "TraceEventEmitter",
 ]

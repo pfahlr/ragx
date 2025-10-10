@@ -1,0 +1,15 @@
+missing_tests:
+  task_id: 07b_budget_guards_and_runner_integration.yaml
+  proposed_tests:
+    - name: test_flow_runner_soft_budget_warning_trace
+      rationale: Ensure soft budgets append warnings and emit `budget_warning` events without halting execution.
+      source_module: pkgs/dsl/budget_manager.py
+      priority: medium
+    - name: test_runner_policy_and_budget_violation_same_iteration
+      rationale: Validate that FlowRunner surfaces both policy denial and loop budget stop when occurring in the same iteration.
+      source_module: pkgs/dsl/runner.py
+      priority: medium
+    - name: test_trace_event_emitter_schema_validation
+      rationale: Add jsonschema validation of emitted payloads to catch contract drift.
+      source_module: pkgs/dsl/trace.py
+      priority: low

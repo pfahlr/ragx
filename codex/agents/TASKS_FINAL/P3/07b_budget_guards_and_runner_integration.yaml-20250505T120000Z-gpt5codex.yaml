@@ -1,0 +1,66 @@
+summary: Integrate budget domain models, manager orchestration, and FlowRunner enforcement with schema-aligned tracing.
+justification: |
+  Consolidates reusable assets from prior branches by pairing immutable budget data classes with a BudgetManager
+  facade and runner integration that respects DSL breach semantics. Emphasizes deterministic tests for hard/soft
+  budgets and loop stop signals to close Phase 2 gaps.
+steps:
+  - id: domain_models
+    description: Reintroduce canonical budget value objects and trace emitter utilities with normalization helpers.
+  - id: budget_manager
+    description: Build BudgetManager orchestration for run/node/loop scopes using preflight/commit with immutable outcomes.
+  - id: runner_integration
+    description: Wire FlowRunner to adapters, policy stack, and BudgetManager enforcing breach actions and trace emission.
+  - id: validation
+    description: Expand unit/e2e-style coverage for hard/soft budgets, loop halts, and warning propagation.
+modules:
+  - path: pkgs/dsl/budget.py
+    role: Immutable budget domain objects, normalization helpers, BudgetMeter, and breach errors.
+  - path: pkgs/dsl/trace.py
+    role: TraceEventEmitter utility shared by policy and budget layers with immutable payloads.
+  - path: pkgs/dsl/budget_manager.py
+    role: BudgetManager coordinating scope meters, preflight/commit outcomes, and trace emission.
+  - path: pkgs/dsl/runner.py
+    role: FlowRunner orchestration with adapter execution, policy enforcement, budget guards, and loop control.
+  - path: pkgs/dsl/__init__.py
+    role: Export newly added budget and runner types for external consumption.
+tests:
+  - path: codex/code/work/tests/unit/test_budget_models.py
+    coverage: BudgetSpec normalization, BudgetMeter breach semantics, trace emitter immutability.
+    mocks: Use fake trace sink and deterministic time factory.
+  - path: codex/code/work/tests/unit/test_budget_manager.py
+    coverage: Preflight/commit flows, run/node/loop scopes, soft warning aggregation.
+    mocks: Fake meters, dummy trace emitter, adapter estimates.
+  - path: codex/code/work/tests/unit/test_flow_runner_budgets.py
+    coverage: FlowRunner integration with loop stop budget, node budgets, and policy allowlist interactions.
+    mocks: Stub ToolAdapter implementations, in-memory trace collector.
+run_order:
+  - tests/unit/test_budget_models.py
+  - tests/unit/test_budget_manager.py
+  - tests/unit/test_flow_runner_budgets.py
+interfaces:
+  - name: ToolAdapter
+    module: pkgs/dsl/runner.py
+    contract: estimate_cost(spec, context) -> CostSnapshot; execute(spec, context) -> ExecutionResult with cost snapshot.
+  - name: BudgetManager
+    module: pkgs/dsl/budget_manager.py
+    contract: preflight(scope, cost) -> BudgetDecision; commit(scope, cost) -> BudgetDecision; push_loop(scope_id, spec); pop_loop().
+  - name: TraceEventEmitter
+    module: pkgs/dsl/trace.py
+    contract: emit(event, scope_type, scope_id, payload) storing immutable MappingProxyType payloads and forwarding to sinks.
+tdd_coverage_targets:
+  pkgs/dsl/budget.py: 0.9
+  pkgs/dsl/budget_manager.py: 0.85
+  pkgs/dsl/runner.py: 0.8
+review_checklist:
+  - Ensure BudgetSpec normalization handles seconds/ms conversions consistently.
+  - Verify BudgetManager enforces breach_action semantics for soft/hard modes.
+  - Confirm FlowRunner integrates PolicyStack to filter adapters before execution.
+  - Check trace payloads are immutable and schema-aligned keys are used.
+outputs:
+  plan_file: codex/agents/TASKS_FINAL/P3/07b_budget_guards_and_runner_integration.yaml-20250505T120000Z-gpt5codex.yaml
+  tests_root: codex/code/work/tests
+  docs_preview: codex/agents/PREVIEW/P3/07b_budget_guards_and_runner_integration.yaml-20250505T120000Z-gpt5codex.md
+  docs_review: codex/agents/REVIEW/P3/07b_budget_guards_and_runner_integration.yaml-20250505T120000Z-gpt5codex.md
+  docs_postexecution: codex/agents/POSTEXECUTION/P3/07b_budget_guards_and_runner_integration.yaml-20250505T120000Z-gpt5codex.md
+  documentation_yaml: codex/DOCUMENTATION/P3/work-20250505T120000Z-gpt5codex.yaml
+  missing_tests_yaml: codex/TESTS/P3/work-20250505T120000Z-gpt5codex.yaml

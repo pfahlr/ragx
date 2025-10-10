@@ -1,0 +1,69 @@
+component:
+  name: FlowRunner Budget Guards
+  purpose: |
+    Execute DSL unit and loop nodes while enforcing hierarchical policies and multi-scope
+    budget guards. Provides deterministic orchestration for adapters with immutable trace
+    emission.
+cli:
+  usage: |
+    No dedicated CLI entry point yet. Runner is consumed as a Python class:
+      from pkgs.dsl.runner import FlowRunner
+      runner = FlowRunner(adapters=my_adapters)
+      result = runner.run(spec=flow_spec, vars={})
+interfaces:
+  primary:
+    - name: FlowRunner.run
+      params:
+        spec: Mapping[str, object]
+        vars: Mapping[str, object]
+      returns: RunResult(run_id, status, outputs, stop_reasons)
+      notes: |
+        Supports `unit` and `loop` nodes. Other node kinds raise `KeyError` or are skipped.
+    - name: BudgetManager.preflight/commit
+      params:
+        scope: BudgetScope(scope_type, scope_id)
+        cost: CostSnapshot
+      returns: BudgetDecision with breach metadata
+      notes: Handles run/node/loop scopes and emits trace events.
+    - name: TraceEventEmitter.emit
+      params: event, scope_type, scope_id, payload
+      returns: TraceEvent with immutable payload
+      notes: Payload recursively converts mappings/lists to immutable structures.
+  extension_hooks:
+    - description: Implement additional ToolAdapter classes adhering to estimate/execute protocol.
+    - description: Extend FlowRunner to cover transform/decision nodes by reusing `_collect_scopes` helpers.
+configuration:
+  options:
+    run_budget: globals.run_budget mapping (max_usd, max_calls, max_tokens, time_limit_sec, mode)
+    node_budget: node.budget mapping (same fields + breach_action)
+    loop_budget: loop.stop.budget mapping controlling iteration stop semantics
+  defaults:
+    mode: hard unless explicitly set to soft
+    breach_action: error except when stop budgets specify "stop"
+automation:
+  triggers:
+    - pytest codex/code/work/tests/unit/test_budget_models.py
+    - pytest codex/code/work/tests/unit/test_budget_manager.py
+    - pytest codex/code/work/tests/unit/test_flow_runner_budgets.py
+errors:
+  contracts:
+    - BudgetBreachError raised when hard budgets exceed limits (unless breach_action == "stop")
+    - PolicyViolationError surfaced when PolicyStack denies a tool
+    - RuntimeError raised if no adapter registered for a referenced tool
+serialization:
+  trace_events:
+    format: JSON-friendly mapping with immutable MappingProxyType payloads
+    fields: [event, scope_type, scope_id, payload]
+lifecycle:
+  phases:
+    - Instantiate FlowRunner with adapter registry
+    - Run execution plan with budgets/policies enforced
+    - Consume RunResult and inspect stop_reasons/warnings
+typing:
+  notes: All public dataclasses enable type checking with Python 3.12; Protocol used for ToolAdapter.
+security:
+  notes: PolicyStack enforces allow/deny lists; no external I/O performed beyond adapters supplied by caller.
+performance:
+  considerations:
+    - BudgetMeter arithmetic uses pure Python; overhead negligible for unit tests.
+    - FlowRunner executes sequentially; concurrency support deferred.
