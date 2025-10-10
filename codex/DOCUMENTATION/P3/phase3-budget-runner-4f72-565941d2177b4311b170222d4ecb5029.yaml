@@ -1,0 +1,61 @@
+component:
+  name: phase3-budget-runner-4f72
+  purpose: >-
+    Sandbox implementation of budget guards integrated with the FlowRunner for
+    task 07b. Demonstrates immutable budget accounting, shared trace emission,
+    and adapter-driven execution suitable for future consolidation into pkgs/dsl.
+  cli_usage: >-
+    No direct CLI entry-point; import modules from `dsl.*` within the sandbox
+    path (`codex/code/phase3-budget-runner-4f72`) and execute via pytest or a
+    host application embedding `FlowRunner`.
+interfaces:
+  public_classes:
+    - name: dsl.costs.normalize_cost
+      role: Canonical cost normaliser converting seconds→milliseconds and
+        freezing payloads.
+    - name: dsl.budget.BudgetManager
+      role: Coordinates preflight/commit budget checks with immutable outcomes
+        and trace emission.
+    - name: dsl.policy.PolicyStack
+      role: Allowlist-backed policy enforcement producing `policy_*` trace
+        events.
+    - name: dsl.runner.FlowRunner
+      role: Sequential adapter runner wiring PolicyStack + BudgetManager.
+  extension_points:
+    - name: dsl.runner.ToolAdapter
+      contract: Provide `name`, `estimate(context)`, and `execute(context)`.
+    - name: dsl.trace.TraceWriter
+      contract: Accept immutable trace payloads and expose `snapshot()`.
+configuration:
+  options:
+    - name: BudgetSpec.breach_action
+      values: ["warn", "stop"]
+      default: warn for soft budgets, stop for hard budgets.
+      effect: Controls whether overages trigger warnings or hard stops.
+    - name: PolicyStack.allowlist
+      values: set[str]
+      default: empty (allow all).
+      effect: Restricts adapters allowed to execute.
+  automation_triggers:
+    - trigger: Importing `TraceEventEmitter`
+      action: All policy/budget traces emitted to the supplied TraceWriter.
+error_contracts:
+  budget:
+    - exception: dsl.budget.BudgetHardStop
+      raised_when: Hard budgets are exceeded during commit.
+      payload: MappingProxy over overage metrics.
+  policy:
+    - exception: dsl.policy.PolicyViolation
+      raised_when: Adapter not present in allowlist.
+  lifecycle:
+    notes: >-
+      `BudgetManager.preflight` is pure and mutation-free; state is only updated
+      on successful `commit`. Hard stops leave accounts unchanged.
+serialization:
+  trace_payloads: Immutable mappings suitable for JSON serialisation; nested
+    payloads stored as mapping proxies.
+typing_security_performance:
+  typing: Modules use typing.Protocol and frozen dataclasses for clarity.
+  security: PolicyStack allowlist prevents execution of blocked adapters.
+  performance: Cost normalisation performs O(n) merges per call; acceptable for
+    small metric maps typical of runner budgets.
