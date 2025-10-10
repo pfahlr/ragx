@@ -1,0 +1,35 @@
+review_summary:
+  code_task: 07b_budget_guards_and_runner_integration.yaml
+  top_branch: codex/complete-phase-3-for-tdd-feature-rd6egz
+  rationale:
+    - Loop-aware execution covers run, loop, and node scopes with clear trace emission, matching spec semantics.
+    - Budget domain is immutable and normalized, making tests deterministic and payload-safe.
+  improvement_areas_identified:
+    - Trace emitter lacks pluggable sinks present in other candidates; plan follow-up.
+    - Production copy still needs relocation from sandbox path into pkgs/dsl package.
+  high_quality_snippets:
+    - file: codex/code/work/dsl/flow_runner.py
+      reason: Clean separation of unit node execution and loop orchestration with budget previews prior to commit.
+      extract: |
+        def _run_unit_node(
+            self,
+            *,
+            run_scope: bm.ScopeKey,
+            raw_node: Mapping[str, object],
+            loop_scope: bm.ScopeKey | None,
+            loop_id: str | None,
+            iteration: int | None,
+        ) -> NodeExecution:
+            ...
+            run_decision = self._apply_budget(
+                run_scope, cost_snapshot, commit=False
+            )
+            ...
+            if loop_decision is not None:
+                self._budgets.commit_charge(loop_decision)
+            self._budgets.commit_charge(node_decision)
+  recommendation_tags:
+    - cohesion
+    - separation_of_concerns
+    - testability
+    - architecture_strength

@@ -1,0 +1,9 @@
+missing_tests:
+  for_task: 07b_budget_guards_and_runner_integration.yaml
+  context: "Generated from branches reviewed in Phase 4"
+  proposed_tests:
+    - name: test_trace_emitter_snapshot_freezes_nested_payloads
+      target_file: tests/unit/dsl/test_trace_emitter_validation.py
+      rationale: Ensure nested dict/list payloads are deep-frozen when a sink is attached so downstream observers cannot mutate history.
+      derived_from_branch: codex/implement-phase-3-using-tdd-for-feature-lypjv9
+      spec_section: observability.trace_payloads

@@ -1,0 +1,21 @@
+task: 07b_budget_guards_and_runner_integration.yaml
+winning_branch: codex/complete-phase-3-for-tdd-feature-rd6egz
+actions:
+  - from: codex/code/work/dsl/budget_models.py
+    to: pkgs/dsl/budget_models.py
+  - from: codex/code/work/dsl/budget_manager.py
+    to: pkgs/dsl/budget_manager.py
+  - from: codex/code/work/dsl/flow_runner.py
+    to: pkgs/dsl/flow_runner.py
+  - from: codex/code/work/dsl/trace.py
+    to: pkgs/dsl/trace.py
+  - from: codex/code/work/tests/test_budget_manager.py
+    to: tests/unit/dsl/test_budget_manager.py
+  - from: codex/code/work/tests/test_budget_models.py
+    to: tests/unit/dsl/test_budget_models.py
+  - from: codex/code/work/tests/test_flow_runner_budget_integration.py
+    to: tests/unit/dsl/test_flow_runner_budget_integration.py
+  - from: codex/code/work/tests/test_flow_runner_loop_policy.py
+    to: tests/unit/dsl/test_flow_runner_loop_policy.py
+  - from: codex/code/work/tests/test_trace_emitter_validation.py
+    to: tests/unit/dsl/test_trace_emitter_validation.py
