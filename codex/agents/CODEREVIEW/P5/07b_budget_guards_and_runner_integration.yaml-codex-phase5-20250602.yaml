@@ -1,0 +1,15 @@
+code_review:
+  findings:
+    - file: pkgs/dsl/flow_runner.py
+      line: 210
+      issue: "Nested loop payloads hit KeyError because `_run_loop` blindly forwards loop bodies to `_run_unit_node`."
+      severity: medium
+      recommendation: "Detect nested `kind="loop"` entries inside loop bodies and either recurse via `_run_loop` or raise a clearer `NotImplementedError` with guidance for downstream authors."
+    - file: pkgs/dsl/flow_runner.py
+      line: 244
+      issue: "`_apply_budget` exposes a `commit` flag but the runner never exercises the `True` branch, so the helper adds noise."
+      severity: low
+      recommendation: "Remove the unused parameter or route run-scope commits through `_apply_budget(..., commit=True)` to keep the abstraction meaningful."
+  reviewed_by: codex-phase5-agent
+  overall_quality: high
+  critical_fixes_required: false

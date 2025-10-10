@@ -5,11 +5,17 @@ missing_tests:
       rationale: Exercise nested loop scopes to ensure inner loop breaches emit stop events without leaking scopes in the outer loop.
       source_module: codex/code/work/dsl/flow_runner.py
       priority: high
+      status: resolved
+      implemented_by: codex/code/07b_budget_guards_and_runner_integration.yaml/tests/test_flow_runner_auto.py::test_nested_loop_budget_stop_propagation
     - name: test_loop_soft_warn_allows_iteration_progress
       rationale: Validate that soft loop budgets with `breach_action: warn` emit breaches yet continue executing subsequent iterations.
       source_module: codex/code/work/dsl/flow_runner.py
       priority: medium
+      status: resolved
+      implemented_by: codex/code/07b_budget_guards_and_runner_integration.yaml/tests/test_flow_runner_auto.py::test_loop_soft_warn_allows_progress
     - name: test_trace_validator_error_context
       rationale: Assert that validator exceptions can annotate failures with event metadata for downstream logging.
       source_module: codex/code/work/dsl/trace.py
       priority: low
+      status: resolved
+      implemented_by: codex/code/07b_budget_guards_and_runner_integration.yaml/tests/test_trace_auto.py::test_trace_validator_error_context

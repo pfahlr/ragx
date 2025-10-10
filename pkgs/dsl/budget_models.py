@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 from collections.abc import Iterable, Mapping
+from collections.abc import Mapping
 from dataclasses import dataclass
+from types import MappingProxyType
 from typing import Any
 
 from .trace import TraceEventEmitter
@@ -62,8 +64,9 @@ class CostSnapshot:
     def has_positive(self) -> bool:
         return self.time_ms > 0.0 or self.tokens > 0
 
-    def to_payload(self) -> dict[str, float | int]:
-        return {"time_ms": float(self.time_ms), "tokens": int(self.tokens)}
+    def to_payload(self) -> Mapping[str, float | int]:
+        data = {"time_ms": float(self.time_ms), "tokens": int(self.tokens)}
+        return MappingProxyType(data)
 
 
 @dataclass(frozen=True, slots=True)
@@ -146,8 +149,6 @@ class BudgetChargeOutcome:
         return self.spec.should_stop(self.breached)
 
     def to_trace_payload(self, *, scope_type: str, scope_id: str) -> Mapping[str, Any]:
-        from types import MappingProxyType
-
         payload = {
             "scope_type": scope_type,
             "scope_id": scope_id,

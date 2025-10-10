@@ -1,0 +1,126 @@
+version: 1
+id: 07b_budget_guards_and_runner_integration.p3-final
+title: Phase 3 – Budget guards with FlowRunner policy integration
+summary: Harden immutable budget models, manager orchestration, and FlowRunner trace ordering for production handoff.
+description: |
+  Consolidate the Phase 3 deliverable around immutable budget data transfer objects, a scope-aware BudgetManager,
+  and FlowRunner orchestration that cooperates with PolicyStack. The plan merges the strongest prior-branch
+  approaches (mapping-proxy trace payloads, preflight/commit semantics, adapter-driven runner) and adds regression
+  coverage for loop scopes plus policy/budget trace interleaving so downstream automation inherits a fully verified
+  contract.
+metadata:
+  owners: [pfahlr@gmail.com]
+  labels: [dsl, budgets, runner]
+  priority: P1
+  risk: medium
+  last_updated: "2025-06-02"
+  links:
+    - type: spec
+      url: https://github.com/pfahlr/ragx/blob/main/codex/specs/ragx_master_spec.yaml
+    - type: spec
+      url: https://github.com/pfahlr/ragx/blob/main/codex/specs/flow_runner_spec.yaml
+strategy:
+  tests_first: true
+  deterministic: true
+  golden_management: manual
+scope:
+  goals:
+    - Deliver immutable CostSnapshot/BudgetSpec/BudgetDecision primitives with schema-aligned trace payloads.
+    - Implement BudgetManager preview/commit/record flows for run, loop, node, and spec scopes with breach telemetry.
+    - Wire FlowRunner to ToolAdapters and PolicyStack so `policy_resolved`, `policy_violation`, `budget_charge`, and
+      `budget_breach` events maintain deterministic ordering across loops and hard/soft budgets.
+    - Extend unit/integration coverage for loop budget stops, policy denial interleaving, and trace validation hooks.
+  non_goals:
+    - Introducing asynchronous adapter execution or speculative budget estimation.
+    - Adding DSL schema fields beyond the published master spec.
+assumptions:
+  - PolicyStack contract from task 07a remains unchanged (push/pop/enforce/effective_allowlist).
+  - Tool adapters execute synchronously and expose deterministic `estimate_cost` signatures.
+constraints:
+  - Preserve mapping-proxy immutability for emitted trace payloads (top level and nested cost snapshots).
+  - Maintain deterministic trace ordering for budgets vs policy traces even during breaches.
+  - Tests must remain hermetic (no network, no filesystem writes outside tmp directories).
+component_ids:
+  - pkgs.dsl.budget_models
+  - pkgs.dsl.budget_manager
+  - pkgs.dsl.flow_runner
+  - pkgs.dsl.trace
+depends_on:
+  - 07a_dsl_policy_engine_completion
+arg_spec:
+  - --flow-id
+  - --run-id
+config_flags:
+  - name: runner.trace_sink
+    type: str
+    desc: Optional dotted path to a callable receiving TraceEvent records.
+  - name: runner.policy_sink
+    type: str
+    desc: Optional dotted path for PolicyTraceRecorder sinks.
+structured_logging_contract:
+  format: jsonl
+  storage_path_prefix: logs/runner/budgets
+  latest_symlink: logs/runner/latest
+  retention: 30d
+  event_fields: [timestamp, event, scope_type, scope_id, payload]
+  metadata_fields: [flow_id, run_id, branch, build_sha]
+  volatile_fields: [timestamp]
+ci:
+  xfail_marker: xfail
+  workflows:
+    - name: ensure_green
+      gates: [ruff, mypy, yamllint, pytest]
+    - name: targeted_budget_runner
+      gates: [pytest]
+      artifacts: [coverage.xml]
+actions:
+  - stage: trace_and_models_foundation
+    summary: Establish immutable trace emission plus canonical CostSnapshot/BudgetSpec helpers.
+    tasks:
+      - "execution_mode=always adapted_from_branch=codex/implement-budget-guards-with-test-first-approach reusable=true :: Rebuild CostSnapshot, BudgetSpec, and BudgetDecision with mapping-proxy payload exports and arithmetic guards."
+      - "execution_mode=always adapted_from_branch=codex/integrate-budget-guards-with-runner reusable=true :: Implement TraceEventEmitter that records immutable TraceEvent instances and forwards to optional sinks/validators."
+  - stage: budget_manager_orchestration
+    summary: Provide scope lifecycle, preview/commit flows, and breach recording APIs.
+    tasks:
+      - "execution_mode=always adapted_from_branch=codex/integrate-budget-guards-with-runner-zwi2ny reusable=true :: Implement BudgetManager.enter_scope/exit_scope, preview_charge/commit_charge, and record_breach with immutable trace payloads."
+      - "execution_mode=always adapted_from_branch=codex/integrate-budget-guards-with-runner-pbdel9 reusable=false :: Harden BudgetManager error handling for duplicate scopes, stop decisions, and inspection helpers."
+  - stage: flow_runner_integration
+    summary: Integrate adapters, policies, and budgets with deterministic tracing.
+    tasks:
+      - "execution_mode=always adapted_from_branch=codex/implement-budget-guards-with-test-first-approach-fa0vm9 reusable=true :: Thread BudgetManager through FlowRunner run/loop execution while preserving adapter lifecycle and scope cleanup."
+      - "execution_mode=always adapted_from_branch=codex/integrate-budget-guards-with-runner reusable=false :: Emit policy_resolved and policy_violation traces alongside budget_charge/breach events and guarantee loop stop semantics."
+  - stage: validation_and_docs
+    summary: Expand regression coverage and surface configuration/documentation for downstream users.
+    tasks:
+      - "execution_mode=always adapted_from_branch=codex/implement-budget-guards-with-test-first-approach reusable=true :: Add pytest suites for loop budget stops, policy/budget interleaving, and trace schema validation under codex/code/07b_budget_guards_and_runner_integration.yaml/tests/."
+      - "execution_mode=always adapted_from_branch=codex/integrate-budget-guards-with-runner-47537ede reusable=false :: Produce README/docs describing configuration hooks, trace contracts, and future work backlog."
+rollout_plan:
+  phases:
+    - name: sandbox_validation
+      exit_criteria:
+        - pytest codex/code/07b_budget_guards_and_runner_integration.yaml/tests -q passes
+        - Trace payloads validated against schema contract (field set + immutability)
+    - name: downstream_adoption
+      exit_criteria:
+        - Runner integrated with MCP pipeline without breaking policy/budget traces
+        - Documentation published under docs/07b_budget_guards_and_runner_integration.yaml.md
+rollback_strategy:
+  steps:
+    - Revert to previous BudgetManager/FlowRunner modules from codex/code/phase3-budget-guards-d98ee6c7.
+    - Disable new trace validators by clearing runner.trace_sink configuration.
+operational_runbooks:
+  - name: budget_trace_diagnostics
+    steps:
+      - Enable runner.trace_sink to capture emitted TraceEvent records.
+      - Re-run pytest codex/code/07b_budget_guards_and_runner_integration.yaml/tests -q to reproduce issues.
+      - Inspect captured events for missing budget_breach or policy_resolved entries before rerunning flows.
+maintenance:
+  deprecation_policy: Follow semantic versioning; breaking changes require new major version of pkgs.dsl.
+  upgrade_notes:
+    - Downstream adapters should inject TraceEventEmitter sinks via dependency injection rather than mutating global state.
+    - PolicyStack effective_allowlist is now invoked for every node to guarantee policy_resolved traces.
+acceptance:
+  - pytest codex/code/07b_budget_guards_and_runner_integration.yaml/tests -q
+  - pytest tests/unit/dsl/test_flow_runner_loop_policy.py -q
+  - pytest tests/unit/dsl/test_budget_manager.py -q
+  - pytest tests/unit/dsl/test_trace_emitter_validation.py -q
