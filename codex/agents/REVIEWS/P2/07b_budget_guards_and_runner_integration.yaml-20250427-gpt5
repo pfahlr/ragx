@@ -1,0 +1,68 @@
+metadata:
+  reviewer: gpt-5-codex
+  repo: pfahlr/ragx
+  task: 07b_budget_guards_and_runner_integration
+  date: 2025-04-27
+comparative_review:
+  - branch: codex/integrate-budget-guards-with-runner
+    bullets:
+      - Maintains the original adapter-driven FlowRunner skeleton so node execution, loop control, and policy placeholders remain wired, giving us a dependable baseline for acceptance tests despite the lean budget API.
+      - Budget enforcement still hinges on mutable dict payloads and a single `BudgetBreachError`; it never differentiates run/node/loop scopes or soft vs hard semantics, so scope isolation and breach actions from the DSL spec are unmet.
+      - Trace emission is coarse (`record_event`-style) and omits immutable payloads or schema alignment; `policy_resolved` is not produced, leaving traceability expectations partially unsatisfied.
+      - Tests exercise only the pre-existing meter limits path; no dedicated loop stop or breach-action coverage means regressions around stop-on-soft budgets would slip through.
+  - branch: codex/integrate-budget-guards-with-runner-zwi2ny
+    bullets:
+      - Introduces immutable `BudgetSpec`/`CostSnapshot`/`BudgetChargeOutcome` models plus a `TraceWriter`, greatly improving data hygiene and observability hooks.
+      - `_execute_node` is stubbed to fabricate costs, severing adapters and making budget enforcement impossible to validate end-to-end; acceptance harnesses would fail because real tool execution disappears.
+      - Defaulting meters to `mode="hard"` while ignoring `breach_action` keeps soft budgets inert; loop stop behaviour therefore violates DSL semantics for warn/stop policies.
+      - Emits `budget_charge` and `budget_breach` events but invents payload shapes that diverge from the policy trace schema and omits `policy_resolved`, so cross-system trace fidelity remains broken.
+  - branch: codex/integrate-budget-guards-with-runner-pbdel9
+    bullets:
+      - Adds structured `BudgetCharge` payloads with `remaining`/`overages` plus `BudgetBreachHard`, giving downstream diagnostics the necessary context to display overrun metrics.
+      - `BudgetMeter.charge()` swallows breaches when `breach_action == "stop"`, and the runner never inspects the returned `breached` flag; loops therefore keep executing past hard stops, regressing enforcement guarantees.
+      - Trace payloads adopt immutable mapping proxies which align with observability requirements, yet the schema differs from DSL expectations (e.g., new event names) and policy traces remain absent.
+      - Time accounting mixes seconds and milliseconds without normalization, causing scope totals to drift between adapters and meters.
+      - Tests emphasise happy-path charging only; there is no regression asserting stop-on-breach or warning emission, so the failure above is uncaught.
+  - branch: codex/implement-budget-guards-with-test-first-approach
+    bullets:
+      - Supplies a comprehensive `BudgetManager` orchestrator with preflight/commit phases, warning aggregation, and hook points for run/node/loop scopes—the most modular abstraction among the branches.
+      - FlowRunner is gutted (`run`/`plan` raise `NotImplementedError`), so nothing actually exercises adapters or traces; this makes the branch unusable without additional integration work.
+      - Manager traces rely on bespoke events emitted via `emit_trace_event` but never reconcile with existing runner trace schemas or the policy stack; DSL contract alignment is deferred.
+      - The expanded unit suite covers manager edges (preview vs commit, warnings), yet end-to-end runner tests are disabled, leaving integration correctness unvalidated.
+  - branch: codex/implement-budget-guards-with-test-first-approach-qhq0jq
+    bullets:
+      - Re-centres on value objects—`BudgetMode`, `Cost`, `BudgetCheck`, `BudgetCharge`—with clear normalization helpers, clarifying soft vs hard semantics for each metric.
+      - FlowRunner fabricates node outputs and omits adapters/trace emitters; as a result, tool invocation, budget charging, and trace generation cannot be validated, regressing the integration contract.
+      - Loop reporting via `LoopSummary` improves observability, but the trace stream only publishes coarse run-level envelopes and never issues `policy_resolved`.
+      - Tests focus on budget math and summary reporting; there is still no coverage for policy enforcement or adapter errors, and fabricated outputs allow silent drift from the DSL spec.
+  - branch: codex/implement-budget-guards-with-test-first-approach-8wxk32
+    bullets:
+      - Evolves the qhq0jq domain into `BudgetDecision` snapshots, immutable `NodeExecution` records, and injectable time/id factories—strong foundations for deterministic, object-oriented runners.
+      - Budget time units silently switch to milliseconds while adapters still provide seconds, producing inconsistent spend tallies and breaking parity with earlier branches.
+      - Runner logic remains adapter-less; decisions never feed a trace sink, so warnings and stop hints are stranded in memory and violate traceability expectations.
+      - The richer test suite validates decision math but, again, lacks execution or policy coverage; stop-signal propagation across nested loops is untested.
+  - branch: codex/implement-budget-guards-with-test-first-approach-fa0vm9
+    bullets:
+      - Introduces a `ToolAdapter` protocol with `estimate_cost` vs `execute` phases and explicit loop-context stacks, finally reattaching budgets to adapters and surfacing `BudgetBreach` diagnostics.
+      - Trace handling accumulates events in mutable lists before optional sink forwarding; without immutable snapshots this breaks stack safety if shared across threads and diverges from DSL schemas.
+      - `BudgetMeter.charge()` mutates shared dictionaries and depends on adapters to normalise cost keys, risking cross-scope leakage and spec drift (time stored in ms, adapters emit seconds).
+      - Stop signals via `_LoopStopSignal` are promising yet bespoke; they should map to the DSL's canonical stop reason vocabulary to maintain consistency.
+      - Tests cover adapter orchestration paths but do not assert schema fidelity for emitted traces or combined policy/budget violations, leaving major acceptance gaps.
+redundancy_and_hallucination_check:
+  overlapping_patterns:
+    - Multiple branches independently implement cost normalization (`CostSnapshot`, `_normalize_cost`, `_normalize_float`) yet disagree on units; no branch fabricates entirely new budget concepts, but the duplicated helpers risk divergence.
+    - Several runners invent bespoke trace event names without updating schemas—these are genuine deviations, not hallucinations, but they must be normalised to the DSL contract.
+  hallucination_watch:
+    - No branch references non-existent spec fields; however, fabricated stop-reason enums (`_LoopStopSignal`, custom breach enums) lack supporting schema updates and must be treated as speculative.
+    - Preview/commit terminology from the BudgetManager branch is internally consistent, but downstream branches that removed the manager left dangling docstrings referencing commits—documentation drift should be corrected.
+synthesis_rationale:
+  - Adopt the typed budget models and TraceWriter abstraction from `codex/integrate-budget-guards-with-runner-zwi2ny` as the canonical data layer, because they enforce immutability and align with trace observability goals.
+  - Merge in the structured `BudgetCharge` diagnostics from `codex/integrate-budget-guards-with-runner-pbdel9` to preserve remaining/overage reporting, fixing stop-on-breach by inspecting outcomes in the runner.
+  - Reuse the `BudgetManager` orchestration pattern from `codex/implement-budget-guards-with-test-first-approach`, but back it with the object-oriented cost/decision model from `codex/implement-budget-guards-with-test-first-approach-8wxk32` to support predictive loop halts without losing adapter integration.
+  - Integrate the `ToolAdapter` protocol and loop stack wiring from `codex/implement-budget-guards-with-test-first-approach-fa0vm9`, tightening cost normalization and aligning stop signals with spec-approved reasons.
+  - Reinstate adapter-backed FlowRunner execution from the base branch while layering policy enforcement (missing in all variants) to satisfy traceability gates (`push`, `pop`, `policy_resolved`).
+optional_enhancements:
+  - Automate schema validation for runner and policy traces (jsonschema or pydantic-lite) to catch payload drift as new branches iterate.
+  - Introduce a shared `TraceEventEmitter` utility module referenced by both policy and budget layers to prevent the mutable-buffer regressions seen in fa0vm9.
+  - Expand tests with scenario matrices covering run/loop/node/spec scope combinations, ensuring both hard and soft budgets trigger expected traces and stop actions.
+  - Provide fixtures for adapter estimation vs execution to remove fabricated cost payloads and increase fidelity in integration tests.

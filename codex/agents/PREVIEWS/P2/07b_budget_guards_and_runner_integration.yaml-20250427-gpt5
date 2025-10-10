@@ -1,0 +1,33 @@
+plan_preview:
+  branch_reuse:
+    - branch: codex/integrate-budget-guards-with-runner
+      elements:
+        - Preserve adapter-backed node execution, run/loop scaffolding, and baseline acceptance wiring as the integration backbone.
+    - branch: codex/integrate-budget-guards-with-runner-zwi2ny
+      elements:
+        - Reuse immutable budget models (`BudgetSpec`, `CostSnapshot`, `BudgetChargeOutcome`) and the `TraceWriter` abstraction for schema-aligned telemetry.
+    - branch: codex/integrate-budget-guards-with-runner-pbdel9
+      elements:
+        - Lift `BudgetCharge` remaining/overage accounting and immutable mapping-proxy payloads for diagnostic fidelity.
+    - branch: codex/implement-budget-guards-with-test-first-approach
+      elements:
+        - Integrate the layered `BudgetManager` preflight/commit orchestration plus warning aggregation hooks.
+    - branch: codex/implement-budget-guards-with-test-first-approach-8wxk32
+      elements:
+        - Reuse `BudgetDecision` snapshots, `NodeExecution` records, and deterministic id/time factories to keep the runner object-oriented and testable.
+    - branch: codex/implement-budget-guards-with-test-first-approach-fa0vm9
+      elements:
+        - Keep the `ToolAdapter` estimate/execute protocol, loop-context stack handling, and breach diagnostics as the realistic adapter surface.
+  conflicts_and_resolutions:
+    - Soft-budget semantics conflict across zwi2ny/pbdel9/8wxk32; resolve by centralising breach handling inside BudgetManager and ensuring runner inspects outcomes to enforce warn vs stop consistently.
+    - Cost normalization varies between seconds/milliseconds; consolidate into a single helper that accepts both and emits canonical milliseconds before persisting snapshots.
+    - Trace payload shapes diverge (mutable lists, custom event names); enforce a shared `TraceEventEmitter` that emits schema-validated immutable payloads for both policy and budget events.
+    - Runner branches disagree on adapter usage vs fabricated costs; require adapters in all execution paths and update tests to provide deterministic fake adapters.
+  policy_engine_redesign:
+    - Expose a policy trace emitter that mirrors the new budget trace pipeline so `push`/`pop`/`policy_resolved` events use the same immutable transport while remaining loosely coupled.
+    - Simplify PolicyStack enforcement hooks to accept normalized tool descriptors from the runner, preventing duplicate resolution logic within loop iterations.
+    - Document and enforce the combined policy+budget trace order in `docs/dsl/trace_contract.md` to avoid branch-specific inventions.
+  open_questions_and_tradeoffs:
+    - Should BudgetManager emit warnings for both run-level soft breaches and loop-level stop actions before halting execution, or should the runner coalesce warnings to reduce noise?
+    - Do we need to stream traces synchronously to external sinks (fa0vm9 style) or buffer them for deterministic unit tests (zwi2ny style); hybrid approach may require pluggable backpressure handling.
+    - How to surface simultaneous policy violations and budget breaches—raise both, prioritise policy, or expose composite trace events?
