@@ -1,0 +1,90 @@
+plan_preview:
+  branch_inclusions:
+    - codex/implement-dsl-policy-engine-in-yaml: stack-owned registry, cycle-safe tool-set expansion, and canonical policy_resolved traces.
+    - codex/implement-dsl-policy-engine-in-yaml-81p0id: candidate-level denial diagnostics and decision-branch lint scaffolding.
+    - codex/implement-dsl-policy-engine-in-yaml-reclz1: ToolDescriptor normalization plus stack cloning for loop/decision contexts.
+    - codex/implement-dsl-policy-engine-in-yaml-yp01n0: enforce()/PolicyViolationError surface and event-sink plumbing.
+  conflict_resolution:
+    - Re-evaluate policy frames in LIFO order using immutable snapshots to restore nearest-scope-wins while still emitting detailed diagnostics.
+    - Retain baseline scope-checked pop semantics and registry validation when blending reclz1 descriptor handling.
+    - Normalize trace event kinds to push/pop/policy_resolved/policy_violation and back them with a shared emitter API.
+  redesign_decisions:
+    - Introduce a PolicySnapshot builder that produces both aggregate allowlists and per-tool decisions without mutating shared state.
+    - Promote ToolDescriptor into the policy core so the stack owns canonical metadata yet exposes read-only views for the linter.
+    - Split linter evaluation into reusable helpers (context expansion, candidate analysis) to support loops, decisions, and fallback checks uniformly.
+  exclusions:
+    - Drop reclz1’s silent skip for falsy policies; always push explicit frames so traces stay complete.
+    - Avoid 81p0id/yp01n0’s FIFO iteration and mutable state tables.
+  open_questions:
+    - Should violation events aggregate multiple contributing scopes or report only the nearest blocker?
+    - Do we need asynchronous trace dispatch for future observability tooling, or is synchronous emission sufficient for now?
+shared_blocks:
+  - name: trace_event_emitter
+    implementation: |
+      def emit_policy_event(callback: Callable[[PolicyEvent], None] | None, event: PolicyEvent, recorder: list[PolicyEvent] | None) -> None:
+          if callback:
+              callback(event)
+          elif recorder is not None:
+              recorder.append(event)
+  - name: scope_pop_guard
+    implementation: |
+      def pop_with_scope(stack: list[_PolicyFrame], expected_scope: str) -> _PolicyFrame:
+          frame = stack.pop()
+          if frame.scope != expected_scope:
+              raise PolicyError(f"Policy stack scope mismatch: expected '{expected_scope}', got '{frame.scope}'")
+          return frame
+tasks:
+  - id: establish_policy_runtime
+    execution_mode: always
+    reusable: true
+    description: |
+      Refactor PolicyStack to own ToolDescriptor-driven registry data, expand tool sets with cycle detection, and compute PolicySnapshot outputs by scanning frames newest-to-oldest. Emit push/pop/policy_resolved events through trace_event_emitter and enforce scope validation with scope_pop_guard.
+    source_files:
+      - pkgs/dsl/policy.py
+      - pkgs/dsl/models.py
+    adapted_from_branch: codex/implement-dsl-policy-engine-in-yaml
+    implementation_ref: scope_pop_guard
+  - id: integrate_enforcement_and_diagnostics
+    execution_mode: always
+    reusable: true
+    description: |
+      Layer enforce() and PolicyViolationError atop the runtime, reusing yp01n0’s violation payload structure while preserving baseline PolicyError taxonomy. Persist candidate-level denial diagnostics inspired by 81p0id inside PolicySnapshot so callers and linter share the same view. Route all events (push/pop/resolved/violation) through trace_event_emitter.
+    dependencies: [establish_policy_runtime]
+    source_files:
+      - pkgs/dsl/policy.py
+    adapted_from_branch: codex/implement-dsl-policy-engine-in-yaml-yp01n0
+  - id: expand_linter_contexts
+    execution_mode: always
+    reusable: true
+    description: |
+      Merge reclz1’s branch/loop context expansion with 81p0id’s candidate diagnostics to detect unreachable tools, fallbacks, and decision options. Reuse the unified PolicySnapshot API instead of duplicating resolution logic, and ensure tool-set cycles or unknown references surface as errors.
+    dependencies: [establish_policy_runtime]
+    source_files:
+      - pkgs/dsl/linter.py
+      - pkgs/dsl/models.py
+    adapted_from_branch: codex/implement-dsl-policy-engine-in-yaml-reclz1
+  - id: author_regression_tests
+    execution_mode: always
+    reusable: false
+    description: |
+      Add pytest coverage for nearest-scope overrides (decision, loop, fallback), policy_resolved emission ordering, enforce() violation hooks, tool-set cycle detection, and linter diagnostics spanning nodes, branches, and fallback exhaustion.
+    dependencies: [integrate_enforcement_and_diagnostics, expand_linter_contexts]
+    source_files:
+      - tests/unit/test_policy_stack_resolution.py
+      - tests/unit/test_linter_unreachable_tools.py
+    adapted_from_branch: codex/implement-dsl-policy-engine-in-yaml-81p0id
+    tests:
+      - pytest -k "policy_stack_resolution or linter_unreachable_tools"
+handoff_contract:
+  expected_consumer: gpt-5-codex
+  input_format: schema://codex/specs/schemas/full_task.schema.json
+  output_type: executable-python+unit-tests
+codex_directives:
+  must:
+    - reuse branch-specific diagnostics in code comments where derived behaviour is ported.
+    - emit policy_resolved and policy_violation events with consistent schemas for observability.
+    - validate tool and tool_set references during push and report actionable errors.
+  do_not:
+    - revert to FIFO evaluation or mutable allowlist state tables.
+    - drop scope validation when popping frames.
+    - invent new trace event kinds beyond the agreed contract.
