@@ -1,5 +1,12 @@
 """DSL package exports for policy engine components."""
 
+from .budget import (  # noqa: F401
+    BudgetBreachError,
+    BudgetChargeResult,
+    BudgetError,
+    BudgetMeter,
+    BudgetWarning,
+)
 from .models import (  # noqa: F401
     PolicyDecision,
     PolicyDenial,
@@ -14,6 +21,7 @@ from .policy import (  # noqa: F401
     PolicyTraceRecorder,
     PolicyViolationError,
 )
+from .runner import FlowRunner, RunResult  # noqa: F401
 
 __all__ = [
     "PolicyDecision",
@@ -26,4 +34,11 @@ __all__ = [
     "PolicyTraceRecorder",
     "PolicyViolationError",
     "ToolDescriptor",
+    "BudgetError",
+    "BudgetBreachError",
+    "BudgetWarning",
+    "BudgetChargeResult",
+    "BudgetMeter",
+    "FlowRunner",
+    "RunResult",
 ]
