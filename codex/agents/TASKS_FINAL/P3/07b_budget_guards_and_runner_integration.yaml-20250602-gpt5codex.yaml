@@ -1,0 +1,91 @@
+summary: "Implement cohesive budget guard integration with deterministic tracing for FlowRunner phase 3."
+justification: |
+  Phase 2 synthesis converged on immutable budget models, a BudgetManager orchestrating scope preflight/commit,
+  and a TraceWriter bridge reused across policy and budget events. Phase 3 must realise this integration end-to-end
+  in a testable slice that preserves adapter-driven execution semantics while surfacing breach diagnostics.
+steps:
+  - name: model_foundation
+    description: Introduce immutable budget data models with normalization and arithmetic helpers.
+  - name: manager_orchestration
+    description: Provide a BudgetManager handling run/node/spec/loop scopes with preflight and commit lifecycles.
+  - name: trace_and_runner_integration
+    description: Bridge trace emission with FlowRunner control flow, ensuring breach actions propagate deterministically.
+modules:
+  - path: codex/code/07b_budget_guards_and_runner_integration.yaml/budget_integration.py
+    role: |
+      House BudgetSpec, CostSnapshot, BudgetRemaining, BudgetBreach metadata, BudgetManager orchestrator,
+      TraceWriter abstraction, and a minimal FlowRunner that exercises adapter execution with budget guards.
+    owners: ["pfahlr@gmail.com"]
+    dependencies:
+      - python: dataclasses
+      - python: typing
+      - python: datetime
+      - python: enum
+tests:
+  - path: codex/code/07b_budget_guards_and_runner_integration.yaml/tests/test_budget_models.py
+    coverage_targets:
+      statements: 0.9
+    focuses:
+      - BudgetSpec normalization and validation
+      - CostSnapshot arithmetic helpers
+  - path: codex/code/07b_budget_guards_and_runner_integration.yaml/tests/test_budget_manager.py
+    coverage_targets:
+      statements: 0.9
+    focuses:
+      - Preflight vs commit lifecycle
+      - Soft vs hard breach handling across scopes
+    mocks:
+      - TraceWriter spy for event capture
+  - path: codex/code/07b_budget_guards_and_runner_integration.yaml/tests/test_trace_bridge.py
+    coverage_targets:
+      statements: 0.85
+    focuses:
+      - Schema validation for emitted events
+      - Chronological ordering guarantees
+  - path: codex/code/07b_budget_guards_and_runner_integration.yaml/tests/test_flow_runner_integration.py
+    coverage_targets:
+      statements: 0.85
+    focuses:
+      - Adapter execution under budgets
+      - Loop stop propagation and warning traces
+run_order:
+  - model_foundation
+  - manager_orchestration
+  - trace_and_runner_integration
+interfaces:
+  - name: TraceWriter
+    methods:
+      - emit(event_type: str, payload: Mapping[str, object]) -> None
+    contracts:
+      - Accepts immutable payloads respecting schema keys {"timestamp", "scope", "event", "data"}
+  - name: ToolAdapter
+    methods:
+      - estimate(node: Mapping[str, object]) -> CostSnapshot
+      - execute(node: Mapping[str, object]) -> tuple[object, CostSnapshot]
+  - name: BudgetManager
+    methods:
+      - preflight(scope: str, budget: BudgetSpec, attempt: CostSnapshot) -> BudgetChargeOutcome
+      - commit(scope: str, cost: CostSnapshot) -> BudgetChargeOutcome
+      - should_stop(scope: str) -> bool
+      - pop_scope(scope: str) -> None
+  - name: FlowRunner
+    methods:
+      - run(nodes: list[Mapping[str, object]], budgets: Mapping[str, BudgetSpec]) -> list[object]
+      - add_policy_trace(event: str, data: Mapping[str, object]) -> None
+      - get_trace() -> list[Mapping[str, object]]
+tdd_coverage_targets:
+  statement: 0.85
+  branch: 0.75
+review_checklist:
+  - Immutable dataclasses avoid mutable default arguments and expose mapping proxies for dict fields.
+  - BudgetManager soft breach returns warnings without raising and sets should_stop appropriately.
+  - FlowRunner stops deterministically on hard breaches and records trace events in chronological order.
+  - Trace schema matches shared contract: keys timestamp/scope/event/data with normalized costs.
+  - Tests cover run/node/spec/loop permutations and both preflight and commit flows.
+outputs:
+  - codex/code/07b_budget_guards_and_runner_integration.yaml/budget_integration.py: implementation
+  - codex/code/07b_budget_guards_and_runner_integration.yaml/tests/test_budget_models.py: unit tests for models
+  - codex/code/07b_budget_guards_and_runner_integration.yaml/tests/test_budget_manager.py: unit tests for manager
+  - codex/code/07b_budget_guards_and_runner_integration.yaml/tests/test_trace_bridge.py: schema validation tests
+  - codex/code/07b_budget_guards_and_runner_integration.yaml/tests/test_flow_runner_integration.py: integration tests
+  - codex/code/07b_budget_guards_and_runner_integration.yaml/__init__.py: package export helpers
