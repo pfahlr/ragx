@@ -13,7 +13,7 @@ comparative_review:
   - branch: codex/integrate-budget-guards-with-runner-zwi2ny
     bullets:
       - Introduces immutable `BudgetSpec`/`CostSnapshot`/`BudgetChargeOutcome` models plus a `TraceWriter`, greatly improving data hygiene and observability hooks.
-      - "`_execute_node` is stubbed to fabricate costs, severing adapters and making budget enforcement impossible to validate end-to-end; acceptance harnesses would fail because real tool execution disappears."
+      - '`_execute_node` is stubbed to fabricate costs, severing adapters and making budget enforcement impossible to validate end-to-end; acceptance harnesses would fail because real tool execution disappears.'
       - Defaulting meters to `mode="hard"` while ignoring `breach_action` keeps soft budgets inert; loop stop behaviour therefore violates DSL semantics for warn/stop policies.
       - Emits `budget_charge` and `budget_breach` events but invents payload shapes that diverge from the policy trace schema and omits `policy_resolved`, so cross-system trace fidelity remains broken.
   - branch: codex/integrate-budget-guards-with-runner-pbdel9
@@ -45,7 +45,7 @@ comparative_review:
     bullets:
       - Introduces a `ToolAdapter` protocol with `estimate_cost` vs `execute` phases and explicit loop-context stacks, finally reattaching budgets to adapters and surfacing `BudgetBreach` diagnostics.
       - Trace handling accumulates events in mutable lists before optional sink forwarding; without immutable snapshots this breaks stack safety if shared across threads and diverges from DSL schemas.
-      - "`BudgetMeter.charge()` mutates shared dictionaries and depends on adapters to normalise cost keys, risking cross-scope leakage and spec drift (time stored in ms, adapters emit seconds)."
+      - '`BudgetMeter.charge()` mutates shared dictionaries and depends on adapters to normalise cost keys, risking cross-scope leakage and spec drift (time stored in ms, adapters emit seconds).'
       - Stop signals via `_LoopStopSignal` are promising yet bespoke; they should map to the DSL's canonical stop reason vocabulary to maintain consistency.
       - Tests cover adapter orchestration paths but do not assert schema fidelity for emitted traces or combined policy/budget violations, leaving major acceptance gaps.
 redundancy_and_hallucination_check:
