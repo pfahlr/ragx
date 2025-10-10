@@ -1,0 +1,88 @@
+component:
+  name: phase3-budget-guards-d98ee6c7
+  purpose: Sandbox integration of budget enforcement with FlowRunner and policy tracing.
+  cli_usage: |
+    python codex/code/phase3-budget-guards-d98ee6c7/phase3_runner.py
+  lifecycle:
+    init: Budget specs registered via BudgetManager.enter_scope before FlowRunner.run.
+    runtime: FlowRunner coordinates adapter execution, budget charging, and policy events.
+    shutdown: BudgetManager.exit_scope invoked by callers once execution completes.
+interfaces:
+  budget_models:
+    public_classes:
+      - name: BudgetSpec
+        role: Immutable configuration for per-scope budget limits and breach behaviour.
+      - name: CostSnapshot
+        role: Normalised cost value object with millisecond arithmetic helpers.
+      - name: BudgetDecision
+        role: Outcome of preflight/commit describing remaining budget, overage, and stop semantics.
+    automation_hooks:
+      - BudgetManager.preflight
+      - BudgetManager.commit
+  trace_pipeline:
+    public_classes:
+      - name: TraceEventEmitter
+        role: Emits immutable budget/policy events through a TraceWriter.
+      - name: TraceWriter
+        role: Protocol to integrate with structured logging backends.
+    extension_points:
+      - Consumers may provide custom TraceWriter implementations that persist to JSONL sinks.
+  runner:
+    public_classes:
+      - name: FlowRunner
+        role: Executes FlowNode sequences under budget and policy control.
+      - name: FlowNode
+        role: Node wrapper carrying adapter reference and payload metadata.
+      - name: RunContext
+        role: Execution context containing run identifiers.
+      - name: RunResult
+        role: Aggregated output including completed nodes, warnings, and breach metadata.
+    hooks:
+      - Tool adapters must expose estimate_cost() and actual_cost_snapshot()/actual_ms.
+      - PolicyStack implementations can extend default behaviour to enforce policies prior to execution.
+config:
+  options:
+    - name: BudgetSpec.limit_ms
+      type: float
+      default: null
+      description: Upper bound for spend in milliseconds per scope.
+    - name: BudgetSpec.mode
+      type: enum[hard, soft]
+      default: hard
+      description: Controls whether overages warn or stop by default.
+    - name: BudgetSpec.breach_action
+      type: enum[stop, warn]
+      default: stop
+      description: Final authority on behaviour when limit exceeded.
+automation:
+  triggers:
+    - name: phase3_runner
+      description: Executes pytest with coverage for sandbox code and writes runlog to POSTEXECUTION artifacts.
+      outputs:
+        - codex/agents/POSTEXECUTION/P3/07b_budget_guards_and_runner_integration.yaml-47537ede-0ec2-4de1-b9cd-10e0f3c0d68c-runlog.txt
+error_contracts:
+  budget_breach:
+    description: Hard-stop breaches recorded in RunResult.breaches with action=stop and are emitted via TraceEventEmitter.
+  scope_missing:
+    description: BudgetManager raises KeyError when commit/preflight invoked for unknown scopes.
+serialization:
+  traces:
+    format: immutable mapping proxies emitted to TraceWriter for policy and budget events.
+    schema_fields:
+      - scope_id
+      - remaining_ms
+      - overage_ms
+      - action/breach_action
+      - event (policy events only)
+  results:
+    format: RunResult dataclass serialisable via asdict for downstream processing.
+typing:
+  notes: All public classes are typed using standard typing annotations and rely on literal enums for breach semantics.
+security:
+  considerations:
+    - Trace payloads exclude tool inputs/outputs to avoid leaking sensitive data in logs.
+    - Immutable payloads prevent downstream mutation that could corrupt audit trails.
+performance:
+  characteristics:
+    - CostSnapshot arithmetic is constant time; BudgetManager stores scope state in-memory keyed by (scope_type, scope_id).
+    - FlowRunner performs synchronous adapter execution; concurrency is not introduced in this sandbox.
