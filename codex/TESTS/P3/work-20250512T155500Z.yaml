@@ -1,0 +1,15 @@
+missing_tests:
+  task_id: 07b_budget_guards_and_runner_integration.yaml
+  proposed_tests:
+    - name: test_policy_violation_and_budget_breach_priority
+      rationale: Ensure FlowRunner surfaces policy violations before soft budget warnings when both occur in the same node execution.
+      source_module: codex/code/work/runner/flow_runner.py
+      priority: high
+    - name: test_trace_payload_schema_validation
+      rationale: Validate emitted trace payloads against the DSL trace schema to catch future drift.
+      source_module: codex/code/work/runner/trace.py
+      priority: medium
+    - name: test_loop_multiple_nodes_budget_accounting
+      rationale: Cover loop bodies with multiple nodes to assert all scopes receive correct spend aggregation and stop semantics.
+      source_module: codex/code/work/runner/flow_runner.py
+      priority: medium

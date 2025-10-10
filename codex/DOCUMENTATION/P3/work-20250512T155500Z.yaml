@@ -1,0 +1,46 @@
+component: flow_runner_budget_guard
+purpose: |
+  Provide immutable budget domain models, a trace-aware BudgetManager facade, and
+  an adapter-backed FlowRunner integration that enforces DSL budget and policy
+  contracts while emitting schema-aligned telemetry.
+cli_usage: |
+  No direct CLI. Components are imported by orchestration layers; tests demonstrate
+  usage via:
+    from codex.code.work.runner.flow_runner import FlowRunner
+    result = FlowRunner(...).run(flow_spec)
+public_interfaces:
+  - name: codex.code.work.runner.budgeting.CostSnapshot
+    description: Immutable cost container with milliseconds/tokens normalization helpers.
+  - name: codex.code.work.runner.budgeting.BudgetSpec
+    description: Scope-specific budget definition (`limit`, `mode`, `breach_action`).
+  - name: codex.code.work.runner.manager.BudgetManager
+    description: Coordinates `preflight` and `commit` across scopes and emits trace events.
+  - name: codex.code.work.runner.flow_runner.FlowRunner
+    description: Executes sequential/loop nodes via adapters while enforcing budgets/policies.
+base_classes:
+  - name: codex.code.work.runner.flow_runner.ToolAdapter
+    description: Protocol describing adapters (estimate_cost, execute) consumed by FlowRunner.
+extension_hooks:
+  - BudgetManager.trace: exposes shared `TraceEventEmitter` allowing observers to subscribe.
+  - FlowRunner._policy_scope: context manager supporting future policy scope customisation.
+configurable_options:
+  - run_budget.limit.milliseconds: Hard/soft budget threshold per run scope.
+  - node/loop budget dictionaries: Optional per-scope budgets with `mode` + `breach_action`.
+  - adapters: Mapping of tool name -> adapter implementing ToolAdapter protocol.
+automation_triggers:
+  - TraceEventEmitter events (`budget_charge`, `budget_warning`, `loop_stop`, `policy_resolved`) feed observability sinks.
+error_contracts:
+  - BudgetManager.commit raises KeyError for unknown scopes to surface misconfiguration.
+  - FlowRunner.run raises KeyError when encountering an unregistered adapter, aligning with DSL schema expectations.
+serialization:
+  - Trace payloads returned as mapping-proxy objects to ensure immutability downstream.
+  - RunResult.outputs serialisable dict keyed by node id.
+lifecycle:
+  - FlowRunner initialises run scope per invocation, reusing shared PolicyStack/BudgetManager dependencies.
+  - BudgetManager state resets per instance; repeated runs require fresh manager or explicit resets.
+typing:
+  - Fully type-hinted (PEP 484) with frozen dataclasses for value objects and Protocol for adapters.
+security:
+  - No external IO; assumes adapters enforce their own sandboxing.
+performance:
+  - In-memory bookkeeping with integer arithmetic; suitable for unit/integration testing scale. Loop iterations short-circuit when budgets breach to prevent unnecessary adapter calls.

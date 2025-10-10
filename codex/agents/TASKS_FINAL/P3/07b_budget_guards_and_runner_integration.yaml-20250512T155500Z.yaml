@@ -1,0 +1,83 @@
+summary: >
+  Implement canonical budget models, manager orchestration, and FlowRunner
+  integration with trace emission built from synthesised phase-2 guidance.
+justification: >
+  Consolidates immutable budgeting data, shared trace emitter, and adapter-backed
+  runner wiring to satisfy policy and budget enforcement coverage without
+  diverging from DSL schemas.
+steps:
+  - name: domain_models
+    description: Define immutable budget data classes and normalization helpers.
+  - name: manager_orchestration
+    description: Build BudgetManager with preflight/commit APIs emitting
+      structured trace payloads.
+  - name: runner_integration
+    description: Wire FlowRunner to adapters, PolicyStack, and BudgetManager,
+      including loop stop semantics and combined trace emission.
+modules:
+  - path: codex/code/work/runner/budgeting.py
+    role: Immutable budget models, normalization utilities, and charge math.
+  - path: codex/code/work/runner/manager.py
+    role: BudgetManager facade coordinating preflight/commit across scopes and
+      producing trace-ready outcomes.
+  - path: codex/code/work/runner/trace.py
+    role: Shared TraceEventEmitter with schema-aligned payload shaping for
+      policy/budget events.
+  - path: codex/code/work/runner/flow_runner.py
+    role: Adapter-backed FlowRunner orchestrating policies, budgets, loops, and
+      trace emission.
+  - path: codex/code/work/runner/__init__.py
+    role: Package exports for runner components to simplify imports in tests.
+tests:
+  - path: codex/code/work/tests/test_budget_manager.py
+    coverage: >
+      Validate BudgetManager normalization, preflight hard-stop detection, and
+      charge aggregation across run/node scopes including warnings.
+    mocks: Use lightweight fake TraceEventEmitter sinks and stub adapters.
+  - path: codex/code/work/tests/test_flow_runner_budgets.py
+    coverage: >
+      Cover FlowRunner enforcement of run/loop/node budgets, policy integration,
+      stop vs warn behaviours, and emitted trace ordering.
+    mocks: Fake adapters implementing estimate/execute with deterministic costs;
+      captured trace sink lists for assertions.
+run_order:
+  - domain_models
+  - manager_orchestration
+  - runner_integration
+interfaces:
+  BudgetManager:
+    methods:
+      - name: register
+        signature: (BudgetSpec) -> None
+      - name: preflight
+        signature: (scopes: Sequence[BudgetScope], estimate: CostSnapshot) -> BudgetPreflightDecision
+      - name: commit
+        signature: (scopes: Sequence[BudgetScope], charge: CostSnapshot) -> list[BudgetChargeOutcome]
+    notes: Returns immutable data for trace emission and enforcement decisions.
+  FlowRunner:
+    methods:
+      - name: run
+        signature: (spec: Mapping[str, object], *, run_vars: Mapping[str, object] | None = None) -> RunResult
+    notes: Accepts adapters/policy stack factories at init; integrates budgets
+      and trace emitter dependencies.
+tdd_coverage_targets:
+  budgeting.py: 0.9
+  manager.py: 0.9
+  flow_runner.py: 0.85
+review_checklist:
+  - Immutable models avoid shared mutation.
+  - BudgetManager enforces breach_action semantics.
+  - FlowRunner emits policy_resolved before budget_charge events per node.
+  - Loop stop reasons align with DSL vocabulary.
+  - Tests cover hard-stop, soft-warn, and simultaneous policy/budget cases.
+outputs:
+  plan_yaml: codex/agents/TASKS_FINAL/P3/07b_budget_guards_and_runner_integration.yaml-20250512T155500Z.yaml
+  tests:
+    - codex/code/work/tests/test_budget_manager.py
+    - codex/code/work/tests/test_flow_runner_budgets.py
+  modules:
+    - codex/code/work/runner/budgeting.py
+    - codex/code/work/runner/manager.py
+    - codex/code/work/runner/trace.py
+    - codex/code/work/runner/flow_runner.py
+    - codex/code/work/runner/__init__.py
