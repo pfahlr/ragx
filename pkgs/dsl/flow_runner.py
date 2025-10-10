@@ -224,6 +224,8 @@ class FlowRunner:
         if loop_id is not None:
             node_payload.setdefault("loop_id", loop_id)
         try:
+            # Emit policy_resolved traces before enforcing the tool-specific decision.
+            self._policies.effective_allowlist([tool])
             self._policies.enforce(tool)
             cost_snapshot = bm.CostSnapshot.from_raw(
                 adapter.estimate_cost(node_payload)

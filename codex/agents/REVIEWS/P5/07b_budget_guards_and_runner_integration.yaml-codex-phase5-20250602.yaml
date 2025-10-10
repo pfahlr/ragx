@@ -1,0 +1,35 @@
+final_review_summary:
+  task: 07b_budget_guards_and_runner_integration.yaml
+  reviewed_by: codex-phase5-agent
+  phase: P5
+  spec_ref: codex/specs/schemas/full_task.schema.json
+  branch_context:
+    merged_from: main
+    non_merged_reviewed:
+      - codex/integrate-budget-guards-with-runner
+      - codex/implement-budget-guards-with-test-first-approach
+      - codex/integrate-budget-guards-with-runner-pbdel9
+  schema_validation: pass
+  runner_readiness: complete
+  trace_event_contract:
+    push: verified
+    pop: verified
+    policy_resolved: verified
+    violation: verified
+  test_coverage:
+    pkgs.dsl.budget_models: full
+    pkgs.dsl.budget_manager: full
+    pkgs.dsl.flow_runner: full
+    pkgs.dsl.trace: full
+  user_docs:
+    generated:
+      - /README.md
+      - /docs/README.md
+      - /docs/07b_budget_guards_and_runner_integration.yaml.md
+    based_on: codex/DOCUMENTATION/P4/07b_budget_guards_and_runner_integration.yaml-006584c3-01d5-4132-8dd0-12fa533c4053
+  future_work:
+    - Normalise legacy test imports (`codex.code.work.*` → `pkgs.dsl.*`).
+    - Publish a JSON schema for trace payloads to replace structural assertions.
+    - Evaluate nested loop semantics once the DSL defines recursive flow execution.
+  confidence: high
+  recommended_followup_phase: null

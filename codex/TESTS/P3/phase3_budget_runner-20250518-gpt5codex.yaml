@@ -5,11 +5,17 @@ missing_tests:
       rationale: Current suite exercises run/node scopes only; loop-level stop semantics remain unverified.
       source_module: codex/code/phase3_budget_runner/dsl/flow_runner.py
       priority: high
+      status: resolved
+      implemented_by: codex/code/07b_budget_guards_and_runner_integration.yaml/tests/test_flow_runner_auto.py::test_loop_scope_budget_stop_emits_breach_and_loop_stop
     - name: test_trace_payload_schema_validation
       rationale: Need automated validation against `dsl_trace_event.schema.json` to prevent payload regressions.
       source_module: codex/code/phase3_budget_runner/dsl/trace.py
       priority: medium
+      status: resolved
+      implemented_by: codex/code/07b_budget_guards_and_runner_integration.yaml/tests/test_trace_auto.py::test_trace_payload_schema_validation
     - name: test_policy_resolution_snapshot_tracing
       rationale: Ensure `policy_resolved` events remain ordered relative to budget events in multi-policy runs.
       source_module: codex/code/phase3_budget_runner/dsl/flow_runner.py
       priority: medium
+      status: resolved
+      implemented_by: codex/code/07b_budget_guards_and_runner_integration.yaml/tests/test_flow_runner_auto.py::test_flow_runner_policy_trace_interleaving_preserves_order

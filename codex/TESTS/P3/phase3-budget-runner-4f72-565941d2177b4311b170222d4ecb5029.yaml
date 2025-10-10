@@ -5,11 +5,17 @@ missing_tests:
       rationale: Ensure commit recomputes projected spend when actual costs differ from estimates, preventing silent drift.
       source_module: dsl/budget.py
       priority: medium
+      status: resolved
+      implemented_by: codex/code/07b_budget_guards_and_runner_integration.yaml/tests/test_budget_manager_auto.py::test_budget_manager_handles_spec_scope_and_partial_metrics
     - name: test_flow_runner_emits_combined_policy_budget_traces
       rationale: Validate ordering when a policy violation occurs after a soft warning within the same run, covering trace interleaving.
       source_module: dsl/runner.py
       priority: medium
+      status: resolved
+      implemented_by: codex/code/07b_budget_guards_and_runner_integration.yaml/tests/test_flow_runner_auto.py::test_flow_runner_emits_combined_policy_budget_traces
     - name: test_trace_writer_snapshot_returns_deeply_immutable_payloads
       rationale: Guard against future regressions where nested payloads become mutable.
       source_module: dsl/trace.py
       priority: low
+      status: resolved
+      implemented_by: codex/code/07b_budget_guards_and_runner_integration.yaml/tests/test_trace_auto.py::test_trace_writer_snapshot_returns_deeply_immutable_payloads

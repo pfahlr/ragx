@@ -119,6 +119,46 @@ python -m ragcore.cli merge \
   --merge ./shards/000 --merge ./shards/001 --out ./artifacts/merged
 ```
 
+---
+
+## 4) Budget Guards + FlowRunner Integration (Phase 3)
+
+The Phase 3 sandbox reconciles the budget guard branches into production-ready modules under `pkgs/dsl/`:
+
+* **`pkgs/dsl/budget_models.py`** — immutable `CostSnapshot`, `BudgetSpec`, and `BudgetDecision` helpers that export mapping-proxy trace payloads.
+* **`pkgs/dsl/budget_manager.py`** — manages scope lifecycle, preview/commit/record flows, and emits `budget_charge`/`budget_breach` traces.
+* **`pkgs/dsl/flow_runner.py`** — orchestrates ToolAdapters, BudgetManager, and PolicyStack with deterministic trace ordering (`policy_resolved` → `budget_breach` → `loop_stop`).
+* **`pkgs/dsl/trace.py`** — `TraceEventEmitter` producing immutable `TraceEvent` records with optional sinks/validators.
+
+### 4.1 Quick validation
+
+```bash
+# Targeted Phase 3 regression suite
+pytest codex/code/07b_budget_guards_and_runner_integration.yaml/tests -q
+
+# Legacy unit coverage (imports will be updated in future phases)
+pytest tests/unit/dsl/test_budget_manager.py -q
+```
+
+### 4.2 Execution flow
+
+1. `FlowRunner.run()` enters the run scope, emits `run_start`, and iterates nodes/loops.
+2. For each node, the runner calls `PolicyStack.effective_allowlist()` to emit `policy_resolved`, then `PolicyStack.enforce()` to raise `PolicyViolationError` when needed.
+3. `BudgetManager.preview_charge()` returns a `BudgetDecision`; if `decision.breached`, `record_breach()` emits immutable payloads and `BudgetBreachError` propagates when `should_stop`.
+4. Loop execution honours `breach_action` semantics: `stop` halts the loop (`loop_stop`), while `warn` keeps iterating after emitting `budget_breach`.
+
+### 4.3 Extension hooks
+
+* Inject custom trace sinks by passing `TraceEventEmitter` instances (or setting `runner.trace_sink` via config flags defined in the Phase 3 task plan).
+* Policy instrumentation can attach a `PolicyTraceRecorder` or sink to observe `policy_push/pop/resolved/violation` events.
+* Downstream adapters should honour the `ToolAdapter` protocol (`estimate_cost`, `execute`) to integrate with the budget manager seamlessly.
+
+### 4.4 Acceptance targets
+
+* Loop budget stops and soft warnings (`test_flow_runner_auto.py`).
+* Policy/budget interleaving and run-level hard stops.
+* Trace payload immutability and validator error surfacing (`test_trace_auto.py`).
+
 ### Log diff & verification
 
 ```bash

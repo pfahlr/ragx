@@ -5,11 +5,17 @@ missing_tests:
       rationale: Ensure BudgetManager tracks independent remaining/overage values when node and loop scopes are entered alongside run scope.
       source_module: pkgs/dsl/budget.py
       priority: high
+      status: resolved
+      implemented_by: codex/code/07b_budget_guards_and_runner_integration.yaml/tests/test_budget_manager_auto.py::test_budget_manager_nested_scope_accounting
     - name: test_flow_runner_policy_violation_interleaving
       rationale: Validate FlowRunner ordering when PolicyStack raises a violation concurrently with a budget breach.
       source_module: pkgs/dsl/runner.py
       priority: medium
+      status: resolved
+      implemented_by: codex/code/07b_budget_guards_and_runner_integration.yaml/tests/test_flow_runner_auto.py::test_policy_violation_prevents_budget_charges_and_emits_ordered_trace
     - name: test_trace_emitter_schema_validation
       rationale: Add regression that validates emitted payloads against the DSL trace schema to prevent field drift.
       source_module: pkgs/dsl/trace.py
       priority: medium
+      status: resolved
+      implemented_by: codex/code/07b_budget_guards_and_runner_integration.yaml/tests/test_trace_auto.py::test_trace_payload_schema_validation

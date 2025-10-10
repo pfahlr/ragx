@@ -5,11 +5,17 @@ missing_tests:
       rationale: Validate that a denylisted node records a `policy_violation` event and halts execution before budget charges.
       source_module: codex/code/phase3-07b-budget-guards-b3c8/dsl/policy.py
       priority: medium
+      status: resolved
+      implemented_by: codex/code/07b_budget_guards_and_runner_integration.yaml/tests/test_flow_runner_auto.py::test_policy_violation_prevents_budget_charges_and_emits_ordered_trace
     - name: test_run_scope_hard_budget_stops_all_loops
       rationale: Ensure run-level hard budgets short-circuit remaining loops and emit a single breach event.
       source_module: codex/code/phase3-07b-budget-guards-b3c8/dsl/runner.py
       priority: high
+      status: resolved
+      implemented_by: codex/code/07b_budget_guards_and_runner_integration.yaml/tests/test_flow_runner_auto.py::test_run_scope_hard_budget_stops_all_loops
     - name: property_based_budget_charge_precision
       rationale: Use Hypothesis to fuzz cost normalization and verify overage arithmetic stability.
       source_module: codex/code/phase3-07b-budget-guards-b3c8/dsl/budget.py
       priority: low
+      status: resolved
+      implemented_by: codex/code/07b_budget_guards_and_runner_integration.yaml/tests/test_budget_manager_auto.py::test_property_based_budget_charge_precision

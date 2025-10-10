@@ -5,11 +5,17 @@ missing_tests:
       rationale: Cover loop scope entry/exit and ensure budget stop halts loop iterations with correct trace ordering.
       source_module: codex/code/work/dsl/flow_runner.py
       priority: high
+      status: resolved
+      implemented_by: codex/code/07b_budget_guards_and_runner_integration.yaml/tests/test_flow_runner_auto.py::test_loop_scope_budget_stop_emits_breach_and_loop_stop
     - name: test_policy_and_budget_violation_coexistence
       rationale: Validate FlowRunner behaviour when a policy denial and budget breach occur on the same node.
       source_module: codex/code/work/dsl/flow_runner.py
       priority: medium
+      status: resolved
+      implemented_by: codex/code/07b_budget_guards_and_runner_integration.yaml/tests/test_flow_runner_auto.py::test_policy_and_budget_violation_coexistence_prioritises_policy
     - name: test_trace_payload_schema_validation
       rationale: Ensure emitted trace payloads conform to DSL schema via jsonschema validation helper.
       source_module: codex/code/work/dsl/trace.py
       priority: medium
+      status: resolved
+      implemented_by: codex/code/07b_budget_guards_and_runner_integration.yaml/tests/test_trace_auto.py::test_trace_payload_schema_validation

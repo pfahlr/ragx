@@ -5,11 +5,17 @@ missing_tests:
       rationale: Ensure emitted trace payloads conform to the DSL schema (field names/types) using a validator.
       source_module: codex/code/phase3_budget_runner_r7h3/dsl/trace.py
       priority: medium
+      status: resolved
+      implemented_by: codex/code/07b_budget_guards_and_runner_integration.yaml/tests/test_trace_auto.py::test_trace_payload_schema_validation
     - name: test_flow_runner_policy_trace_interleaving
       rationale: Validate that policy resolve/validate hooks emit corresponding trace events alongside budget events.
       source_module: codex/code/phase3_budget_runner_r7h3/dsl/runner.py
       priority: medium
+      status: resolved
+      implemented_by: codex/code/07b_budget_guards_and_runner_integration.yaml/tests/test_flow_runner_auto.py::test_flow_runner_policy_trace_interleaving_preserves_order
     - name: test_budget_manager_partial_metric_limits
       rationale: Cover scenarios where limits omit metrics present in costs to confirm remaining values are unbounded.
       source_module: codex/code/phase3_budget_runner_r7h3/dsl/budget.py
       priority: low
+      status: resolved
+      implemented_by: codex/code/07b_budget_guards_and_runner_integration.yaml/tests/test_budget_manager_auto.py::test_budget_manager_handles_spec_scope_and_partial_metrics
