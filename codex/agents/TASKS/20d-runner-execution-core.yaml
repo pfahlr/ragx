@@ -2,7 +2,7 @@ id: 20d-runner-execution-core
 title: DSL Runner – execution core (sequential, no loops/decisions yet)
 owner: codex
 priority: P0
-depends_on: [20c-flowscript-compiler-to-yaml]
+dependencies: [20c-flowscript-compiler-to-yaml]
 goal: Execute YAML DSL graphs (unit + transform nodes) sequentially with templating and tracing.
 inputs:
   - codex/specs/ragx_master_spec.yaml

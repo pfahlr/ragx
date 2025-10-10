@@ -41,7 +41,7 @@ component_ids:
   - tests.unit.budget
   - tests.unit.runner
   - tests.e2e.runner
-depends_on:
+dependencies:
   - 07a_dsl_policy_engine_completion.plan
 arg_spec: []
 config_flags: []
@@ -150,7 +150,7 @@ actions:
             - codex/implement-budget-guards-with-test-first-approach
             - codex/integrate-budget-guards-with-runner-pbdel9
             - codex/integrate-budget-guards-with-runner-zwi2ny
-          depends_on:
+          dependencies:
             - budget_domain_model
           steps:
             - Implement BudgetManager that constructs BudgetMeter instances per scope, exposes preflight_* and commit_* APIs, and returns BudgetCheck/BudgetCharge outcomes.
@@ -176,7 +176,7 @@ actions:
             - codex/implement-budget-guards-with-test-first-approach-8wxk32
             - codex/implement-budget-guards-with-test-first-approach-fa0vm9
             - codex/implement-budget-guards-with-test-first-approach-qhq0jq
-          depends_on:
+          dependencies:
             - budget_manager_and_trace
           steps:
             - Execute nodes via ToolAdapter protocol, capturing estimates, enforcing PolicyStack before execution, and charging BudgetManager with actual costs.
@@ -200,7 +200,7 @@ actions:
           adapted_from_branch:
             - codex/integrate-budget-guards-with-runner-pbdel9
             - codex/implement-budget-guards-with-test-first-approach-fa0vm9
-          depends_on:
+          dependencies:
             - flow_runner_integration
           steps:
             - Add integration test exercising simultaneous run+loop soft warnings followed by hard stop, verifying trace ordering.

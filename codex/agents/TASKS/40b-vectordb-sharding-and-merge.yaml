@@ -2,7 +2,7 @@ id: 40b-vectordb-sharding-and-merge
 title: VectorDB – shard build + merge + resume
 owner: codex
 priority: P0
-depends_on: [40a-vectordb-faiss-shim-and-serialize]
+dependencies: [40a-vectordb-faiss-shim-and-serialize]
 goal: Build shards up to `--shard-size`, allow resume after crash, and merge into final index.
 outputs:
   - pkgs/indexer/builder.py

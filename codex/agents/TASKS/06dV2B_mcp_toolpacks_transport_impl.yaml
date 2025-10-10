@@ -2,7 +2,7 @@ version: 1
 id: 06dV2B_mcp_toolpacks_transport_impl.yaml
 title: MCP Toolpacks Transport — Unified execution, guardrails, and telemetry (Part B — Implementation & Enhancements)
 
-depends_on:
+dependencies:
   - 06d_mcp_toolpacks_transport_A_tests_first
 
 summary: >

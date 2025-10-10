@@ -2,7 +2,7 @@ id: 31a-rest-parity-facade
 title: REST facade – /v1/search /v1/plan /v1/research + tests
 owner: codex
 priority: P1
-depends_on: [30d-core-tools-canonical]
+dependencies: [30d-core-tools-canonical]
 goal: Thin HTTP endpoints that call into same service layer as MCP tools; JSON schemas.
 outputs:
   - apps/rest/api.py

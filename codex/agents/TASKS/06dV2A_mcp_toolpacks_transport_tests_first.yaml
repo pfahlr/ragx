@@ -37,7 +37,7 @@ constraints:
   - Golden updates require an explicit approval step.
 
 component_ids: [apps.mcp_server.service, apps.toolpacks.executor, tests.e2e.mcp]
-depends_on: [06cV2A_mcp_envelope_and_schema_validation_A, 06b_mcp_server_bootstrap]
+dependencies: [06cV2A_mcp_envelope_and_schema_validation_A, 06b_mcp_server_bootstrap]
 
 arg_spec:
   - --deterministic-ids

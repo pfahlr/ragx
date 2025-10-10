@@ -31,7 +31,7 @@ constraints:
   - On-disk log fields use camelCase; volatile identifiers are whitelisted in diffs.
 
 component_ids: ["mcp_server", "toolpacks_runtime", "observability"]
-depends_on: ["06b_mcp_server_bootstrap", "06a_core_tools_minimal_subset"]
+dependencies: ["06b_mcp_server_bootstrap", "06a_core_tools_minimal_subset"]
 arg_spec: ["mcp_server", "task_runner"]
 
 config_flags:

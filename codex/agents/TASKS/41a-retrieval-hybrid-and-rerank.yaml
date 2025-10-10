@@ -2,7 +2,7 @@ id: 41a-retrieval-hybrid-and-rerank
 title: Retrieval – hybrid BM25+vector and cross-encoder rerank
 owner: codex
 priority: P1
-depends_on: [30d-core-tools-canonical, 40a-vectordb-faiss-shim-and-serialize]
+dependencies: [30d-core-tools-canonical, 40a-vectordb-faiss-shim-and-serialize]
 goal: RetrieverFactory with hybrid scoring and optional cross-encoder reranker; NDCG fixtures offline.
 outputs:
   - pkgs/retrieval/retriever.py

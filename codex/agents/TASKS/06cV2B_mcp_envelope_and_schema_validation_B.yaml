@@ -2,7 +2,7 @@ version: 1
 id: 06cV2B_mcp_envelope_and_schema_validation_B
 title: MCP Envelope & Schema Validation (Part B — Implementation & Enhancements)
 
-depends_on:
+dependencies:
   - 06c_mcp_envelope_and_schema_validation_A_tests_first
 
 summary: >

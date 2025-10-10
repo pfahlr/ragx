@@ -2,7 +2,7 @@ id: 20c-flowscript-compiler-to-yaml
 title: FlowScript compiler → canonical YAML DSL
 owner: codex
 priority: P0
-depends_on: [20b-flowscript-parser-ast]
+dependencies: [20b-flowscript-parser-ast]
 goal: Compile FlowScript AST into the canonical YAML DSL (schemas defined in spec).
 inputs:
   - codex/specs/ragx_master_spec.yaml

@@ -2,7 +2,7 @@ id: 20h-adapters-and-costing
 title: Tool/LLM/MCP adapters + costing from tool_registry
 owner: codex
 priority: P0
-depends_on: [20e-policy-and-budget-engine, 06b_mcp_server_bootstrap, 05b_toolpacks_executor_python_only]
+dependencies: [20e-policy-and-budget-engine, 06b_mcp_server_bootstrap, 05b_toolpacks_executor_python_only]
 goal: Uniform adapter interface with cost estimation (tokens/calls/usd) using tool_registry.
 inputs:
   - codex/specs/ragx_master_spec.yaml

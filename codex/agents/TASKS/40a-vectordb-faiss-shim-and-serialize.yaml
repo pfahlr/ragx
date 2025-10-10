@@ -2,7 +2,7 @@ id: 40a-vectordb-faiss-shim-and-serialize
 title: VectorDB – FAISS shim + CPU serialize + docmap contract
 owner: codex
 priority: P0
-depends_on: []
+dependencies: []
 goal: Ship Python shim and minimal backend (dummy or FAISS if available) honoring serialize contract and index dir layout.
 outputs:
   - ragcore/interfaces.py

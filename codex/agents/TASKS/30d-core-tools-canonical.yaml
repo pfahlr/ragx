@@ -2,7 +2,7 @@ id: 30d-core-tools-canonical
 title: Core Tools – normalized schemas and fixtures
 owner: codex
 priority: P0
-depends_on: [30c-toolpacks-loader-and-exec]
+dependencies: [30c-toolpacks-loader-and-exec]
 goal: Implement canonical toolpacks with normalized I/O and golden fixtures.
 outputs:
   - apps/mcp_server/toolpacks/web.search.query.tool.yaml

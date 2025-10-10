@@ -98,7 +98,7 @@ actions:
           summary: Layer PolicySnapshot/enforce API onto the corrected PolicyStack.
           adapted_from_branch:
             - codex/implement-dsl-policy-engine-in-yaml-yp01n0
-          depends_on:
+          dependencies:
             - policy_stack_core
           steps:
             - Produce immutable PolicySnapshot objects that capture allowed tools, denial metadata, and stack scopes without recomputing traces.
@@ -120,7 +120,7 @@ actions:
           adapted_from_branch:
             - codex/implement-dsl-policy-engine-in-yaml-reclz1
             - codex/implement-dsl-policy-engine-in-yaml-81p0id
-          depends_on:
+          dependencies:
             - policy_stack_core
           steps:
             - Build a reusable analyzer that clones the PolicyStack per loop/decision branch and records trace context for unreachable findings.

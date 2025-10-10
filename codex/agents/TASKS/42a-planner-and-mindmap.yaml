@@ -2,7 +2,7 @@ id: 42a-planner-and-mindmap
 title: Planner – deterministic perspectives, questions, mind-map JSON
 owner: codex
 priority: P1
-depends_on: [20j-example-flows-and-docs]
+dependencies: [20j-example-flows-and-docs]
 goal: Produce stable perspectives & questions with seeded RNG; mind-map export/import.
 outputs:
   - pkgs/planner/planner.py

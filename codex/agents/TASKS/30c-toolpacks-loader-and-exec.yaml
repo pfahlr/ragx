@@ -2,7 +2,7 @@ id: 30c-toolpacks-loader-and-exec
 title: Toolpacks – loader + exec (python|cli|http) with $ref and limits
 owner: codex
 priority: P0
-depends_on: [30a-mcp-envelope-and-schema]
+dependencies: [30a-mcp-envelope-and-schema]
 goal: Load *.tool.yaml; resolve $ref schemas; execute tools with stdin/stdout JSON; enforce time/size limits; deterministic cache.
 outputs:
   - apps/toolpacks/loader.py

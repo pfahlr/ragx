@@ -2,7 +2,7 @@ id: 20i-dsl-linter-and-ci
 title: Static DSL linter + CI gate (unreachable tools, budget blow-ups)
 owner: codex
 priority: P0
-depends_on: [20h-adapters-and-costing]
+dependencies: [20h-adapters-and-costing]
 goal: Ship linter CLI and wire into CI as a required step.
 inputs:
   - codex/specs/ragx_master_spec.yaml

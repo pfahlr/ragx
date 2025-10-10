@@ -2,7 +2,7 @@ id: 20f-transforms-sandbox
 title: Transform sandbox – jinja/python (shell opt-in via flag)
 owner: codex
 priority: P1
-depends_on: [20d-runner-execution-core]
+dependencies: [20d-runner-execution-core]
 goal: "Safe execution of transform nodes with resource bounds; default: jinja + python only."
 inputs:
   - codex/specs/ragx_master_spec.yaml

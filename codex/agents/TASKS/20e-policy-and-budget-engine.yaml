@@ -2,7 +2,7 @@ id: 20e-policy-and-budget-engine
 title: Policy stack + budget meters (hard/soft) with enforcement
 owner: codex
 priority: P0
-depends_on: [20d-runner-execution-core]
+dependencies: [20d-runner-execution-core]
 goal: Enforce hierarchical policy allow/deny and budget caps at run/node/spec scope.
 inputs:
   - codex/specs/ragx_master_spec.yaml

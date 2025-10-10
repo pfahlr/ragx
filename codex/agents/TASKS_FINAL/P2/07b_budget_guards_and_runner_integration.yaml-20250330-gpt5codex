@@ -34,7 +34,7 @@ constraints:
   - Trace payloads must adhere to a shared schema validated during tests to prevent drift.
 component_ids:
   - pkgs/dsl
-depends_on:
+dependencies:
   - codex/specs/ragx_master_spec.yaml
 structured_logging_contract:
   summary: Budget and policy events share a TraceWriter-backed sink emitting immutable payloads for push/pop/charge/breach.

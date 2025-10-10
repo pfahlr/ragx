@@ -2,7 +2,7 @@ id: 50a-observability-trace-contracts
 title: Observability – trace JSONL contracts and metrics smoke tests
 owner: codex
 priority: P0
-depends_on: [20d-runner-execution-core]
+dependencies: [20d-runner-execution-core]
 goal: Validate trace event shapes and minimal metrics counters for runner and MCP.
 outputs:
   - tests/obs/test_trace_contracts.py
