@@ -1,0 +1,283 @@
+meta:
+  code_task: 07a_dsl_policy_engine_completion.yaml
+  repo: pfahlr/
+  last_updated: 2025-03-27
+  phase: P4
+  merged_branch_excluded: true
+branch_ranking:
+  - branch: codex/implement-dsl-policy-engine-in-production
+    rank: 1
+    rationale: "Completes registry normalization, nearest-scope evaluation, and enforcement with structured traces; only minor cleanups remain (e.g., pytest import)."
+  - branch: codex/implement-dsl-policy-engine-in-production-5p284m
+    rank: 2
+    rationale: "Implements event sinks and ToolDescriptor helpers but defaults to implicit deny and omits pytest imports, leaving behavior gaps versus the top branch."
+  - branch: codex/implement-dsl-policy-engine-in-production-72ua42
+    rank: 3
+    rationale: "Attempts richer denial payloads and directive scoping, yet missing imports (`dataclass`, `deque`) and incomplete tests prevent execution."
+  - branch: codex/implement-dsl-policy-engine-in-production-p4eaey
+    rank: 4
+    rationale: "Introduces cloning and metadata guards, but pervasive missing imports and mandatory tool-set arguments break basic stack usage."
+extended_tasks:
+  - version: 1
+    id: policy_stack_trace_defaults
+    title: Instantiate default trace recorder and expose stack depth accessors
+    summary: Provide a first-class trace recorder and stack depth accessors so instrumentation consumers can inspect PolicyStack state without wiring fixtures manually.
+    description: |
+      Source files: pkgs/dsl/policy.py, tests/unit/test_policy_stack_resolution.py
+      Adapted from branch: codex/implement-dsl-policy-engine-in-production-5p284m
+      Execution mode: manual
+      Reusable: true
+      Implementation sketch:
+        from pkgs.dsl.policy import PolicyStack, PolicyTraceRecorder
+
+        stack = PolicyStack(tools=TOOLS)
+        assert isinstance(stack.trace_recorder, PolicyTraceRecorder)
+        stack.push({}, scope="root")
+        assert stack.stack_depth == 1
+
+      Tests:
+        - tests/unit/test_policy_stack_resolution.py::test_stack_depth_property_exposes_frame_count
+        - tests/unit/test_policy_stack_resolution.py::test_default_trace_recorder_captures_events
+
+      Artifacts:
+        - name: trace_recorder_contract
+          file: docs/policy/trace-recorder.md
+    metadata:
+      owners: [pfahlr@gmail.com]
+      labels: [dsl, policy-engine, observability]
+      priority: P2
+      risk: medium
+      last_updated: 2025-03-27
+    strategy:
+      tests_first: true
+      deterministic: true
+      golden_management: manual
+    scope:
+      goals:
+        - Instantiate a default PolicyTraceRecorder when none is provided.
+        - Add read-only accessors for stack depth and the active recorder.
+        - Extend resolution tests to cover the default recorder and depth accessor contract.
+      non_goals:
+        - Altering trace payload schemas established by the primary branch.
+        - Modifying enforcement semantics or PolicyViolationError signatures.
+    assumptions:
+      - Event sink callbacks remain optional and synchronous.
+    constraints:
+      - Maintain backward compatibility for callers already passing an explicit recorder.
+    component_ids:
+      - pkgs.dsl.policy
+      - tests.unit.policy_stack
+    structured_logging_contract:
+      format: jsonl
+      storage_path_prefix: logs/policy_engine
+      latest_symlink: logs/policy_engine/latest
+      retention: 14d
+      event_fields:
+        - event
+        - scope
+        - payload.stack_depth
+        - payload.allowed
+        - payload.denied
+      metadata_fields:
+        - run_id
+        - policy_scope
+      volatile_fields:
+        - payload.timestamp
+    ci:
+      xfail_marker: policy_stack_trace_default_gap
+      workflows:
+        - name: ensure_green
+          gates:
+            - scripts/ensure_green.sh
+          artifacts:
+            - tests/unit/test_policy_stack_resolution.py
+    actions:
+      - stage: bootstrap_recorder_access
+        summary: Wire the default recorder and stack_depth properties following branch 5p284m patterns while preserving public API stability.
+        tasks:
+          - Update PolicyStack.__init__ to create a PolicyTraceRecorder when trace is None and store it on a public accessor.
+          - Introduce stack_depth and trace_recorder read-only properties with docstrings.
+          - Ensure event emission paths reuse the recorder property to avoid duplication.
+      - stage: validate_observability_contract
+        summary: Extend unit coverage to assert recorder defaults and stack depth tracking.
+        tasks:
+          - Add regression tests asserting default recorder instantiation and push/pop stack depth changes.
+          - Capture a short trace documentation note enumerating default recorder behavior.
+    acceptance:
+      - Default PolicyStack instances expose a PolicyTraceRecorder without additional wiring.
+      - Stack depth property reflects push/pop mutations and stays read-only.
+      - Updated tests covering recorder defaults and depth accessors pass under scripts/ensure_green.sh.
+  - version: 1
+    id: policy_snapshot_denial_catalog
+    title: Materialize structured denials across allowlist evaluations
+    summary: Extend PolicySnapshot with structured PolicyDenial cataloging for every blocked tool to ease downstream diagnostics.
+    description: |
+      Source files: pkgs/dsl/models.py, pkgs/dsl/policy.py, tests/unit/test_policy_stack_enforce.py
+      Adapted from branch: codex/implement-dsl-policy-engine-in-production-72ua42
+      Execution mode: manual
+      Reusable: true
+      Implementation sketch:
+        snapshot = stack.effective_allowlist()
+        denial = snapshot.denials["search_api"]
+        assert denial.scope == "node"
+        assert "deny:tag:external" in denial.reasons
+
+      Tests:
+        - tests/unit/test_policy_stack_enforce.py::test_snapshot_denials_capture_violation_details
+        - tests/unit/test_policy_stack_resolution.py::test_snapshot_denials_cover_not_in_allowlist
+
+      Artifacts:
+        - name: denial_schema
+          file: docs/policy/denial-payload.json
+    metadata:
+      owners: [pfahlr@gmail.com]
+      labels: [dsl, policy-engine, diagnostics]
+      priority: P2
+      risk: medium
+      last_updated: 2025-03-27
+    strategy:
+      tests_first: true
+      deterministic: true
+      golden_management: manual
+    scope:
+      goals:
+        - Introduce a PolicySnapshot.denials mapping keyed by tool name with structured PolicyDenial values.
+        - Populate denials during resolution without altering enforcement hot paths.
+        - Document the denial payload schema for downstream consumers.
+      non_goals:
+        - Changing PolicyViolationError messaging semantics.
+        - Emitting additional trace events beyond the existing contract.
+    assumptions:
+      - PolicyDecision already captures granted/denied scopes and tag matches required for denials.
+    constraints:
+      - Maintain immutability guarantees on PolicySnapshot contents.
+    component_ids:
+      - pkgs.dsl.policy
+      - pkgs.dsl.models
+      - tests.unit.policy_stack
+    structured_logging_contract:
+      format: jsonl
+      storage_path_prefix: logs/policy_engine
+      latest_symlink: logs/policy_engine/latest
+      retention: 14d
+      event_fields:
+        - event
+        - scope
+        - payload.denied
+        - payload.reasons
+        - payload.stack_depth
+      metadata_fields:
+        - run_id
+        - tool
+      volatile_fields:
+        - payload.timestamp
+    ci:
+      xfail_marker: policy_snapshot_denial_catalog_gap
+      workflows:
+        - name: ensure_green
+          gates:
+            - scripts/ensure_green.sh
+          artifacts:
+            - tests/unit/test_policy_stack_enforce.py
+            - tests/unit/test_policy_stack_resolution.py
+    actions:
+      - stage: enrich_snapshot_model
+        summary: Lift denial modeling from branch 72ua42 while preserving frozen dataclasses.
+        tasks:
+          - Extend PolicyDenial to capture provenance (scope, reasons, matched tags) sourced from PolicyDecision data.
+          - Add an immutable denials mapping on PolicySnapshot populated during resolution.
+      - stage: reinforce_violation_tests
+        summary: Assert denial catalog population across enforcement and allowlist queries.
+        tasks:
+          - Add tests covering both explicit violations and implicit allowlist exclusions.
+          - Publish a denial payload schema artifact documenting available fields.
+    acceptance:
+      - PolicySnapshot exposes denials for every blocked tool with immutable payloads.
+      - Enforcement tests confirm violation snapshots carry structured denial entries.
+      - Denial schema documentation aligns with emitted payload keys.
+  - version: 1
+    id: policy_stack_clone_support
+    title: Add cloning support for branching policy evaluations
+    summary: Provide a safe PolicyStack.clone method to duplicate stack state for branch/loop analysis without mutating the original.
+    description: |
+      Source files: pkgs/dsl/policy.py, tests/unit/test_policy_stack_resolution.py
+      Adapted from branch: codex/implement-dsl-policy-engine-in-production-p4eaey
+      Execution mode: manual
+      Reusable: true
+      Implementation sketch:
+        stack.push({}, scope="global")
+        clone = stack.clone()
+        clone.push({}, scope="branch")
+        assert stack.stack_depth == 1
+        assert clone.stack_depth == 2
+
+      Tests:
+        - tests/unit/test_policy_stack_resolution.py::test_clone_copies_frames_and_registry
+        - tests/unit/test_policy_stack_resolution.py::test_clone_mutations_do_not_affect_original
+
+      Artifacts:
+        - name: clone_usage_notes
+          file: docs/policy/policy-stack-clone.md
+    metadata:
+      owners: [pfahlr@gmail.com]
+      labels: [dsl, policy-engine, planner]
+      priority: P3
+      risk: low
+      last_updated: 2025-03-27
+    strategy:
+      tests_first: true
+      deterministic: true
+      golden_management: manual
+    scope:
+      goals:
+        - Implement PolicyStack.clone returning a deep copy of frames and tool-set caches.
+        - Ensure cloned stacks share read-only registry metadata but maintain independent frame lists.
+        - Backfill unit tests covering divergence between original and cloned stacks.
+      non_goals:
+        - Introducing asynchronous cloning or copy-on-write semantics.
+        - Changing registry normalization or event sink behavior.
+    assumptions:
+      - Tool registry metadata is already stored immutably via ToolDescriptor instances.
+    constraints:
+      - Cloning must avoid duplicating heavy metadata objects unnecessarily.
+    component_ids:
+      - pkgs.dsl.policy
+      - tests.unit.policy_stack
+    structured_logging_contract:
+      format: jsonl
+      storage_path_prefix: logs/policy_engine
+      latest_symlink: logs/policy_engine/latest
+      retention: 14d
+      event_fields:
+        - event
+        - scope
+        - payload.stack_depth
+        - payload.clone
+      metadata_fields:
+        - run_id
+        - branch_id
+      volatile_fields:
+        - payload.timestamp
+    ci:
+      xfail_marker: policy_stack_clone_support_gap
+      workflows:
+        - name: ensure_green
+          gates:
+            - scripts/ensure_green.sh
+          artifacts:
+            - tests/unit/test_policy_stack_resolution.py
+    actions:
+      - stage: implement_clone
+        summary: Port the cloning concept from branch p4eaey while keeping frames immutable.
+        tasks:
+          - Add a clone method that copies frames and cached tool-set expansions without revalidating registry entries.
+          - Ensure clone shares the event sink and optional recorder references safely.
+      - stage: test_branch_divergence
+        summary: Validate cloned stacks evolve independently.
+        tasks:
+          - Add tests verifying pushes on clone do not mutate original stack state.
+          - Document clone usage patterns for planners and linter contexts.
+    acceptance:
+      - PolicyStack.clone returns a functionally equivalent stack ready for independent mutations.
+      - Unit tests demonstrate divergence between original and cloned stacks without side effects.
+      - Documentation explains clone scenarios for branch/loop planners.
