@@ -1,5 +1,12 @@
-"""DSL package exports for policy engine components."""
+"""DSL package exports for policy and budgeting components."""
 
+from .budget import (  # noqa: F401
+    BudgetBreach,
+    BudgetCharge,
+    BudgetCheck,
+    BudgetExceededError,
+    BudgetMeter,
+)
 from .models import (  # noqa: F401
     PolicyDecision,
     PolicyDenial,
@@ -16,6 +23,11 @@ from .policy import (  # noqa: F401
 )
 
 __all__ = [
+    "BudgetBreach",
+    "BudgetCharge",
+    "BudgetCheck",
+    "BudgetExceededError",
+    "BudgetMeter",
     "PolicyDecision",
     "PolicyDenial",
     "PolicyResolution",
