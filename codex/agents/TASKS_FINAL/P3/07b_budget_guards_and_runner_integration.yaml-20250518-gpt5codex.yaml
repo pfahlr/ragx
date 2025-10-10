@@ -1,0 +1,90 @@
+summary: "Budget guards integrate immutable models, manager orchestration, and FlowRunner traces"
+justification: |
+  Consolidates the strongest prior-branch patterns (immutable budget DTOs, reusable BudgetManager,
+  adapter-driven FlowRunner) into a cohesive package staged under codex/code/phase3_budget_runner.
+  The plan emphasises schema-aligned trace emission and deterministic policy+budget sequencing so
+  Phase 4 can extend coverage without rewriting core abstractions.
+steps:
+  - order: 1
+    name: trace_and_models_foundation
+    description: Establish immutable trace emission and canonical budget data transfer objects.
+    tasks:
+      - Write failing tests for CostSnapshot normalisation, arithmetic, and BudgetChargeOutcome trace payloads.
+      - Implement TraceEventEmitter to produce immutable payloads and optional sink forwarding used across budgets and policies.
+      - Implement CostSnapshot, BudgetSpec, BudgetChargeOutcome, and BudgetDecision with mapping-proxy payloads and stop logic.
+  - order: 2
+    name: budget_manager_orchestration
+    description: Provide scope lifecycle management plus preview/commit and breach telemetry.
+    tasks:
+      - Add failing tests for BudgetManager scope entry/exit, warn vs stop semantics, and trace emission ordering.
+      - Implement BudgetManager with enter_scope/exit_scope, preview_charge/commit_charge, record_breach, and trace integration.
+  - order: 3
+    name: flow_runner_integration
+    description: Integrate adapters, policies, and budgets with combined tracing.
+    tasks:
+      - Author integration tests covering adapter estimation/execution, BudgetBreachError propagation, and policy violation traces.
+      - Implement FlowRunner run loop using ToolAdapter protocol, applying budgets before execution, and emitting node/run traces.
+modules:
+  - path: codex/code/phase3_budget_runner/__init__.py
+    responsibility: Expose package namespace for phase3 budget runner components.
+  - path: codex/code/phase3_budget_runner/dsl/trace.py
+    responsibility: Immutable trace event structures and emitter shared across budgets and FlowRunner.
+  - path: codex/code/phase3_budget_runner/dsl/budget_models.py
+    responsibility: Scope keys, cost snapshots, budget specs, outcomes, and decisions with trace conversion helpers.
+  - path: codex/code/phase3_budget_runner/dsl/budget_manager.py
+    responsibility: Manage scope state, preview/commit operations, and breach telemetry via TraceEventEmitter.
+  - path: codex/code/phase3_budget_runner/dsl/flow_runner.py
+    responsibility: Execute flow nodes with ToolAdapter protocol, PolicyStack enforcement, and BudgetManager coordination.
+tests:
+  - path: codex/code/phase3_budget_runner/tests/test_budget_models.py
+    coverage_targets: [cost_normalisation, trace_payload_fields]
+    mocks: none (pure dataclasses)
+  - path: codex/code/phase3_budget_runner/tests/test_budget_manager.py
+    coverage_targets: [warn_vs_stop_semantics, trace_emission_order, scope_history]
+    mocks: Trace sink spy for verifying emitted events.
+  - path: codex/code/phase3_budget_runner/tests/test_flow_runner_budget_integration.py
+    coverage_targets: [adapter_breach_flow, policy_violation_trace, run_scope_lifecycle]
+    mocks: FakeToolAdapter implementing estimate/execute; dummy policy recorder sink.
+run_order:
+  - pytest codex/code/phase3_budget_runner/tests/test_budget_models.py
+  - pytest codex/code/phase3_budget_runner/tests/test_budget_manager.py
+  - pytest codex/code/phase3_budget_runner/tests/test_flow_runner_budget_integration.py
+interfaces:
+  - name: TraceEventEmitter.emit
+    contract: Returns immutable TraceEvent and forwards to optional sink.
+  - name: BudgetManager.preview_charge
+    contract: Returns BudgetDecision summarising outcomes without mutating state.
+  - name: BudgetManager.commit_charge
+    contract: Persists spend, emits budget_charge traces, and raises BudgetBreachError when decision.should_stop.
+  - name: FlowRunner.run
+    contract: Executes adapters respecting budgets/policies; raises PolicyViolationError or BudgetBreachError as appropriate.
+tdd_coverage_targets:
+  - module: codex/code/phase3_budget_runner/dsl/budget_models.py
+    minimum_line: 0.95
+  - module: codex/code/phase3_budget_runner/dsl/budget_manager.py
+    minimum_line: 0.9
+  - module: codex/code/phase3_budget_runner/dsl/flow_runner.py
+    minimum_line: 0.85
+review_checklist:
+  - Validate trace payload keys match DSL schema expectations (scope_type, scope_id, spec_name, cost/prior/new_total/remaining/overage).
+  - Confirm BudgetManager refuses duplicate enter_scope and cleans up state on exit.
+  - Ensure FlowRunner surfaces PolicyViolationError with policy trace event recorded before propagating error.
+  - Verify BudgetManager.record_breach is invoked before raising BudgetBreachError in FlowRunner.
+outputs:
+  code:
+    - codex/code/phase3_budget_runner/__init__.py
+    - codex/code/phase3_budget_runner/dsl/trace.py
+    - codex/code/phase3_budget_runner/dsl/budget_models.py
+    - codex/code/phase3_budget_runner/dsl/budget_manager.py
+    - codex/code/phase3_budget_runner/dsl/flow_runner.py
+  tests:
+    - codex/code/phase3_budget_runner/tests/test_budget_models.py
+    - codex/code/phase3_budget_runner/tests/test_budget_manager.py
+    - codex/code/phase3_budget_runner/tests/test_flow_runner_budget_integration.py
+  docs:
+    - codex/agents/PREVIEW/P3/07b_budget_guards_and_runner_integration.yaml-20250518-gpt5codex.md
+    - codex/agents/REVIEW/P3/07b_budget_guards_and_runner_integration.yaml-20250518-gpt5codex.md
+    - codex/agents/POSTEXECUTION/P3/07b_budget_guards_and_runner_integration.yaml-20250518-gpt5codex.md
+    - codex/DOCUMENTATION/P3/phase3_budget_runner-20250518-gpt5codex.yaml
+  metadata:
+    - codex/TESTS/P3/phase3_budget_runner-20250518-gpt5codex.yaml
