@@ -1,0 +1,94 @@
+version: 1
+component: flow_runner.budget_guards
+summary:
+  purpose: >-
+    Provide immutable budget models, a trace-aware BudgetManager, and a FlowRunner orchestrator
+    that enforces run/node/loop budgets while emitting schema-aligned traces.
+  status: experimental
+cli:
+  usage: |
+    # No direct CLI entry point; instantiate FlowRunner from Python:
+    from codex.code.work.runner.flow_runner import FlowRunner
+    runner = FlowRunner(adapters={...}, budget_manager=..., policy_adapter=...)
+    result = runner.run(flow_spec, variables)
+  notes: FlowRunner returns a RunResult with status/outputs/stop_reason fields for CLI adapters to serialize.
+interfaces:
+  - name: TraceEventEmitter
+    module: codex.code.work.trace.emitter
+    type: class
+    description: Immutable trace collector with optional sink forwarding.
+    methods:
+      - name: emit
+        purpose: Freeze payloads and record structured events for downstream sinks.
+      - name: events
+        purpose: Expose collected TraceEvent instances for tests or observers.
+  - name: CostSnapshot
+    module: codex.code.work.budget.models
+    type: dataclass
+    description: Normalized cost metrics (calls/tokens/seconds) used for charges and limits.
+  - name: BudgetSpec
+    module: codex.code.work.budget.models
+    type: dataclass
+    description: Defines per-scope budget behaviour including mode and breach_action semantics.
+  - name: BudgetManager
+    module: codex.code.work.budget.manager
+    type: class
+    description: Registers budgets, performs preflight/commit, and emits trace events.
+    methods:
+      - name: register_scope
+        purpose: Install or remove meters for run/node/loop scopes from specs or BudgetSpec instances.
+      - name: preflight
+        purpose: Preview spend without mutating meters, returning BudgetChargeOutcome if a meter exists.
+      - name: commit
+        purpose: Apply spend, emit `budget_charge` events, and surface stop outcomes.
+  - name: FlowRunner
+    module: codex.code.work.runner.flow_runner
+    type: class
+    description: Deterministic executor integrating adapters, policies, and budgets.
+    methods:
+      - name: run
+        purpose: Execute flow specs, enforcing budgets and returning RunResult diagnostics.
+      - name: _execute_loop
+        purpose: Iterate loop bodies, halting when loop budgets or max iterations trigger.
+      - name: _resolve_policy
+        purpose: Delegate to injected policy adapter and emit `policy_resolved` traces.
+extension_points:
+  policy_adapter:
+    contract: resolve(node_id, tool_chain) -> Sequence[str]
+    note: Supports custom policy stacks; optional push/pop hooks may be implemented for nested scopes.
+  adapters:
+    contract: ToolAdapter protocol with estimate_cost/execute methods returning CostSnapshot metadata.
+configuration:
+  budgets:
+    run: Accepts mapping or BudgetSpec with limit/mode/breach_action.
+    node: Optional per-node budget mapping; register_scope invoked lazily per node execution.
+    loop: Derived from loop.stop.budget; enforce stop via commit.
+  trace_sink:
+    description: Optional sink callable for TraceEventEmitter to forward events to external telemetry.
+automation:
+  triggers:
+    - event: budget_breach
+      action: Downstream automation may escalate to policy enforcement or run halt notifications.
+    - event: loop_halt
+      action: Observability pipelines can annotate traces with stop reasons for dashboards.
+errors:
+  - name: RuntimeError
+    raised_by: FlowRunner when policy denies the selected tool after resolution.
+  - name: ValueError
+    raised_by: BudgetSpec.from_mapping when required fields are missing or invalid.
+serialization:
+  trace_payloads: MappingProxyType-wrapped dictionaries safe for JSON serialization via dict(...).
+  run_result: Consumers should serialize RunResult fields (`run_id`, `status`, `outputs`, `stop_reason`).
+lifecycle:
+  initialization: Provide adapters/budget manager/policy adapter during FlowRunner construction.
+  execution: Call FlowRunner.run per flow spec; inspect RunResult to determine continuation or halt.
+  teardown: No explicit teardown; clear TraceEventEmitter if reusing for multiple runs.
+typing:
+  strictness: Uses dataclasses with type hints; Protocols enforce adapter shape.
+  notes: CostSnapshot forbids negative values ensuring predictable arithmetic.
+security:
+  considerations: FlowRunner delegates tool execution to injected adapters; ensure adapters enforce sandboxing.
+  trace_integrity: MappingProxyType prevents mutation of emitted trace payloads.
+performance:
+  scope: Designed for deterministic unit scenarios; meters perform O(1) arithmetic per charge.
+  tuning: Avoid excessive trace sinks inside hot loops; emitter supports optional sink removal.

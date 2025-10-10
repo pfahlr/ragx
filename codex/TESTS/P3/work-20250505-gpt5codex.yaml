@@ -1,0 +1,15 @@
+missing_tests:
+  task_id: 07b_budget_guards_and_runner_integration.yaml
+  proposed_tests:
+    - name: test_budget_manager_scope_removal
+      rationale: Ensure deregistering a scope drops existing meters and prevents stale state bleed into later runs.
+      source_module: codex/code/work/budget/manager.py
+      priority: medium
+    - name: test_flow_runner_policy_denial_error
+      rationale: Validate FlowRunner raises and surfaces policy violations when the resolved allowlist excludes the primary tool.
+      source_module: codex/code/work/runner/flow_runner.py
+      priority: high
+    - name: test_trace_emitter_sink_forwarding
+      rationale: Guard that TraceEventEmitter forwards records to custom sinks and preserves immutable payload contracts.
+      source_module: codex/code/work/trace/emitter.py
+      priority: low
