@@ -1,0 +1,78 @@
+summary: Integrate canonical budget manager and trace emitter into a FlowRunner harness staged under codex/code/phase3-budget-guards-d98ee6c7
+justification: |
+  Phase 2 reviews highlighted the need to merge immutable budget models, a preflight/commit BudgetManager, and adapter-driven FlowRunner execution while standardising traces.
+  This plan builds those components in the sandbox branch with tests that capture soft vs hard semantics, policy interplay, and trace immutability before wiring implementation.
+steps:
+  - name: establish_budget_models_and_manager
+    description: Create immutable budget dataclasses and a BudgetManager that handles preflight/commit per scope with deterministic cost normalization.
+  - name: build_trace_emitter
+    description: Implement a TraceEventEmitter using the TraceWriter abstraction to emit schema-aligned immutable payloads for budget and policy events.
+  - name: integrate_runner_with_policies_and_budgets
+    description: Implement a FlowRunner orchestrating adapters, policies, and budgets, ensuring stop semantics, warnings, and trace ordering comply with spec expectations.
+modules:
+  - path: codex/code/phase3-budget-guards-d98ee6c7/pkgs/dsl/budget.py
+    role: Immutable budget models, normalization helpers, and BudgetManager orchestration.
+  - path: codex/code/phase3-budget-guards-d98ee6c7/pkgs/dsl/trace.py
+    role: TraceWriter protocol and TraceEventEmitter responsible for budget and policy events.
+  - path: codex/code/phase3-budget-guards-d98ee6c7/pkgs/dsl/runner.py
+    role: FlowRunner implementation with adapter integration, policy enforcement, and budget charging.
+  - path: codex/code/phase3-budget-guards-d98ee6c7/pkgs/dsl/policy.py
+    role: Minimal PolicyStack implementation mirroring push/resolve/pop semantics for runner integration tests.
+  - path: codex/code/phase3-budget-guards-d98ee6c7/__init__.py
+    role: Package marker enabling sandbox imports before canonical modules on sys.path.
+  - path: codex/code/phase3-budget-guards-d98ee6c7/pkgs/__init__.py
+    role: Package marker for pkgs namespace in sandbox.
+  - path: codex/code/phase3-budget-guards-d98ee6c7/pkgs/dsl/__init__.py
+    role: Expose sandbox DSL components for tests.
+  - path: codex/code/phase3-budget-guards-d98ee6c7/phase3_runner.py
+    role: Optional helper to execute pytest and log coverage artifacts.
+
+tests:
+  - path: codex/code/phase3-budget-guards-d98ee6c7/tests/test_budget_manager.py
+    coverage: BudgetManager preflight/commit soft vs hard cases, scope stack entry/exit, remaining/overage calculations.
+    mocks: Fake TraceWriter, deterministic cost snapshots.
+  - path: codex/code/phase3-budget-guards-d98ee6c7/tests/test_trace_emitter.py
+    coverage: TraceEventEmitter ensures immutable payloads and event ordering for policy/budget events.
+    mocks: In-memory TraceWriter recording events.
+  - path: codex/code/phase3-budget-guards-d98ee6c7/tests/test_flow_runner_budget_integration.py
+    coverage: FlowRunner orchestrates adapters, policies, budgets with stop/warn semantics and combined traces.
+    mocks: Fake ToolAdapter implementations, deterministic PolicyStack fixture.
+run_order:
+  - codex/code/phase3-budget-guards-d98ee6c7/tests/test_budget_manager.py
+  - codex/code/phase3-budget-guards-d98ee6c7/tests/test_trace_emitter.py
+  - codex/code/phase3-budget-guards-d98ee6c7/tests/test_flow_runner_budget_integration.py
+interfaces:
+  budget_manager:
+    preflight: (scope_type: str, scope_id: str, estimate: CostSnapshot) -> BudgetDecision
+    commit: (scope_type: str, scope_id: str, actual: CostSnapshot) -> BudgetDecision
+    enter_scope: (scope_type: str, scope_id: str, spec: BudgetSpec) -> None
+    exit_scope: (scope_type: str, scope_id: str) -> None
+  trace_event_emitter:
+    emit_budget_charge: (decision: BudgetDecision) -> None
+    emit_budget_breach: (decision: BudgetDecision) -> None
+    emit_policy_event: (event: str, scope: str, payload: Mapping[str, Any]) -> None
+  flow_runner:
+    run: (flow: Sequence[FlowNode], context: RunContext) -> RunResult
+  policy_stack:
+    push: (node_id: str, metadata: Mapping[str, Any]) -> None
+    resolve: (node_id: str) -> None
+    pop: (node_id: str) -> None
+
+tdd_coverage_targets:
+  budget_manager: 90
+  trace_event_emitter: 85
+  flow_runner: 85
+review_checklist:
+  - Ensure budget and policy traces use immutable payloads.
+  - Validate that soft budgets warn without stopping and hard budgets stop execution.
+  - Confirm FlowRunner integrates adapters without fabricating costs.
+  - Verify cost normalization handles seconds vs milliseconds consistently.
+  - Assert PolicyStack events maintain push → resolve → pop ordering in traces.
+outputs:
+  code_root: codex/code/phase3-budget-guards-d98ee6c7
+  documentation_root: codex/DOCUMENTATION/P3
+  preview: codex/agents/PREVIEW/P3/07b_budget_guards_and_runner_integration.yaml-47537ede-0ec2-4de1-b9cd-10e0f3c0d68c.md
+  review: codex/agents/REVIEW/P3/07b_budget_guards_and_runner_integration.yaml-47537ede-0ec2-4de1-b9cd-10e0f3c0d68c.md
+  postexecution: codex/agents/POSTEXECUTION/P3/07b_budget_guards_and_runner_integration.yaml-47537ede-0ec2-4de1-b9cd-10e0f3c0d68c.md
+  metadata: codex/DOCUMENTATION/P3/phase3-budget-guards-d98ee6c7-47537ede-0ec2-4de1-b9cd-10e0f3c0d68c.yaml
+  missing_tests: codex/TESTS/P3/phase3-budget-guards-d98ee6c7-47537ede-0ec2-4de1-b9cd-10e0f3c0d68c.yaml
