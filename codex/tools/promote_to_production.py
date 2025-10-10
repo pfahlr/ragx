@@ -125,19 +125,3 @@ if __name__ == "__main__":
 
     promote(args.plan, dry_run=args.dry_run, force=args.force)
 
-    ## ✅ Optional: Git auto-commit
-    if [[ "${AUTO_COMMIT:-true}" == "true" ]]; then
-      echo "📦 Staging promoted files..."
-      git add production/*
-
-      COMMIT_MSG="codex: promote {{CODEX_TASK}} top-ranked implementation to production"
-      echo "📝 Committing with message: $COMMIT_MSG"
-      git commit -m "$COMMIT_MSG" || echo "ℹ️ No changes to commit"
-
-      if [[ "${AUTO_PUSH:-false}" == "true" ]]; then
-        echo "🚀 Pushing changes to remote..."
-        git push
-      else
-        echo "🛑 Skipping push (AUTO_PUSH=false)"
-      fi
-    fi
