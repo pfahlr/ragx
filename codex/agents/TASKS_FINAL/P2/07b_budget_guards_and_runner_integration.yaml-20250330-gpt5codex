@@ -1,0 +1,104 @@
+version: 1
+id: 07b_budget_guards_and_runner_integration
+title: Budget guards integrated in FlowRunner (P2 synthesis)
+summary: Merge adapter-driven runner execution with typed budget management and unified tracing.
+description: |
+  Deliver a cohesive FlowRunner that enforces run/node/spec/loop budgets through a reusable BudgetManager,
+  emits deterministic policy+budget traces, and preserves adapter-driven execution while surfacing breach
+  diagnostics. The plan reconciles divergent branch strategies into a single, schema-compliant implementation
+  guarded by unit and e2e coverage.
+metadata:
+  owners: ["pfahlr@gmail.com"]
+  labels: ["dsl", "budget-guards", "flow-runner", "observability"]
+  priority: P1
+  risk: medium
+  last_updated: 2025-03-30
+strategy:
+  tests_first: true
+  deterministic: true
+  golden_management: label-gated
+scope:
+  goals:
+    - Unify budget domain models (specs, cost snapshots, breach metadata) across runner and manager layers.
+    - Integrate a BudgetManager collaborator into FlowRunner without regressing adapter execution or policy enforcement.
+    - Emit validated trace events for policy push/pop and budget charge/breach sequences with shared schema enforcement.
+    - Restore and extend unit/e2e coverage for hard and soft budget behaviors at run/node/spec/loop scopes.
+  non_goals:
+    - Implement asynchronous adapter execution or distributed tracing pipelines.
+    - Introduce new DSL schema fields beyond those in ragx_master_spec.yaml.
+assumptions:
+  - Existing adapter interfaces remain synchronous and return deterministic cost telemetry per execution.
+  - PolicyStack APIs from the baseline runner stay unchanged and can be reused for enforcement ordering.
+constraints:
+  - Must normalize all budget costs to a single unit contract (seconds-to-milliseconds conversions handled centrally).
+  - Trace payloads must adhere to a shared schema validated during tests to prevent drift.
+component_ids:
+  - pkgs/dsl
+depends_on:
+  - codex/specs/ragx_master_spec.yaml
+structured_logging_contract:
+  summary: Budget and policy events share a TraceWriter-backed sink emitting immutable payloads for push/pop/charge/breach.
+  expectations:
+    - Emit `policy_push`, `policy_resolved`, and `policy_violation` unchanged from baseline ordering.
+    - Emit `budget_preflight`, `budget_charge`, and `budget_breach` events with scope identifiers, normalized cost snapshots, remaining headroom, and breach metadata.
+    - Guarantee chronological ordering per scope to support replay in observability tooling.
+ci:
+  xfail_marker: budget_guard_pending
+  workflows:
+    - name: ensure_green
+      gates: ["ruff", "mypy", "yamllint", "pytest"]
+    - name: nightly_trace_schema
+      gates: ["pytest tests/observability", "jsonschema budget_trace_contract.json"]
+actions:
+  - stage: design
+    summary: Establish canonical budget models and validation helpers.
+    tasks:
+      - "always;reusable=true;adapted_from_branch=codex/integrate-budget-guards-with-runner-zwi2ny;tests=tests/unit/test_budget_meter_limits.py;artifacts=None;description=Define BudgetSpec/CostSnapshot/BudgetRemaining dataclasses with normalization helpers and mapping-proxy exports."
+      - "always;reusable=true;adapted_from_branch=codex/implement-budget-guards-with-test-first-approach-8wxk32;depends_on=Define BudgetSpec/CostSnapshot/BudgetRemaining dataclasses with normalization helpers and mapping-proxy exports.;description=Port arithmetic helpers (addition, subtraction, clamp) for Cost snapshots with centralized unit coercion."
+  - stage: implementation
+    summary: Build BudgetManager + FlowRunner integration with trace bridge.
+    tasks:
+      - "always;reusable=true;adapted_from_branch=codex/implement-budget-guards-with-test-first-approach;depends_on=Define BudgetSpec/CostSnapshot/BudgetRemaining dataclasses with normalization helpers and mapping-proxy exports.;description=Implement BudgetManager preflight/commit APIs for run/node/spec/loop scopes returning immutable decisions and breach metadata."
+      - "always;reusable=false;adapted_from_branch=codex/integrate-budget-guards-with-runner-pbdel9;depends_on=Implement BudgetManager preflight/commit APIs for run/node/spec/loop scopes returning immutable decisions and breach metadata.;tests=tests/e2e/test_runner_budget_stop.py;description=Wire FlowRunner to invoke BudgetManager around adapter execution, preserve stop reasons, and propagate breach actions into loop/run control flow."
+      - "always;reusable=true;adapted_from_branch=codex/integrate-budget-guards-with-runner-zwi2ny;depends_on=Implement BudgetManager preflight/commit APIs for run/node/spec/loop scopes returning immutable decisions and breach metadata.;description=Create TraceWriter bridge that emits combined policy and budget events with schema validation hooks."
+      - "optional;reusable=true;adapted_from_branch=codex/implement-budget-guards-with-test-first-approach-fa0vm9;depends_on=Wire FlowRunner to invoke BudgetManager around adapter execution, preserve stop reasons, and propagate breach actions into loop/run control flow.;description=Inject budget_factory overrides for tests and downstream integrations to customize meter construction."
+  - stage: testing-and-hardening
+    summary: Expand automated coverage and validation for budget guards.
+    tasks:
+      - "always;reusable=true;adapted_from_branch=codex/integrate-budget-guards-with-runner;depends_on=Wire FlowRunner to invoke BudgetManager around adapter execution, preserve stop reasons, and propagate breach actions into loop/run control flow.;tests=tests/unit/test_budget_meter_limits.py,tests/e2e/test_runner_budget_stop.py;description=Add regression tests for soft/hard breaches across run/node/spec/loop scopes ensuring stop reasons and warnings are emitted." 
+      - "always;reusable=true;adapted_from_branch=codex/implement-budget-guards-with-test-first-approach;depends_on=Create TraceWriter bridge that emits combined policy and budget events with schema validation hooks.;tests=tests/observability/test_budget_trace_schema.py;artifacts=docs/observability/budget_trace_contract.md;description=Introduce schema validation fixtures and documentation for budget trace payloads." 
+      - "manual;reusable=false;adapted_from_branch=codex/integrate-budget-guards-with-runner-pbdel9;depends_on=Add regression tests for soft/hard breaches across run/node/spec/loop scopes ensuring stop reasons and warnings are emitted.;description=Perform exploratory runs on complex flow graphs to confirm stack safety and trace ordering, capturing findings in QA notes." 
+rollout_plan:
+  phases:
+    - name: dev-integration
+      exit_criteria:
+        - All unit and e2e tests introduced in this plan pass locally and in CI.
+        - Trace schema validation suite green with new payload definitions.
+    - name: staging-shadow
+      exit_criteria:
+        - Runner executes sample flows with budgets enabled alongside baseline branch, traces inspected for parity.
+        - No regressions detected in policy enforcement or adapter success metrics.
+    - name: production-pilot
+      exit_criteria:
+        - Budget telemetry dashboards show accurate remaining/overage data for pilot flows.
+        - No critical defects reported after 48 hours of pilot usage.
+rollback_strategy:
+  steps:
+    - Revert FlowRunner budget integration commits while retaining validated dataclasses to minimize churn.
+    - Disable BudgetManager injection via feature flag to fall back to baseline meter behavior.
+    - Restore previous trace schema by toggling TraceWriter bridge off in configuration.
+operational_runbooks:
+  - name: budget-trace-verification
+    steps:
+      - Run `pytest tests/observability/test_budget_trace_schema.py -k budget` to validate payloads.
+      - Execute `python scripts/print_latest_traces.py --scope run` to inspect emitted events.
+      - Compare remaining/overage metrics against BudgetManager debug logs for discrepancies.
+maintenance:
+  deprecation_policy: Budget fields follow ragx_master_spec.yaml; any schema change requires spec-first PR with migration notes.
+  upgrade_notes:
+    - Update documentation and fixtures whenever new budget metrics (e.g., latency buckets) are introduced.
+    - Keep TraceWriter bridge backward compatible for at least one release cycle before removing legacy event names.
+acceptance:
+  - tests/unit/test_budget_meter_limits.py passes with expanded cases.
+  - tests/e2e/test_runner_budget_stop.py validates hard and soft stop semantics with new manager integration.
+  - Observability contract tests confirm schema compliance for budget trace events.
