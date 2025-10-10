@@ -6,6 +6,7 @@ import hashlib
 import importlib
 import json
 import time
+from contextvars import ContextVar
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from typing import Any
@@ -37,12 +38,15 @@ class Executor:
 
     def __init__(self) -> None:
         self._cache: dict[str, dict[str, Any]] = {}
-        self._last_stats: ExecutionStats | None = None
+        self._last_stats: ContextVar[ExecutionStats | None] = ContextVar(
+            f"toolpack_executor_last_stats_{id(self)}",
+            default=None,
+        )
 
     def last_run_stats(self) -> ExecutionStats | None:
         """Return metrics for the most recent invocation."""
 
-        return self._last_stats
+        return self._last_stats.get()
 
     def run_toolpack(self, toolpack: Toolpack, payload: Mapping[str, Any]) -> dict[str, Any]:
         """Execute ``toolpack`` with ``payload`` and return the validated output."""
@@ -88,7 +92,7 @@ class Executor:
                     output_bytes=output_bytes,
                     cache_hit=True,
                 )
-                self._last_stats = stats
+                self._last_stats.set(stats)
                 return copy.deepcopy(cached), stats
 
         runner = self._resolve_python_callable(toolpack)
@@ -118,7 +122,7 @@ class Executor:
             output_bytes=output_bytes,
             cache_hit=False,
         )
-        self._last_stats = stats
+        self._last_stats.set(stats)
         if toolpack.deterministic:
             if cache_enabled:
                 self._cache[cache_key] = copy.deepcopy(materialised)

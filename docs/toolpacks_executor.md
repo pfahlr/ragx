@@ -30,8 +30,8 @@ print(result["text"], stats.duration_ms)
 
 Pass ``use_cache=False`` to `run_toolpack_with_stats` when you need to bypass
 deterministic caching (for example, to isolate transport-specific invocations)
-without flushing previously cached entries. The most recent metrics can always
-be retrieved via `executor.last_run_stats()`.
+without flushing previously cached entries. The most recent metrics for the
+current execution context can be retrieved via `executor.last_run_stats()`.
 
 ## Behaviour
 
@@ -47,8 +47,9 @@ be retrieved via `executor.last_run_stats()`.
   duration, payload sizes, and cache-hit status for the invocation. It exposes a
   ``use_cache`` flag to bypass caching when required.
 - `Executor.last_run_stats()` returns the metrics collected for the most recent
-  invocation, allowing transports to preserve observability when they temporarily
-  disable caching.
+  invocation **within the current thread or asyncio task**, allowing transports
+  to preserve observability when they temporarily disable caching without
+  leaking state across concurrent requests.
 - Non-deterministic toolpacks bypass the cache entirely.
 - Handlers are resolved via the `execution.module` field using the
   `module:callable` convention. Invalid formats, missing modules, missing
