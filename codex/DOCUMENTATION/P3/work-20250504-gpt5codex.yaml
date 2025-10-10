@@ -1,0 +1,86 @@
+documentation:
+  task_id: 07b_budget_guards_and_runner_integration
+  branch: work
+  phase: P3
+  components:
+    - name: pkgs.dsl.budget
+      purpose: Unified budget specification, scope identification, and manager orchestration for FlowRunner.
+      public_interfaces:
+        classes:
+          - BudgetSpec.from_mapping(limit, mode, breach_action)
+          - BudgetScope.run|loop|node|spec(identifier)
+          - BudgetManager.preview(cost, scopes)
+          - BudgetManager.commit(cost, scopes)
+      extension_hooks:
+        - Additional scope kinds can be added by extending BudgetScope factory helpers.
+        - Downstream runners can wrap BudgetManager to introduce custom breach actions.
+      lifecycle:
+        creation: FlowRunner builds a manager per run and registers scopes discovered in the flow spec.
+        usage: preview before adapter execution; commit with actual spend after execution.
+      error_contracts:
+        - Registering duplicate scopes raises ValueError.
+        - Invalid limit or cost mappings raise ValueError with descriptive messages.
+      typing_notes:
+        - All payloads exposed via BudgetCharge and BudgetOutcome use MappingProxyType to prevent mutation.
+      performance_notes:
+        - Normalisation folds `_seconds` metrics into milliseconds; caching of totals keeps per-charge overhead small.
+    - name: pkgs.dsl.trace
+      purpose: Shared trace emitter for budget and policy events with immutable payloads.
+      public_interfaces:
+        classes:
+          - TraceEventEmitter.emit(event, scope, payload)
+          - TraceEventEmitter.budget_charge(charge, loop_iteration, run_id)
+          - TraceEventEmitter.budget_breach(charge, loop_iteration, run_id, stop_reason)
+          - TraceEventEmitter.policy_resolved(node_id, resolution, run_id, iteration)
+      extension_hooks:
+        - `extend()` helper allows streaming pre-existing events into the emitter.
+      lifecycle:
+        creation: Injected into FlowRunner; reset per run.
+        usage: FlowRunner records policy decisions and budget state transitions.
+      error_contracts:
+        - None beyond standard Python type errors; payloads are assumed serialisable.
+      typing_notes:
+        - Events expose MappingProxyType payloads; callers must copy to mutate.
+      performance_notes:
+        - Payload creation copies small dicts; emitter keeps in-memory list suitable for deterministic tests.
+    - name: pkgs.dsl.runner
+      purpose: Adapter-driven FlowRunner enforcing policies and budgets while emitting traces.
+      public_interfaces:
+        classes:
+          - ToolAdapter(estimate_cost, execute)
+          - FlowRunner.run(spec, vars)
+          - RunResult(status, outputs, warnings, stop_reason, trace_events)
+      extension_hooks:
+        - Custom adapters implement ToolAdapter to integrate new tools.
+        - `enforce_budgets=False` toggles preview halting for diagnostic runs.
+      lifecycle:
+        creation: Instantiate with adapter registry, policy tool registry, and optional trace emitter.
+        usage: `run()` performs sequential execution, handling loops and scope registration per spec.
+      error_contracts:
+        - Missing adapters raise ValueError; policy violations raise PolicyViolationError captured as run errors.
+        - Hard budget breaches raise `_RunHalted` internally, surfaced as halted RunResult with reason metadata.
+      typing_notes:
+        - Outputs and warnings returned as mapping proxies containing tuples of iteration outputs.
+      security_notes:
+        - No network or file IO performed; adapters remain responsible for sandboxing external calls.
+      performance_notes:
+        - Designed for deterministic single-thread execution; loop guard prevents infinite iteration when no stop signals exist.
+  cli:
+    usage:
+      - No direct CLI; FlowRunner intended for programmatic orchestration.
+  automation:
+    triggers:
+      - Tests located in `codex/code/work/tests` validate budget math and runner integration; include in CI matrix.
+  serialization:
+    traces:
+      format: JSONL-friendly dictionaries produced by TraceEventEmitter.
+      retention: Caller-defined; emitter keeps data in-memory until persisted by host application.
+  error_contracts:
+    - Hard budget stop reason payload follows `{scope, id, reason}` mapping.
+  typing_and_security:
+    typing: Runtime relies on Python 3.12 typing; protocols satisfied by abstract base class `ToolAdapter`.
+    security: No external IO; safe for offline execution.
+  performance:
+    considerations:
+      - Budget normalisation performs O(n) merge per charge; intended for small metric sets.
+      - Loop execution halts via budgets or optional `max_iterations` guard.

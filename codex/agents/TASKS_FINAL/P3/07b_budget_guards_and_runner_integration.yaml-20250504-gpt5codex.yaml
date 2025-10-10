@@ -1,0 +1,94 @@
+summary: Canonicalise budget enforcement primitives and integrate them into FlowRunner with schema-aligned tracing.
+justification: |
+  Earlier phases converged on immutable budget models (zwi2ny branch), structured charge diagnostics (pbdel9),
+  and a reusable BudgetManager (test-first branches) while preserving the adapter-driven FlowRunner baseline.
+  Phase 3 must merge these threads: expose a normalised BudgetManager API, surface trace emissions via a shared
+  emitter, and retrofit FlowRunner to charge run/node/loop/spec budgets without regressing policy enforcement.
+steps:
+  - id: budget_models
+    description: Define immutable budget value objects, meters, and manager orchestration with preview/commit lifecycle.
+    inputs: [codex/specs/flow_runner_spec.yaml, codex/specs/flow_runner_spec_ext.yaml]
+    outputs: [pkgs/dsl/budget.py]
+  - id: trace_emitter
+    description: Provide a TraceEventEmitter that wraps mapping proxies and produces budget/policy events.
+    inputs: [codex/specs/flow_runner_spec_ext.yaml]
+    outputs: [pkgs/dsl/trace.py]
+  - id: runner_integration
+    description: Update FlowRunner to use adapters, PolicyStack, and BudgetManager while emitting structured traces and handling loop stops.
+    inputs: [pkgs/dsl/policy.py, pkgs/dsl/models.py]
+    outputs: [pkgs/dsl/runner.py]
+modules:
+  - path: pkgs/dsl/budget.py
+    role: Unified budget specifications, meters, and manager orchestration.
+    owner: dsl-runtime
+  - path: pkgs/dsl/trace.py
+    role: Trace event abstraction shared by policy and budget emitters.
+    owner: dsl-runtime
+  - path: pkgs/dsl/runner.py
+    role: FlowRunner implementation with budget and policy integration.
+    owner: dsl-runner
+tests:
+  - name: unit_budget_manager
+    path: codex/code/work/tests/test_budget_manager.py
+    covers: [pkgs/dsl/budget.py]
+    focus: preview/commit semantics, hard vs soft breaches, immutable payloads.
+    mocks: none (pure value objects)
+  - name: unit_flow_runner_budgets
+    path: codex/code/work/tests/test_flow_runner_budget_integration.py
+    covers: [pkgs/dsl/runner.py, pkgs/dsl/trace.py]
+    focus: run/node/loop budget enforcement, trace emission, policy integration signals.
+    mocks: fake tool adapters, in-memory trace emitter
+run_order:
+  - write unit_budget_manager tests
+  - write unit_flow_runner_budgets tests
+  - implement pkgs/dsl/budget.py
+  - implement pkgs/dsl/trace.py
+  - implement pkgs/dsl/runner.py
+  - run pytest codex/code/work/tests -q
+interfaces:
+  BudgetSpec:
+    methods:
+      - from_mapping(mapping: Mapping[str, object], *, name: str | None = None) -> BudgetSpec
+    notes: Normalises mode/breach_action enums and freezes limit mappings.
+  BudgetManager:
+    methods:
+      - register(scope: BudgetScope, spec: BudgetSpec) -> None
+      - preview(cost: Mapping[str, float], scopes: Sequence[BudgetScope]) -> BudgetOutcome
+      - commit(cost: Mapping[str, float], scopes: Sequence[BudgetScope]) -> BudgetOutcome
+    notes: Preview never mutates; commit returns immutable BudgetCharge payloads and stop/warn aggregation.
+  TraceEventEmitter:
+    methods:
+      - emit(event: str, scope: str, payload: Mapping[str, object]) -> None
+      - budget_charge(charge: BudgetCharge, *, loop_iteration: int | None, run_id: str) -> None
+      - budget_breach(charge: BudgetCharge, *, loop_iteration: int | None, run_id: str, stop_reason: str) -> None
+      - policy_resolved(node_id: str, resolution: PolicyResolution, run_id: str, iteration: int | None) -> None
+    notes: Wraps payloads in mapping proxies for schema-aligned immutability.
+  FlowRunner:
+    methods:
+      - run(spec: Mapping[str, object], vars: Mapping[str, object]) -> RunResult
+    notes: Executes adapters sequentially, charges relevant budgets, integrates policy stack, records traces, and halts on stop outcomes.
+tdd_coverage_targets:
+  pkgs/dsl/budget.py: 0.9
+  pkgs/dsl/runner.py: 0.85
+  pkgs/dsl/trace.py: 0.85
+review_checklist:
+  - Verify BudgetManager preview/commit lifecycle does not mutate state prematurely.
+  - Ensure FlowRunner stops on hard breaches and records warnings for soft breaches.
+  - Confirm trace payloads use MappingProxyType and include run_id, node_id, and loop_iteration where relevant.
+  - Validate policy_resolved events are emitted once per node execution.
+  - Check tests exercise run/node/loop/spec budget combinations.
+outputs:
+  plan: codex/agents/TASKS_FINAL/P3/07b_budget_guards_and_runner_integration.yaml-20250504-gpt5codex.yaml
+  tests:
+    - codex/code/work/tests/test_budget_manager.py
+    - codex/code/work/tests/test_flow_runner_budget_integration.py
+  modules:
+    - pkgs/dsl/budget.py
+    - pkgs/dsl/trace.py
+    - pkgs/dsl/runner.py
+  docs:
+    - codex/agents/PREVIEW/P3/07b_budget_guards_and_runner_integration.yaml-20250504-gpt5codex.md
+    - codex/agents/REVIEW/P3/07b_budget_guards_and_runner_integration.yaml-20250504-gpt5codex.md
+    - codex/agents/POSTEXECUTION/P3/07b_budget_guards_and_runner_integration.yaml-20250504-gpt5codex.md
+    - codex/DOCUMENTATION/P3/work-20250504-gpt5codex.yaml
+  missing_tests: codex/TESTS/P3/work-20250504-gpt5codex.yaml

@@ -1,0 +1,15 @@
+missing_tests:
+  task_id: 07b_budget_guards_and_runner_integration.yaml
+  proposed_tests:
+    - name: test_flow_runner_policy_violation_stops_execution
+      rationale: Ensure FlowRunner surfaces PolicyViolationError as halted run and emits policy_violation trace.
+      source_module: pkgs/dsl/runner.py
+      priority: high
+    - name: test_budget_manager_spec_scope_registration
+      rationale: Validate spec-level (node.spec.budget) registration and charging semantics.
+      source_module: pkgs/dsl/budget.py
+      priority: medium
+    - name: test_trace_emitter_serialization_stability
+      rationale: Guard against accidental mutation of emitted payloads when serialized to JSON.
+      source_module: pkgs/dsl/trace.py
+      priority: low
