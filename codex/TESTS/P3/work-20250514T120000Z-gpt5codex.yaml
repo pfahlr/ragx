@@ -1,0 +1,15 @@
+missing_tests:
+  task_id: 07b_budget_guards_and_runner_integration.yaml
+  proposed_tests:
+    - name: test_flow_runner_policy_violation_precedence
+      rationale: Ensure policy violations and budget breaches occurring in the same iteration resolve stop reasons deterministically.
+      source_module: codex/code/work/runner/flow_runner.py
+      priority: high
+    - name: test_budget_manager_mixed_metrics_overflow
+      rationale: Validate simultaneous USD and token limits to guarantee metric-specific overages remain independent.
+      source_module: codex/code/work/runner/budget_manager.py
+      priority: medium
+    - name: test_trace_emitter_custom_writer_integration
+      rationale: Confirm custom TraceWriter implementations receive payloads without mutation, enabling streaming sinks.
+      source_module: codex/code/work/runner/trace.py
+      priority: low

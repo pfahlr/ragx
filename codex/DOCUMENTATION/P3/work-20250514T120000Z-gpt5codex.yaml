@@ -1,0 +1,109 @@
+version: 1
+metadata:
+  task_id: 07b_budget_guards_and_runner_integration
+  phase: P3
+  branch: work
+  generated_at: 2025-05-14T12:00:00Z
+component:
+  name: FlowRunner Budget Guard Integration
+  purpose: >-
+    Enforces DSL budget scopes (run, loop, node, spec) within FlowRunner while emitting
+    structured trace events for observability and diagnostics.
+  cli_usage: >-
+    Imported as a library component; no direct CLI entrypoint. Integrate via FlowRunner
+    invocation in DSL execution pipelines.
+interfaces:
+  public:
+    - name: BudgetSpec.from_dict
+      type: factory
+      description: Parse raw budget dictionaries into immutable specifications.
+      parameters:
+        - name: data
+          type: Mapping[str, Any]
+          required: true
+      returns: BudgetSpec
+    - name: CostSnapshot.from_costs
+      type: factory
+      description: Normalise heterogeneous cost metrics to Decimal-backed snapshots.
+      parameters:
+        - name: costs
+          type: Mapping[str, Any]
+          required: true
+      returns: CostSnapshot
+    - name: BudgetManager.charge
+      type: method
+      description: Apply a cost to multiple scopes, returning structured outcomes and enforcing hard breaches.
+      parameters:
+        - name: scopes
+          type: Sequence[BudgetScope]
+          required: true
+        - name: cost
+          type: CostSnapshot
+          required: true
+      returns: List[BudgetChargeOutcome]
+      raises:
+        - name: BudgetBreachError
+          condition: Raised when any scope with `breach_action: error` exceeds its limit.
+    - name: FlowRunner.run
+      type: method
+      description: Execute looped flow definitions while coordinating adapters, budget enforcement, and trace emission.
+      parameters:
+        - name: flow
+          type: FlowDefinition
+          required: true
+        - name: context
+          type: RunContext
+          required: true
+      returns: FlowResult
+  extension_hooks:
+    - name: TraceWriter
+      type: protocol
+      description: Custom sinks can implement `emit(event, payload)` to capture structured JSONL events.
+    - name: Adapter estimate/execute
+      type: protocol
+      description: Tool adapters must expose `estimate(node_id, iteration)` and `execute(node_id, iteration)` for deterministic cost control.
+configuration:
+  options:
+    - name: breach_action
+      scope: BudgetSpec
+      values: [error, warn, stop]
+      description: Controls enforcement mode for each budget scope.
+    - name: mode
+      scope: BudgetSpec
+      values: [hard, soft]
+      description: Determines default breach action (hard→error, soft→warn) unless overridden.
+automation_triggers:
+  - trigger: FlowRunner.run invoked
+    action: Emit `run_start` trace event and initialise budget tracking.
+  - trigger: Budget breach detected
+    action: Emit `budget_breach` trace, append stop reason or warning, and optionally halt execution.
+error_contracts:
+  - name: BudgetBreachError
+    type: RuntimeError
+    payload:
+      scope: BudgetScope (serialized)
+      outcome: BudgetChargeOutcome (includes overages, remaining, action)
+      outcomes: Sequence[BudgetChargeOutcome] | None
+    caller_actions:
+      - Inspect `outcome.action`; abort run when `error`, handle diagnostics otherwise.
+serialization:
+  formats:
+    - name: Trace payloads
+      format: JSON-compatible dicts with decimal values stringified for deterministic storage.
+lifecycle:
+  stages:
+    - initialise BudgetManager with static specs before run start.
+    - emit `run_start` → iterate loop nodes applying `charge` per iteration.
+    - on stop/warn, capture payload and continue/abort according to action.
+    - emit `run_end` with final status and stop reason.
+typing:
+  notes:
+    - All monetary/token/call metrics stored as `Decimal` to avoid floating rounding errors.
+    - Type hints rely on `Sequence` and `Mapping` to encourage deterministic inputs.
+security:
+  considerations:
+    - No external I/O; ensure adapters validated upstream to avoid executing arbitrary code.
+performance:
+  notes:
+    - CostSnapshot operations are O(n) over limited metric set (usd/tokens/calls) and negligible.
+    - Trace emission uses simple dict merges; no heavy serialization.

@@ -1,0 +1,93 @@
+summary: "Phase 3 execution plan for FlowRunner budget guard integration"
+justification: >-
+  Consolidates prior branch strengths (fa0vm9 loop orchestration, zwi2ny trace writer,
+  pbdel9 remaining/overage math, qhq0jq budget modes) into a cohesive, test-driven
+  implementation that satisfies DSL budget scopes without regressing policy wiring.
+steps:
+  - order: 1
+    name: Define budget domain models
+    description: >-
+      Implement immutable cost snapshots, budget specs, and breach outcomes supporting
+      hierarchical scopes and deterministic math before orchestrating budgets.
+  - order: 2
+    name: Implement BudgetManager orchestration
+    description: >-
+      Coordinate run, loop, node, and spec scopes with preview/charge lifecycle and
+      trace-friendly outcomes, reusing normalized costs and breach semantics.
+  - order: 3
+    name: Integrate FlowRunner execution
+    description: >-
+      Wire adapters, loop control, and budget manager decisions to emit schema-compliant
+      trace events and stop reasons.
+  - order: 4
+    name: Validate via targeted tests
+    description: >-
+      Exercise unit coverage for BudgetManager and integration coverage for FlowRunner
+      budget stops, including soft-warn handling and loop stop conditions.
+modules:
+  - path: codex/code/work/runner/budget_models.py
+    role: Budget and cost dataclasses, enums, and normalization helpers.
+  - path: codex/code/work/runner/budget_manager.py
+    role: BudgetManager coordinating scopes, preview, and charge outcomes.
+  - path: codex/code/work/runner/trace.py
+    role: TraceWriter protocol and TraceEventEmitter utilities.
+  - path: codex/code/work/runner/flow_runner.py
+    role: FlowRunner integrating adapters, policies placeholder, and budget enforcement.
+  - path: codex/code/work/runner/__init__.py
+    role: Package exports for runner components.
+tests:
+  - path: codex/code/work/tests/test_budget_manager.py
+    coverage: >-
+      Validate run/node/spec scope interactions, hard vs soft breaches, and remaining/overage math.
+    mocks: None (pure BudgetManager logic).
+  - path: codex/code/work/tests/test_flow_runner_budget_integration.py
+    coverage: >-
+      Ensure FlowRunner emits trace events, halts on loop stop budgets, and records stop reasons
+      while propagating soft warnings.
+    mocks: Adapter doubles implementing estimate/execute.
+run_order:
+  - Write tests for budget models and manager.
+  - Write FlowRunner integration tests.
+  - Implement budget models and helpers.
+  - Implement BudgetManager.
+  - Implement trace utilities.
+  - Implement FlowRunner and adapters integration.
+  - Run pytest focused on new tests, then full suite segment if required.
+interfaces:
+  TraceWriter: emit(event: str, payload: Mapping[str, Any]) -> None
+  BudgetManager:
+    preview(scopes: Sequence[BudgetScope], cost: CostSnapshot) -> List[BudgetChargeOutcome]
+    charge(scopes: Sequence[BudgetScope], cost: CostSnapshot) -> List[BudgetChargeOutcome]
+    reset_loop(loop_id: str) -> None
+  FlowRunner.run(flow: FlowDefinition, context: RunContext) -> FlowResult
+  CostSnapshot: normalized(cost_dict) -> CostSnapshot
+  BudgetSpec: from_dict(data) -> BudgetSpec
+  TraceEventEmitter.emit_budget_charge(scope, outcome, context) -> None
+  TraceEventEmitter.emit_budget_breach(scope, outcome, context) -> None
+tdd_coverage_targets:
+  budget_models: 0.9
+  budget_manager: 0.95
+  flow_runner: 0.9
+review_checklist:
+  - Do tests cover both hard and soft budget scenarios?
+  - Are trace payloads immutable and schema-aligned?
+  - Is cost normalization consistent across scopes?
+  - Does FlowRunner stop reason reflect highest-priority breach?
+  - Are adapters/policy hooks easily swappable for future work?
+outputs:
+  plan: codex/agents/TASKS_FINAL/P3/07b_budget_guards_and_runner_integration.yaml-20250514T120000Z-gpt5codex.yaml
+  tests:
+    - codex/code/work/tests/test_budget_manager.py
+    - codex/code/work/tests/test_flow_runner_budget_integration.py
+  modules:
+    - codex/code/work/runner/budget_models.py
+    - codex/code/work/runner/budget_manager.py
+    - codex/code/work/runner/trace.py
+    - codex/code/work/runner/flow_runner.py
+    - codex/code/work/runner/__init__.py
+  documentation:
+    - codex/agents/PREVIEW/P3/07b_budget_guards_and_runner_integration.yaml-20250514T120000Z-gpt5codex.md
+    - codex/agents/REVIEW/P3/07b_budget_guards_and_runner_integration.yaml-20250514T120000Z-gpt5codex.md
+    - codex/agents/POSTEXECUTION/P3/07b_budget_guards_and_runner_integration.yaml-20250514T120000Z-gpt5codex.md
+    - codex/DOCUMENTATION/P3/work-20250514T120000Z-gpt5codex.yaml
+  missing_tests: codex/TESTS/P3/work-20250514T120000Z-gpt5codex.yaml
