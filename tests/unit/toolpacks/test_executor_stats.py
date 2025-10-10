@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import json
+import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import pytest
@@ -43,6 +45,52 @@ def sample_toolpack(tmp_path: Path) -> Toolpack:
         env={},
         templating={},
         source_path=tmp_path / "echo.tool.yaml",
+    )
+
+
+@pytest.fixture
+def delayed_toolpack(tmp_path: Path) -> Toolpack:
+    """Toolpack that sleeps for ``delayMs`` before echoing the payload."""
+
+    return Toolpack(
+        id="tests.delayed.echo",
+        version="0.1.0",
+        deterministic=True,
+        timeout_ms=1000,
+        limits={"maxInputBytes": 4096, "maxOutputBytes": 4096},
+        input_schema={
+            "type": "object",
+            "properties": {
+                "text": {"type": "string"},
+                "delayMs": {"type": "number", "minimum": 0},
+            },
+            "required": ["text", "delayMs"],
+            "additionalProperties": False,
+        },
+        output_schema={
+            "type": "object",
+            "properties": {
+                "echo": {
+                    "type": "object",
+                    "properties": {
+                        "text": {"type": "string"},
+                        "delayMs": {"type": "number", "minimum": 0},
+                    },
+                    "required": ["text", "delayMs"],
+                    "additionalProperties": False,
+                }
+            },
+            "required": ["echo"],
+            "additionalProperties": False,
+        },
+        execution={
+            "kind": "python",
+            "module": "tests.helpers.toolpack_samples:delayed_echo",
+        },
+        caps={},
+        env={},
+        templating={},
+        source_path=tmp_path / "delayed_echo.tool.yaml",
     )
 
 
@@ -120,3 +168,33 @@ def test_executor_can_disable_cache_without_flushing_existing_entries(
 
     _, hit_stats = executor.run_toolpack_with_stats(sample_toolpack, payload)
     assert hit_stats.cache_hit is True
+
+
+def test_last_run_stats_are_isolated_between_threads(
+    delayed_toolpack: Toolpack,
+) -> None:
+    executor = Executor()
+    barrier = threading.Barrier(2)
+
+    def invoke(payload: dict[str, object]) -> tuple[int, ExecutionStats]:
+        result = executor.run_toolpack(delayed_toolpack, payload)
+        assert result["echo"] == payload
+        expected_input = _canonical_size(payload)
+        barrier.wait()
+        stats = executor.last_run_stats()
+        assert stats is not None
+        return expected_input, stats
+
+    fast_payload = {"text": "fast", "delayMs": 10}
+    slow_payload = {"text": "slow-slower", "delayMs": 80}
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        fast_future = pool.submit(invoke, fast_payload)
+        slow_future = pool.submit(invoke, slow_payload)
+
+    fast_expected, fast_stats = fast_future.result()
+    slow_expected, slow_stats = slow_future.result()
+
+    assert fast_stats.input_bytes == fast_expected
+    assert slow_stats.input_bytes == slow_expected
+    assert fast_stats is not slow_stats
