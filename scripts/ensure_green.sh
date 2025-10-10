@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+if [[ -f requirements.txt ]]; then
+  echo "[ensure_green] installing python dependencies..."
+  python -m pip install -r requirements.txt
+fi
+
 echo "[ensure_green] linting..."
 ruff check .
 
