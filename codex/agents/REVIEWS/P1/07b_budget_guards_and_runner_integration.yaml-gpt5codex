@@ -173,10 +173,10 @@ analysis:
       - Soft budget handling is either absent or inconsistently surfaced; none of the branches produce a canonical `budget_resolved` trace for soft warnings.
       - Runner integration with policy enforcement (`PolicyStack`) is missing across all variants, so tool gating remains disconnected from budget decisions.
     unique_strengths:
-      - `codex/integrate-budget-guards-with-runner-zwi2ny` adds reusable trace writers and deterministic event payloads that match acceptance expectations.
-      - `codex/integrate-budget-guards-with-runner-pbdel9` provides structured `BudgetCharge` responses suitable for downstream diagnostics.
-      - `codex/implement-budget-guards-with-test-first-approach` introduces a `BudgetManager` abstraction enabling preflight vs commit semantics that align with TDD scaffolding.
-      - `codex/implement-budget-guards-with-test-first-approach-fa0vm9` demonstrates the most complete runner loop integration, including adapter orchestration and stop signals.
+      - "`codex/integrate-budget-guards-with-runner-zwi2ny` adds reusable trace writers and deterministic event payloads that match acceptance expectations."
+      - "`codex/integrate-budget-guards-with-runner-pbdel9` provides structured `BudgetCharge` responses suitable for downstream diagnostics."
+      - "`codex/implement-budget-guards-with-test-first-approach` introduces a `BudgetManager` abstraction enabling preflight vs commit semantics that align with TDD scaffolding."
+      - "`codex/implement-budget-guards-with-test-first-approach-fa0vm9` demonstrates the most complete runner loop integration, including adapter orchestration and stop signals."
     critical_gaps:
       - No branch delivers a unified trace contract that covers `push`, `pop`, `policy_resolved`, and `violation` events alongside budget telemetry.
       - Limit normalization and unit conversion rules diverge, risking inconsistent enforcement across scopes.
@@ -187,7 +187,7 @@ confidence_notes:
     reason: branches disagree on exception types (`BudgetBreachHard`, `BudgetExceededError`) and soft-stop behavior, so harmonization requires careful reconciliation.
 coverage_gaps:
   - missing: regression asserting `budget_charge` events include both cost and remaining headroom.
-  - missing: unit test covering loop-level soft breach with `breach_action: stop`.
+  - missing: "unit test covering loop-level soft breach with `breach_action: stop`."
 traceability_checklist:
   - must-emit: push
   - must-emit: pop

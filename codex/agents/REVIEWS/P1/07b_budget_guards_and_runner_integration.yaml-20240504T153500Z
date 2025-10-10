@@ -159,12 +159,12 @@ analysis:
       - Several implementations drop deterministic adapter execution in favour of mocked cost payloads, undermining integration realism required by the spec.
       - Test coverage regresses from the base branch; rewritten runners often invalidate `tests/unit/test_budget_meter_limits.py` without equivalent replacements.
     unique_strengths:
-      - `codex/integrate-budget-guards-with-runner-zwi2ny` offers reusable `BudgetSpec`/`CostSnapshot` value objects and a `TraceWriter` abstraction we can compose.
-      - `codex/integrate-budget-guards-with-runner-pbdel9` surfaces per-meter `remaining`/`overages` snapshots suitable for observability dashboards.
-      - `codex/implement-budget-guards-with-test-first-approach` provides a `BudgetManager` facade with preflight/commit hooks aligned to future runner orchestration.
-      - `codex/implement-budget-guards-with-test-first-approach-qhq0jq` captures loop summaries and normalizes budget modes via an enum, improving reporting fidelity.
-      - `codex/implement-budget-guards-with-test-first-approach-8wxk32` models node executions and costs with immutable dataclasses and injectable clocks for determinism.
-      - `codex/implement-budget-guards-with-test-first-approach-fa0vm9` formalizes adapter contracts and breach metadata, easing downstream tool integration.
+      - "`codex/integrate-budget-guards-with-runner-zwi2ny` offers reusable `BudgetSpec`/`CostSnapshot` value objects and a `TraceWriter` abstraction we can compose."
+      - "`codex/integrate-budget-guards-with-runner-pbdel9` surfaces per-meter `remaining`/`overages` snapshots suitable for observability dashboards."
+      - "`codex/implement-budget-guards-with-test-first-approach` provides a `BudgetManager` facade with preflight/commit hooks aligned to future runner orchestration."
+      - "`codex/implement-budget-guards-with-test-first-approach-qhq0jq` captures loop summaries and normalizes budget modes via an enum, improving reporting fidelity."
+      - "`codex/implement-budget-guards-with-test-first-approach-8wxk32` models node executions and costs with immutable dataclasses and injectable clocks for determinism."
+      - "`codex/implement-budget-guards-with-test-first-approach-fa0vm9` formalizes adapter contracts and breach metadata, easing downstream tool integration."
     critical_gaps:
       - Soft budget semantics diverge: some branches never surface warnings, others auto-raise even when `breach_action == "stop"`, so unified handling is missing.
       - Loop stop reasons and trace payload schemas differ, requiring reconciliation before merging into the runner contract.

@@ -13,13 +13,13 @@ comparative_review:
   - branch: codex/integrate-budget-guards-with-runner-zwi2ny
     bullets:
       - Introduces immutable `BudgetSpec`/`CostSnapshot`/`BudgetChargeOutcome` models plus a `TraceWriter`, greatly improving data hygiene and observability hooks.
-      - `_execute_node` is stubbed to fabricate costs, severing adapters and making budget enforcement impossible to validate end-to-end; acceptance harnesses would fail because real tool execution disappears.
+      - "`_execute_node` is stubbed to fabricate costs, severing adapters and making budget enforcement impossible to validate end-to-end; acceptance harnesses would fail because real tool execution disappears."
       - Defaulting meters to `mode="hard"` while ignoring `breach_action` keeps soft budgets inert; loop stop behaviour therefore violates DSL semantics for warn/stop policies.
       - Emits `budget_charge` and `budget_breach` events but invents payload shapes that diverge from the policy trace schema and omits `policy_resolved`, so cross-system trace fidelity remains broken.
   - branch: codex/integrate-budget-guards-with-runner-pbdel9
     bullets:
       - Adds structured `BudgetCharge` payloads with `remaining`/`overages` plus `BudgetBreachHard`, giving downstream diagnostics the necessary context to display overrun metrics.
-      - `BudgetMeter.charge()` swallows breaches when `breach_action == "stop"`, and the runner never inspects the returned `breached` flag; loops therefore keep executing past hard stops, regressing enforcement guarantees.
+      - '`BudgetMeter.charge()` swallows breaches when `breach_action == "stop"`, and the runner never inspects the returned `breached` flag; loops therefore keep executing past hard stops, regressing enforcement guarantees.'
       - Trace payloads adopt immutable mapping proxies which align with observability requirements, yet the schema differs from DSL expectations (e.g., new event names) and policy traces remain absent.
       - Time accounting mixes seconds and milliseconds without normalization, causing scope totals to drift between adapters and meters.
       - Tests emphasise happy-path charging only; there is no regression asserting stop-on-breach or warning emission, so the failure above is uncaught.
@@ -45,7 +45,7 @@ comparative_review:
     bullets:
       - Introduces a `ToolAdapter` protocol with `estimate_cost` vs `execute` phases and explicit loop-context stacks, finally reattaching budgets to adapters and surfacing `BudgetBreach` diagnostics.
       - Trace handling accumulates events in mutable lists before optional sink forwarding; without immutable snapshots this breaks stack safety if shared across threads and diverges from DSL schemas.
-      - `BudgetMeter.charge()` mutates shared dictionaries and depends on adapters to normalise cost keys, risking cross-scope leakage and spec drift (time stored in ms, adapters emit seconds).
+      - "`BudgetMeter.charge()` mutates shared dictionaries and depends on adapters to normalise cost keys, risking cross-scope leakage and spec drift (time stored in ms, adapters emit seconds)."
       - Stop signals via `_LoopStopSignal` are promising yet bespoke; they should map to the DSL's canonical stop reason vocabulary to maintain consistency.
       - Tests cover adapter orchestration paths but do not assert schema fidelity for emitted traces or combined policy/budget violations, leaving major acceptance gaps.
 redundancy_and_hallucination_check:
