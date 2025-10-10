@@ -26,7 +26,7 @@ def _seed(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("RAGX_SEED", "42")
 
 
-VOLATILE_META_FIELDS = {"requestId", "traceId", "spanId"}
+VOLATILE_META_FIELDS = {"requestId", "traceId", "spanId", "transport"}
 
 
 def _stable_meta(meta: Mapping[str, Any]) -> dict[str, Any]:
@@ -76,4 +76,6 @@ def test_transport_parity_for_tool_invocation(tmp_path: Path) -> None:
     assert http_payload == stdio_payload
     assert http_envelope["meta"]["deterministic"] is True
     assert stdio_envelope["meta"]["deterministic"] is True
+    assert http_envelope["meta"]["transport"] == "http"
+    assert stdio_envelope["meta"]["transport"] == "stdio"
     assert _stable_meta(http_envelope["meta"]) == _stable_meta(stdio_envelope["meta"])
