@@ -1,0 +1,15 @@
+missing_tests:
+  task_id: 07b_budget_guards_and_runner_integration.yaml
+  proposed_tests:
+    - name: test_loop_budget_warns_and_continues_multiple_iterations
+      rationale: Cover loop scopes configured with breach_action "warn" to ensure warnings emit without halting iterations.
+      source_module: codex/code/work/dsl/flow_runner.py
+      priority: medium
+    - name: test_policy_bridge_with_existing_sink
+      rationale: Validate that PolicyTraceBridge correctly forwards events when PolicyStack already has a sink attached.
+      source_module: codex/code/work/dsl/policy_bridge.py
+      priority: low
+    - name: property_test_budget_decision_carries_through_exception
+      rationale: Property-based check that any stop decision propagated via BudgetBreachError retains the originating decision payload.
+      source_module: codex/code/work/dsl/budget_manager.py
+      priority: medium

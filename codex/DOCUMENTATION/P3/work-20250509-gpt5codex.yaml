@@ -1,0 +1,64 @@
+component: budget_guard_runner_phase3
+purpose: |
+  Extend the Phase 3 runner integration with loop-aware budgeting and shared policy trace emission.
+  FlowRunner now previews budgets across run/node/loop scopes before committing spend, breaks loops
+  on stop-configured breaches, and emits loop summaries plus policy trace events through a unified emitter.
+cli_usage:
+  description: Execute branch-scoped regression tests for loop and policy integrations.
+  command: pytest codex/code/work/tests -q
+public_interfaces:
+  - name: codex.code.work.dsl.policy_bridge.PolicyTraceBridge
+    description: Forwards PolicyStack trace events into the shared TraceEventEmitter while preserving downstream sinks.
+  - name: codex.code.work.dsl.flow_runner.FlowRunner.run
+    description: Executes nodes with optional run-level policy frame, loop orchestration, and scope-aware budget enforcement.
+  - name: codex.code.work.dsl.flow_runner._execute_loop
+    description: Internal helper that iterates loop bodies, applies loop budgets, and emits loop_summary traces.
+  - name: codex.code.work.dsl.budget_manager.BudgetBreachError.decision
+    description: Exposed attribute referencing the BudgetDecision that triggered the breach for diagnostics.
+extension_hooks:
+  - hook: PolicyTraceBridge
+    extension: Wrap with additional sinks (e.g., OTEL) to fan out policy trace events.
+  - hook: FlowRunner._normalise_body
+    extension: Override in subclasses to support richer loop body descriptors.
+  - hook: FlowRunner._commit_scope
+    extension: Decorate to add telemetry or retries around budget commit operations.
+configurable_options:
+  - name: run_policy
+    values: Mapping[str, Iterable[str]] | None
+    default: null
+  - name: loop.stop.max_iterations
+    values: integer >= 0
+    default: null (loop runs until other stop conditions)
+  - name: BudgetSpec.mode
+    values: [hard, soft]
+    default: hard
+automation_triggers:
+  - trigger: PolicyStack.push/pop via FlowRunner
+    outcome: Ensures policies remain balanced even when exceptions occur.
+  - trigger: BudgetManager.preview_charge for loop scopes
+    outcome: Records breach telemetry before deciding whether to execute an iteration.
+error_contracts:
+  - name: BudgetBreachError
+    raised_when: Preview/commit detects a stop-configured breach at run/node/loop scopes.
+    payload: scope metadata, blocking BudgetChargeOutcome, and attached BudgetDecision.
+  - name: PolicyViolationError
+    raised_when: PolicyStack denies a tool; FlowRunner emits policy_violation and aborts execution.
+serialization:
+  trace_payloads:
+    loop_summary: {loop_id, iterations, stop_reason, breach?}
+    policy_events: Forwarded PolicyTraceEvent payloads (policy_push/pop/resolved/violation).
+    budget_events: MappingProxyType containing cost, totals, remaining, and overage metrics.
+  cost_snapshot: {time_ms: float, tokens: int}
+lifecycle:
+  - FlowRunner.run: enter run scope -> optional run policy push -> iterate nodes/loops -> emit run_complete -> pop policy -> exit scope.
+  - Loop execution: enter loop scope -> optional policy push -> per-iteration budget previews -> commit or halt -> emit loop_summary -> exit scope.
+  - Budget breach: preview_charge -> record_breach -> commit_charge raises BudgetBreachError with attached decision.
+typing:
+  language: Python 3.12
+  typing: dataclasses, Protocol for adapters, explicit Mapping types for node definitions.
+security:
+  - FlowRunner trusts adapters and policies; ensure upstream configuration sanitises inputs.
+  - Policy trace emission may include policy definitions; route to trusted sinks.
+performance:
+  - Preview before commit avoids unnecessary state updates when loops halt early.
+  - Trace emission is synchronous; consider attaching asynchronous sinks for high-volume policies/loops.

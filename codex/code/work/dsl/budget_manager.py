@@ -94,7 +94,9 @@ class BudgetManager:
             blocking = decision.blocking
             if blocking is None:  # pragma: no cover - defensive guard
                 raise BudgetError("blocking outcome missing for stop decision")
-            raise BudgetBreachError(decision.scope, blocking)
+            error = BudgetBreachError(decision.scope, blocking)
+            setattr(error, "decision", decision)
+            raise error
         for outcome in decision.outcomes:
             state.spent[outcome.spec.name] = outcome.charge.new_total
             self._trace.emit(

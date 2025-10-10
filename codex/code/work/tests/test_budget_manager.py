@@ -54,8 +54,9 @@ class TestBudgetManager:
         decision = manager.preview_charge(scope, bm.CostSnapshot.from_raw({"time_ms": 20}))
         assert decision.should_stop is True
         manager.record_breach(decision)
-        with pytest.raises(BudgetBreachError):
+        with pytest.raises(BudgetBreachError) as excinfo:
             manager.commit_charge(decision)
+        assert getattr(excinfo.value, "decision", None) is decision
         events = trace_emitter.events
         assert any(evt.event == "budget_breach" and evt.payload["spec_name"] == "run-hard" for evt in events)
 

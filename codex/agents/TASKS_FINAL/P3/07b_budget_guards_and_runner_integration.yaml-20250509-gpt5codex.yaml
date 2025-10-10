@@ -1,0 +1,90 @@
+summary: Extend FlowRunner with loop-aware budget enforcement and shared policy tracing
+justification: |
+  Phase 2 established immutable budget models, a scope-aware BudgetManager, and adapter-backed
+  FlowRunner skeleton. Review notes highlighted missing loop stop semantics and lack of shared
+  policy traces. This plan adds loop orchestration, ensures budget breaches halt loops without
+  aborting the entire run, and bridges PolicyStack events into the TraceEventEmitter so policy
+  and budget telemetry share a contract. Tests will codify stop/warn behaviour and trace payloads
+  before implementation.
+steps:
+  - name: policy_bridge
+    description: Provide a reusable bridge that forwards PolicyStack trace events into the shared TraceEventEmitter.
+  - name: flow_runner_loops
+    description: Teach FlowRunner to execute loop nodes, apply loop budgets, and emit loop summaries while preserving adapter integration.
+  - name: flow_runner_policy_traces
+    description: Push/pop run and node policies, emit policy_resolved traces, and surface violations through the shared emitter.
+  - name: budget_manager_stop_metadata
+    description: Attach preview decisions to raised BudgetBreachError so loop handlers can produce diagnostics without mutating manager internals.
+modules:
+  - path: codex/code/work/dsl/policy_bridge.py
+    role: Adapt PolicyStack trace events to the TraceEventEmitter, preserving immutable payloads.
+  - path: codex/code/work/dsl/flow_runner.py
+    role: Execute tool and loop nodes with budget+policy enforcement and deterministic trace emission.
+  - path: codex/code/work/dsl/budget_manager.py
+    role: Surface BudgetDecision metadata when raising BudgetBreachError for downstream diagnostics.
+  - path: codex/code/work/dsl/__init__.py
+    role: Export new bridge utilities for downstream imports.
+  - path: codex/code/work/tests/work/__init__.py
+    role: Namespace package for branch-scoped tests.
+  - path: codex/code/work/tests/work/test_flow_runner_loop_budget_stop.py
+    role: Validate loop budget stop semantics, summary traces, and continued run execution.
+  - path: codex/code/work/tests/work/test_flow_runner_policy_traces.py
+    role: Assert shared policy trace emission, policy push/pop ordering, and violation recording.
+  - path: codex/code/work/tests/conftest.py
+    role: Ensure Python path wiring covers new branch-scoped tests.
+  - path: codex/code/work/tests/test_flow_runner_budget_integration.py
+    role: Align legacy integration fixture helpers with new bridge utilities when necessary.
+  - path: codex/code/work/tests/__init__.py
+    role: Document branch test layout.
+  - path: codex/code/work/dsl/trace.py
+    role: Support policy bridge payload immutability helpers if adjustments needed.
+  - path: codex/code/work/dsl/budget_models.py
+    role: Provide helper types reused by loop summaries (e.g., ScopeKey aliasing).
+  - path: codex/code/work/tests/test_budget_manager.py
+    role: Extend assertions for attached decision metadata.
+  - path: codex/code/work/tests/test_flow_runner_budget_integration.py
+    role: Update fixtures to leverage new bridge if required.
+  - path: codex/code/work/tests/test_budget_models.py
+    role: Ensure compatibility with new summary helpers if added.
+tests:
+  - path: codex/code/work/tests/work/test_flow_runner_loop_budget_stop.py
+    coverage: loop scope entry/exit, soft vs stop semantics, loop_summary trace payloads, continuation behaviour.
+    mocks: Deterministic fake adapter with per-node counters.
+  - path: codex/code/work/tests/work/test_flow_runner_policy_traces.py
+    coverage: run/node policy push/pop, policy_resolved emission, violation propagation.
+    mocks: Fake adapter, preconfigured PolicyStack fixtures.
+  - path: codex/code/work/tests/test_budget_manager.py
+    coverage: confirm raised BudgetBreachError now carries decision metadata for diagnostics.
+    mocks: Trace emitter fixture.
+run_order:
+  - pytest codex/code/work/tests/work/test_flow_runner_policy_traces.py
+  - pytest codex/code/work/tests/work/test_flow_runner_loop_budget_stop.py
+  - pytest codex/code/work/tests/test_budget_manager.py
+  - pytest codex/code/work/tests/test_flow_runner_budget_integration.py
+interfaces:
+  policy_bridge: [PolicyTraceBridge.__call__]
+  flow_runner: [FlowRunner.run, FlowRunner._execute_node, FlowRunner._execute_loop]
+  budget_manager: [BudgetManager.commit_charge, BudgetBreachError.outcome, BudgetBreachError.decision]
+  trace: [TraceEventEmitter.emit]
+  policy_stack: [PolicyStack.push, PolicyStack.pop, PolicyStack.effective_allowlist, PolicyStack.enforce]
+tdd_coverage_targets:
+  codex/code/work/dsl/flow_runner.py: 90
+  codex/code/work/dsl/policy_bridge.py: 95
+  codex/code/work/dsl/budget_manager.py: 85
+review_checklist:
+  - Verify PolicyTraceBridge preserves downstream sinks and emits immutable payloads.
+  - Ensure FlowRunner loop execution catches loop-specific budget stops without masking run/node breaches.
+  - Confirm loop_summary payload includes stop_reason and breached spec metadata when applicable.
+  - Check policy push/pop ordering is balanced even on exceptions.
+  - Validate new tests cover both success and failure paths deterministically.
+outputs:
+  plan: codex/agents/TASKS_FINAL/P3/07b_budget_guards_and_runner_integration.yaml-20250509-gpt5codex.yaml
+  tests: codex/code/work/tests/work
+  implementation: codex/code/work/dsl
+  documentation:
+    preview: codex/agents/PREVIEW/P3/07b_budget_guards_and_runner_integration.yaml-20250509-gpt5codex.md
+    review: codex/agents/REVIEW/P3/07b_budget_guards_and_runner_integration.yaml-20250509-gpt5codex.md
+    postexecution: codex/agents/POSTEXECUTION/P3/07b_budget_guards_and_runner_integration.yaml-20250509-gpt5codex.md
+    metadata: codex/DOCUMENTATION/P3/work-20250509-gpt5codex.yaml
+  missing_tests: codex/TESTS/P3/work-20250509-gpt5codex.yaml
+  optional_runner: codex/code/work/phase3_runner.py
