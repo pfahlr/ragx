@@ -1,0 +1,97 @@
+summary: Extend FlowRunner budgets to cover loop scopes and trace validation
+justification: |
+  Phase 2 synthesis and prior reviews flagged missing coverage for loop budget stop behaviour,
+  simultaneous policy and budget violations, and schema validation of emitted trace payloads.
+  This phase introduces targeted enhancements—loop-aware execution paths, validator-backed
+  trace emission, and regression tests—to close those gaps while preserving the immutable data
+  model and adapter-driven runner established earlier.
+steps:
+  - name: loop_scope_support
+    description: Add loop scope orchestration in FlowRunner with deterministic trace emission
+      and graceful handling of stop-on-breach outcomes.
+  - name: trace_validation
+    description: Allow TraceEventEmitter to register validators so budget/policy payloads can
+      be checked against DSL expectations during tests.
+  - name: policy_budget_interplay
+    description: Harden FlowRunner around policy denials so budget scopes unwind cleanly when
+      enforcement blocks execution prior to charging costs.
+modules:
+  - path: codex/code/work/dsl/budget_manager.py
+    role: Scope lifecycle and charging logic; updated for non-raising decision returns when
+      used by loop orchestration.
+  - path: codex/code/work/dsl/flow_runner.py
+    role: Adapter-backed runner extended with loop execution, stop handling, and enriched
+      trace emission.
+  - path: codex/code/work/dsl/trace.py
+    role: Trace emitter augmented with validator attachment for schema enforcement.
+  - path: codex/code/work/tests/test_flow_runner_budget_integration.py
+    role: Existing integration regression suite updated for new behaviours.
+  - path: codex/code/work/tests/test_flow_runner_loop_policy.py
+    role: New unit/integration coverage for loop stop semantics and policy/budget interplay.
+  - path: codex/code/work/tests/test_trace_emitter_validation.py
+    role: Unit coverage for validator-backed trace emission contract.
+  - path: codex/code/work/tests/conftest.py
+    role: Shared fixtures extended for new tests (loop-aware adapters, validators).
+  - path: codex/code/work/tests/__init__.py
+    role: Package marker (unchanged but included for completeness).
+tests:
+  - path: codex/code/work/tests/test_flow_runner_loop_policy.py
+    coverage: loop scope entry/exit, stop-on-breach handling, policy denial without cost charges.
+    mocks: FakeAdapter, TestPolicyStack fixtures, TraceEventEmitter validator doubles.
+  - path: codex/code/work/tests/test_trace_emitter_validation.py
+    coverage: validator success/failure paths, immutability preservation on rejection.
+    mocks: inline validator callables.
+  - path: codex/code/work/tests/test_flow_runner_budget_integration.py
+    coverage: update expectations for new trace events and decision returns.
+    mocks: FakeAdapter already present; extended to expose iteration metadata.
+run_order:
+  - pytest codex/code/work/tests/test_trace_emitter_validation.py
+  - pytest codex/code/work/tests/test_flow_runner_loop_policy.py
+  - pytest codex/code/work/tests/test_flow_runner_budget_integration.py
+interfaces:
+  budget_manager:
+    - BudgetManager.enter_scope
+    - BudgetManager.exit_scope
+    - BudgetManager.preview_charge
+    - BudgetManager.commit_charge
+    - BudgetManager.record_breach
+  flow_runner:
+    - FlowRunner.run
+    - FlowRunner._run_loop
+    - FlowRunner._run_unit_node
+  trace:
+    - TraceEventEmitter.emit
+    - TraceEventEmitter.attach_sink
+    - TraceEventEmitter.attach_validator
+  policy:
+    - PolicyStack.enforce
+    - PolicyStack.push
+    - PolicyStack.pop
+tdd_coverage_targets:
+  codex/code/work/dsl/flow_runner.py: 90
+  codex/code/work/dsl/budget_manager.py: 90
+  codex/code/work/dsl/trace.py: 95
+review_checklist:
+  - Verify loop scopes are entered/exited exactly once per run even on early stop.
+  - Ensure BudgetBreachError raised for loop scopes is intercepted and emits loop_stop traces
+    without aborting the run.
+  - Confirm policy violations leave run/node budgets uncharged and traces emitted.
+  - Validate TraceEventEmitter rejects invalid events before persisting them.
+  - Check new tests cover warn vs stop combinations and validator failure cases.
+outputs:
+  plan: codex/agents/TASKS_FINAL/P3/07b_budget_guards_and_runner_integration.yaml-20250513-gpt5codex.yaml
+  tests:
+    - codex/code/work/tests/test_flow_runner_loop_policy.py
+    - codex/code/work/tests/test_trace_emitter_validation.py
+    - codex/code/work/tests/test_flow_runner_budget_integration.py
+  implementation:
+    - codex/code/work/dsl/flow_runner.py
+    - codex/code/work/dsl/budget_manager.py
+    - codex/code/work/dsl/trace.py
+  documentation:
+    preview: codex/agents/PREVIEW/P3/07b_budget_guards_and_runner_integration.yaml-20250513-gpt5codex.md
+    review: codex/agents/REVIEW/P3/07b_budget_guards_and_runner_integration.yaml-20250513-gpt5codex.md
+    postexecution: codex/agents/POSTEXECUTION/P3/07b_budget_guards_and_runner_integration.yaml-20250513-gpt5codex.md
+    metadata: codex/DOCUMENTATION/P3/work-20250513-gpt5codex.yaml
+  missing_tests: codex/TESTS/P3/work-20250513-gpt5codex.yaml
+  optional_runner: codex/code/work/phase3_runner.py
