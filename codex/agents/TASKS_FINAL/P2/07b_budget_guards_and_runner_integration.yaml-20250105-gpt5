@@ -120,98 +120,94 @@ actions:
   - stage: budget_domain_model
     summary: Consolidate immutable budget data structures and validation.
     tasks:
-      - |
-          execution_mode: always
-          reusable: true
-          summary: Merge CostSnapshot/BudgetSpec immutability with BudgetMode/BudgetCheck semantics and BudgetBreach metadata.
-          adapted_from_branch:
-            - codex/integrate-budget-guards-with-runner-zwi2ny
-            - codex/implement-budget-guards-with-test-first-approach-qhq0jq
-            - codex/implement-budget-guards-with-test-first-approach-fa0vm9
-            - codex/implement-budget-guards-with-test-first-approach-8wxk32
-          steps:
-            - Create CostSnapshot and Cost dataclasses supporting tokens_in/tokens_out aggregation and total computation.
-            - Define BudgetSpec with validation for negative/unknown metrics and normalize time_ms/time_sec inputs.
-            - Implement BudgetCharge and BudgetCheck results that carry remaining/overage mappings and breach metadata using mapping_proxy.
-            - Add BudgetBreach dataclass capturing scope, metric, amount, and breach_kind for trace parity.
-          tests:
-            - tests/unit/test_budget_meter_limits.py::test_charge_respects_soft_and_hard_modes
-            - tests/unit/test_budget_meter_limits.py::test_remaining_and_overages_are_immutable
-          artifacts:
-            - pkgs/dsl/budget.py
+      - execution_mode: always
+        reusable: true
+        summary: Merge CostSnapshot/BudgetSpec immutability with BudgetMode/BudgetCheck semantics and BudgetBreach metadata.
+        adapted_from_branch:
+          - codex/integrate-budget-guards-with-runner-zwi2ny
+          - codex/implement-budget-guards-with-test-first-approach-qhq0jq
+          - codex/implement-budget-guards-with-test-first-approach-fa0vm9
+          - codex/implement-budget-guards-with-test-first-approach-8wxk32
+        steps:
+          - Create CostSnapshot and Cost dataclasses supporting tokens_in/tokens_out aggregation and total computation.
+          - Define BudgetSpec with validation for negative/unknown metrics and normalize time_ms/time_sec inputs.
+          - Implement BudgetCharge and BudgetCheck results that carry remaining/overage mappings and breach metadata using mapping_proxy.
+          - Add BudgetBreach dataclass capturing scope, metric, amount, and breach_kind for trace parity.
+        tests:
+          - tests/unit/test_budget_meter_limits.py::test_charge_respects_soft_and_hard_modes
+          - tests/unit/test_budget_meter_limits.py::test_remaining_and_overages_are_immutable
+        artifacts:
+          - pkgs/dsl/budget.py
   - stage: budget_manager_and_trace
     summary: Implement BudgetManager orchestration and trace emission plumbing.
     tasks:
-      - |
-          execution_mode: always
-          reusable: true
-          summary: Build BudgetManager preflight/commit per scope and unify trace recorder usage with PolicyStack.
-          adapted_from_branch:
-            - codex/implement-budget-guards-with-test-first-approach
-            - codex/integrate-budget-guards-with-runner-pbdel9
-            - codex/integrate-budget-guards-with-runner-zwi2ny
-          depends_on:
-            - budget_domain_model
-          steps:
-            - Implement BudgetManager that constructs BudgetMeter instances per scope, exposes preflight_* and commit_* APIs, and returns BudgetCheck/BudgetCharge outcomes.
-            - Ensure breach_action stop semantics trigger explicit `should_stop` flags without mutating meters on failure paths.
-            - Emit budget_charge and budget_breach events via a shared RunnerTraceEmitter that also accepts policy events.
-            - Provide in-memory recorder plus optional sink callable, returning immutable trace payloads for tests.
-          tests:
-            - tests/unit/test_budget_manager_preflight.py::test_preflight_detects_soft_breaches
-            - tests/unit/test_budget_manager_preflight.py::test_commit_sets_should_stop_flag
-            - tests/unit/test_policy_stack_traces.py::test_policy_and_budget_share_recorder
-          artifacts:
-            - pkgs/dsl/budget.py
-            - pkgs/dsl/trace.py
+      - execution_mode: always
+        reusable: true
+        summary: Build BudgetManager preflight/commit per scope and unify trace recorder usage with PolicyStack.
+        adapted_from_branch:
+          - codex/implement-budget-guards-with-test-first-approach
+          - codex/integrate-budget-guards-with-runner-pbdel9
+          - codex/integrate-budget-guards-with-runner-zwi2ny
+        depends_on:
+          - budget_domain_model
+        steps:
+          - Implement BudgetManager that constructs BudgetMeter instances per scope, exposes preflight_* and commit_* APIs, and returns BudgetCheck/BudgetCharge outcomes.
+          - Ensure breach_action stop semantics trigger explicit `should_stop` flags without mutating meters on failure paths.
+          - Emit budget_charge and budget_breach events via a shared RunnerTraceEmitter that also accepts policy events.
+          - Provide in-memory recorder plus optional sink callable, returning immutable trace payloads for tests.
+        tests:
+          - tests/unit/test_budget_manager_preflight.py::test_preflight_detects_soft_breaches
+          - tests/unit/test_budget_manager_preflight.py::test_commit_sets_should_stop_flag
+          - tests/unit/test_policy_stack_traces.py::test_policy_and_budget_share_recorder
+        artifacts:
+          - pkgs/dsl/budget.py
+          - pkgs/dsl/trace.py
   - stage: flow_runner_integration
     summary: Retrofit FlowRunner to enforce policy, adapters, and budgets cohesively.
     tasks:
-      - |
-          execution_mode: always
-          reusable: false
-          summary: Integrate adapters with BudgetManager outcomes, loop summaries, and trace emission.
-          adapted_from_branch:
-            - codex/integrate-budget-guards-with-runner
-            - codex/implement-budget-guards-with-test-first-approach-8wxk32
-            - codex/implement-budget-guards-with-test-first-approach-fa0vm9
-            - codex/implement-budget-guards-with-test-first-approach-qhq0jq
-          depends_on:
-            - budget_manager_and_trace
-          steps:
-            - Execute nodes via ToolAdapter protocol, capturing estimates, enforcing PolicyStack before execution, and charging BudgetManager with actual costs.
-            - Produce NodeExecution records and accumulate LoopSummary instances including stop reasons and breach lists.
-            - Break loops based on BudgetManager.should_stop or PolicyViolationError, ensuring warnings propagate when breach_action="warn".
-            - Populate RunResult with outputs, immutable trace events, and loop summaries while keeping adapter contract synchronous.
-          tests:
-            - tests/unit/test_flow_runner_budget_manager.py::test_runner_stops_on_stop_breach
-            - tests/e2e/test_runner_budget_stop.py::test_loop_soft_warn_and_hard_stop
-            - tests/e2e/test_runner_policy_budget_trace.py::test_policy_and_budget_traces_in_order
-          artifacts:
-            - pkgs/dsl/runner.py
-            - pkgs/dsl/policy.py
+      - execution_mode: always
+        reusable: false
+        summary: Integrate adapters with BudgetManager outcomes, loop summaries, and trace emission.
+        adapted_from_branch:
+          - codex/integrate-budget-guards-with-runner
+          - codex/implement-budget-guards-with-test-first-approach-8wxk32
+          - codex/implement-budget-guards-with-test-first-approach-fa0vm9
+          - codex/implement-budget-guards-with-test-first-approach-qhq0jq
+        depends_on:
+          - budget_manager_and_trace
+        steps:
+          - Execute nodes via ToolAdapter protocol, capturing estimates, enforcing PolicyStack before execution, and charging BudgetManager with actual costs.
+          - Produce NodeExecution records and accumulate LoopSummary instances including stop reasons and breach lists.
+          - Break loops based on BudgetManager.should_stop or PolicyViolationError, ensuring warnings propagate when breach_action="warn".
+          - Populate RunResult with outputs, immutable trace events, and loop summaries while keeping adapter contract synchronous.
+        tests:
+          - tests/unit/test_flow_runner_budget_manager.py::test_runner_stops_on_stop_breach
+          - tests/e2e/test_runner_budget_stop.py::test_loop_soft_warn_and_hard_stop
+          - tests/e2e/test_runner_policy_budget_trace.py::test_policy_and_budget_traces_in_order
+        artifacts:
+          - pkgs/dsl/runner.py
+          - pkgs/dsl/policy.py
   - stage: regression_tests_and_docs
     summary: Harden coverage and document budgeting behaviour.
     tasks:
-      - |
-          execution_mode: always
-          reusable: true
-          summary: Extend tests and docs for combined policy/budget observability.
-          adapted_from_branch:
-            - codex/integrate-budget-guards-with-runner-pbdel9
-            - codex/implement-budget-guards-with-test-first-approach-fa0vm9
-          depends_on:
-            - flow_runner_integration
-          steps:
-            - Add integration test exercising simultaneous run+loop soft warnings followed by hard stop, verifying trace ordering.
-            - Document trace schema and budgeting workflow in docs/runner/budgeting.md, referencing shared trace emitter contract.
-            - Capture fixture trace samples for golden regression under tests/fixtures/flows/.
-          tests:
-            - tests/e2e/test_runner_policy_budget_trace.py::test_combined_policy_budget_trace_payload
-            - tests/property/test_budget_charge_invariants.py
-          artifacts:
-            - docs/runner/budgeting.md
-            - tests/e2e/test_runner_policy_budget_trace.py
+      - execution_mode: always
+        reusable: true
+        summary: Extend tests and docs for combined policy/budget observability.
+        adapted_from_branch:
+          - codex/integrate-budget-guards-with-runner-pbdel9
+          - codex/implement-budget-guards-with-test-first-approach-fa0vm9
+        depends_on:
+          - flow_runner_integration
+        steps:
+          - Add integration test exercising simultaneous run+loop soft warnings followed by hard stop, verifying trace ordering.
+          - Document trace schema and budgeting workflow in docs/runner/budgeting.md, referencing shared trace emitter contract.
+          - Capture fixture trace samples for golden regression under tests/fixtures/flows/.
+        tests:
+          - tests/e2e/test_runner_policy_budget_trace.py::test_combined_policy_budget_trace_payload
+          - tests/property/test_budget_charge_invariants.py
+        artifacts:
+          - docs/runner/budgeting.md
+          - tests/e2e/test_runner_policy_budget_trace.py
 acceptance:
   - tests/unit/test_budget_meter_limits.py
   - tests/unit/test_budget_manager_preflight.py
