@@ -1,0 +1,303 @@
+developer_doc_metadata:
+  code_task: 07b_budget_guards_and_runner_integration.yaml
+  components_documented:
+    - name: BudgetManager
+      description: "Coordinates scope-aware budget previews, commits, and breach telemetry."
+      source_file: codex/code/work/dsl/budget_manager.py
+
+      cli_usage:
+        exposed: false
+        commands: []
+        entry_point: null
+
+      public_interface:
+        methods:
+          - name: enter_scope
+            signature: "def enter_scope(self, scope: ScopeKey) -> None"
+            purpose: "Activate a scope with zeroed spend tracking before running nodes."
+          - name: preview_charge
+            signature: "def preview_charge(self, scope: ScopeKey, cost: CostSnapshot) -> BudgetDecision"
+            purpose: "Compute decision outcomes without mutating spend totals."
+          - name: commit_charge
+            signature: "def commit_charge(self, decision: BudgetDecision) -> None"
+            purpose: "Persist spend and emit charge traces when decision is non-blocking."
+          - name: record_breach
+            signature: "def record_breach(self, decision: BudgetDecision) -> None"
+            purpose: "Emit breach events for any outcome that exceeded its limits."
+          - name: spent
+            signature: "def spent(self, scope: ScopeKey, spec_name: str) -> CostSnapshot"
+            purpose: "Return accumulated spend for inspection and assertions."
+        classes:
+          - name: BudgetManager
+            base_classes: [object]
+            purpose: "Stateful coordinator that owns per-scope spend maps and trace emitter."
+
+      inheritance:
+        base_classes: []
+        implements_interfaces: []
+
+      lifecycle:
+        methods:
+          - name: __init__
+            stage: init
+            description: "Index budget specs by scope and prepare trace emitter."
+          - name: enter_scope
+            stage: pre-exec
+            description: "Create spend ledger for a scope before execution."
+          - name: commit_charge
+            stage: post-exec
+            description: "Persist new totals and emit traces after adapter execution."
+
+      extension_points:
+        - hook: trace
+          type: DI injection
+          usage: "Supply custom TraceEventEmitter when richer sinks are needed."
+          location: codex/code/work/dsl/budget_manager.py
+
+      configuration:
+        config_file: null
+        options: []
+
+      automation_support:
+        triggers: []
+        environment_variables: []
+        ci_tasks: []
+
+      error_contracts:
+        expected_exceptions:
+          - name: BudgetBreachError
+            raised_by: commit_charge
+            when: "A blocking outcome is encountered during commit."
+            recoverable: false
+
+      serialization:
+        format: json
+        serializer_class: null
+        fields_serialized: ["spec_name", "cost", "remaining", "overage"]
+        persistence_target: trace sinks
+
+      typing_constraints:
+        strict_mode: true
+        annotations:
+          - name: commit_charge
+            signature: "(BudgetDecision) -> None"
+
+      runtime_dependencies:
+        environment:
+          required_vars: []
+          required_tools: []
+          required_python_packages: []
+        services: []
+
+      security_notes:
+        permissions_required: []
+        sandbox_safe: true
+        sensitive_data_handled: false
+
+      deprecated_elements: []
+
+      performance_notes:
+        resource_impact:
+          cpu_ms: 0.5
+          memory_mb: 1.0
+          network_calls: 0
+        optimization_tips:
+          - "Reuse CostSnapshot instances when possible to limit allocations."
+
+    - name: FlowRunner
+      description: "Executes flow nodes with policy enforcement, loop control, and budget checks."
+      source_file: codex/code/work/dsl/flow_runner.py
+
+      cli_usage:
+        exposed: false
+        commands: []
+        entry_point: null
+
+      public_interface:
+        methods:
+          - name: run
+            signature: "def run(self, *, flow_id: str, run_id: str, nodes: Iterable[Mapping[str, object]]) -> list[NodeExecution]"
+            purpose: "Iterate over nodes, applying budgets and policies before executing adapters."
+        classes:
+          - name: FlowRunner
+            base_classes: [object]
+            purpose: "Coordinator owning adapters, budgets, policy stack, and trace emitter."
+          - name: NodeExecution
+            base_classes: [object]
+            purpose: "Immutable record capturing adapter results and loop metadata."
+
+      inheritance:
+        base_classes: []
+        implements_interfaces: [ToolAdapter]
+
+      lifecycle:
+        methods:
+          - name: run
+            stage: exec
+            description: "Creates run scope, iterates nodes, and emits lifecycle traces."
+          - name: _run_loop
+            stage: exec
+            description: "Handles loop bodies, enforcing loop budgets and stop reasons."
+          - name: _run_unit_node
+            stage: exec
+            description: "Executes a single node with scoped budgets and policy enforcement."
+
+      extension_points:
+        - hook: ToolAdapter
+          type: protocol
+          usage: "Adapters implement estimate_cost/execute to participate in the runner."
+        - hook: PolicyStack
+          type: DI injection
+          usage: "Inject custom policy behaviour or telemetry sinks."
+
+      configuration:
+        config_file: null
+        options: []
+
+      automation_support:
+        triggers: []
+        environment_variables: []
+        ci_tasks: []
+
+      error_contracts:
+        expected_exceptions:
+          - name: BudgetBreachError
+            raised_by: run
+            when: "A blocking budget is encountered during execution."
+            recoverable: false
+          - name: PolicyViolationError
+            raised_by: run
+            when: "PolicyStack denies a tool."
+            recoverable: false
+
+      serialization:
+        format: json
+        serializer_class: null
+        fields_serialized: ["event", "scope_type", "scope_id", "payload"]
+        persistence_target: trace sinks
+
+      typing_constraints:
+        strict_mode: true
+        annotations:
+          - name: run
+            signature: "(*, flow_id: str, run_id: str, nodes: Iterable[Mapping[str, object]]) -> list[NodeExecution]"
+
+      runtime_dependencies:
+        environment:
+          required_vars: []
+          required_tools: []
+          required_python_packages: []
+        services: []
+
+      security_notes:
+        permissions_required: []
+        sandbox_safe: true
+        sensitive_data_handled: false
+
+      deprecated_elements: []
+
+      performance_notes:
+        resource_impact:
+          cpu_ms: 5.0
+          memory_mb: 5.0
+          network_calls: 0
+        optimization_tips:
+          - "Reuse adapter instances to avoid repeated setup per iteration."
+
+    - name: TraceEventEmitter
+      description: "In-memory trace emitter with optional sink and validator hooks."
+      source_file: codex/code/work/dsl/trace.py
+
+      cli_usage:
+        exposed: false
+        commands: []
+        entry_point: null
+
+      public_interface:
+        methods:
+          - name: attach_sink
+            signature: "def attach_sink(self, sink: Callable[[TraceEvent], None] | None) -> None"
+            purpose: "Register an observer to receive emitted events."
+          - name: attach_validator
+            signature: "def attach_validator(self, validator: Callable[[TraceEvent], None] | None) -> None"
+            purpose: "Register a guard executed before events are stored."
+          - name: emit
+            signature: "def emit(self, event: str, *, scope_type: str, scope_id: str, payload: Mapping[str, Any] | None = None) -> TraceEvent"
+            purpose: "Create immutable trace records and forward to sink/validator."
+          - name: events
+            signature: "@property def events(self) -> tuple[TraceEvent, ...]"
+            purpose: "Expose accumulated trace records for assertions."
+          - name: clear
+            signature: "def clear(self) -> None"
+            purpose: "Reset captured events during tests."
+        classes:
+          - name: TraceEvent
+            base_classes: [object]
+            purpose: "Frozen data class capturing event metadata."
+
+      inheritance:
+        base_classes: []
+        implements_interfaces: []
+
+      lifecycle:
+        methods:
+          - name: __init__
+            stage: init
+            description: "Prepare event buffer and optional hooks."
+          - name: emit
+            stage: exec
+            description: "Freeze payloads, invoke validator, persist, and forward to sink."
+
+      extension_points:
+        - hook: sink
+          type: DI injection
+          usage: "Attach structured logging or OTEL exporters downstream."
+        - hook: validator
+          type: DI injection
+          usage: "Enforce schema checks per event before storage."
+
+      configuration:
+        config_file: null
+        options: []
+
+      automation_support:
+        triggers: []
+        environment_variables: []
+        ci_tasks: []
+
+      error_contracts:
+        expected_exceptions: []
+
+      serialization:
+        format: json
+        serializer_class: null
+        fields_serialized: ["event", "scope_type", "scope_id", "payload"]
+        persistence_target: in-memory buffer or downstream sink
+
+      typing_constraints:
+        strict_mode: true
+        annotations:
+          - name: emit
+            signature: "(str, *, scope_type: str, scope_id: str, payload: Mapping[str, Any] | None) -> TraceEvent"
+
+      runtime_dependencies:
+        environment:
+          required_vars: []
+          required_tools: []
+          required_python_packages: []
+        services: []
+
+      security_notes:
+        permissions_required: []
+        sandbox_safe: true
+        sensitive_data_handled: false
+
+      deprecated_elements: []
+
+      performance_notes:
+        resource_impact:
+          cpu_ms: 0.3
+          memory_mb: 1.0
+          network_calls: 0
+        optimization_tips:
+          - "Reuse validators to avoid per-event allocations."

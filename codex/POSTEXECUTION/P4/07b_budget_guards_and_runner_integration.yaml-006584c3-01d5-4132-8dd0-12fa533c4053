@@ -1,0 +1,107 @@
+postexecution:
+  phase: P4
+  task_id: 07b_budget_guards_and_runner_integration.yaml
+  branches_reviewed:
+    - codex/complete-phase-3-for-tdd-feature-54y5b9
+    - codex/complete-phase-3-for-tdd-feature-rd6egz
+    - codex/complete-phase-3-for-tdd-feature-7i9h5x
+    - codex/implement-phase-3-using-tdd-for-feature
+    - codex/implement-phase-3-using-tdd-for-feature-lypjv9
+    - codex/implement-phase-3-using-tdd-for-feature-ije1jy
+    - codex/implement-phase-3-using-tdd-for-feature-nxygro
+    - codex/implement-phase-3-using-tdd-for-feature-bk4a29
+  winning_branch: codex/complete-phase-3-for-tdd-feature-rd6egz
+  source_repo: pfahlr/
+  reviewers_notes:
+    - Loop-aware FlowRunner plus immutable budget domain from rd6egz delivered the cleanest, production-ready surface.
+  time_to_review_minutes: 90
+  ci_outcomes_summary:
+    - branch: codex/complete-phase-3-for-tdd-feature-rd6egz
+      green: true
+      last_commit_sha: c2b4526d1db5a05102073f27607455ef83e057db
+    - branch: codex/complete-phase-3-for-tdd-feature-7i9h5x
+      green: false
+      last_commit_sha: 59a1638eaaf53e0dce7c48a6877d11b253a08817
+    - branch: codex/complete-phase-3-for-tdd-feature-54y5b9
+      green: false
+      last_commit_sha: 43fc4a50674e9a5f8e6ae624592fb0d5df6aff76
+    - branch: codex/implement-phase-3-using-tdd-for-feature
+      green: false
+      last_commit_sha: b9d7848870a1b8593127d24058a2a7783cf45b8a
+    - branch: codex/implement-phase-3-using-tdd-for-feature-lypjv9
+      green: false
+      last_commit_sha: d4bf37084eb3c33b1fe59e12abc575d179bc0f67
+    - branch: codex/implement-phase-3-using-tdd-for-feature-ije1jy
+      green: false
+      last_commit_sha: adf3a61b600c7f1da4647b91965b0a121342922f
+    - branch: codex/implement-phase-3-using-tdd-for-feature-nxygro
+      green: false
+      last_commit_sha: da5553f0e6cd2add16651452e66dc7e48d82fb71
+    - branch: codex/implement-phase-3-using-tdd-for-feature-bk4a29
+      green: false
+      last_commit_sha: 655a0d8402af46b01ba9fe98e1449e5976b23471
+  reusable_modules:
+    - name: TraceWriter+Emitter abstraction
+      source_branch: codex/implement-phase-3-using-tdd-for-feature-lypjv9
+      from_file: codex/code/phase3-budget-runner-4f72/dsl/trace.py
+      why_reusable: Provides injectable sinks and deep-freezing payload helper for downstream observability hooks.
+      where_to_reuse: dsl trace pipeline
+      linked_extended_task: trace_writer_sink_injection
+  test_coverage_summary:
+    - branch: codex/complete-phase-3-for-tdd-feature-rd6egz
+      new_tests: 5
+      missing_tests: []
+      regression_tests_added: true
+      coverage_notes: Loop, policy violation, and trace validation scenarios are exercised alongside budget manager cases.
+    - branch: codex/complete-phase-3-for-tdd-feature-7i9h5x
+      new_tests: 5
+      missing_tests: []
+      regression_tests_added: true
+      coverage_notes: Mirrors rd6egz suite without additional assertions.
+    - branch: codex/implement-phase-3-using-tdd-for-feature
+      new_tests: 5
+      missing_tests: []
+      regression_tests_added: true
+      coverage_notes: Adds same integration coverage but retains redundant legacy fixtures.
+    - branch: codex/implement-phase-3-using-tdd-for-feature-lypjv9
+      new_tests: 8
+      missing_tests: []
+      regression_tests_added: true
+      coverage_notes: Extends suite with TraceWriter specific cases while duplicating existing flow tests.
+    - branch: codex/implement-phase-3-using-tdd-for-feature-ije1jy
+      new_tests: 8
+      missing_tests: []
+      regression_tests_added: true
+      coverage_notes: Similar to lypjv9, covering recorder adapter paths.
+    - branch: codex/implement-phase-3-using-tdd-for-feature-nxygro
+      new_tests: 5
+      missing_tests: []
+      regression_tests_added: true
+      coverage_notes: Focuses on pkgs/dsl relocation but no new behaviours.
+    - branch: codex/implement-phase-3-using-tdd-for-feature-bk4a29
+      new_tests: 5
+      missing_tests: []
+      regression_tests_added: true
+      coverage_notes: Exercises pkgs/dsl runner yet diverges from canonical API.
+    - branch: codex/complete-phase-3-for-tdd-feature-54y5b9
+      new_tests: 3
+      missing_tests: []
+      regression_tests_added: true
+      coverage_notes: Stops at run/node scopes with no loop scenarios.
+  design_rationales:
+    - feature: Loop-aware FlowRunner budgeting
+      principle: single responsibility
+      summary: Separate helpers manage run, loop, and node scopes so FlowRunner coordinates policy + budget decisions without mutating shared state.
+      risk_if_excluded: Loops would leak charges or miss stop signals, breaking budget guarantees.
+      preferred_contexts: Multi-iteration flow execution where budgets span run/loop scopes.
+    - feature: Immutable cost/value objects
+      principle: immutability
+      summary: CostSnapshot and BudgetDecision freeze payloads before trace emission to prevent accidental mutation across observers.
+      risk_if_excluded: Trace consumers or adapters could mutate historical data causing audit drift.
+      preferred_contexts: Any budgeting or telemetry surface that shares payloads with untrusted sinks.
+  refactor_candidates:
+    - from_branch: codex/implement-phase-3-using-tdd-for-feature-bk4a29
+      file: codex/code/phase3-budget-guards-d98ee6c7/pkgs/dsl/runner.py
+      issue: FlowRunner handles adapter orchestration, policy stack management, and breach reporting in one method.
+      suggested_fix: Split execution phases into discrete helpers (preflight, commit, teardown) before considering upstream merge.
+      urgency: medium
