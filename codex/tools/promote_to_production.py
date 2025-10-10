@@ -7,18 +7,21 @@ the finalized implementation and test files from `codex/code/<branch>/`
 into their target production locations in the project.
 
 Usage:
-    python codex/tools/promote_to_production.py codex/agents/P4/production_copy_plan.yaml [--dry-run] [--force]
+    python codex/tools/promote_to_production.py \
+        codex/agents/P4/production_copy_plan.yaml [--dry-run] [--force]
 
 Example:
-    python codex/tools/promote_to_production.py codex/agents/P4/production_copy_plan.yaml --dry-run
+    python codex/tools/promote_to_production.py \
+        codex/agents/P4/production_copy_plan.yaml --dry-run
 """
 
-import os
-import sys
-import shutil
-import yaml
 import argparse
+import os
+import shutil
+import sys
 from datetime import datetime
+
+import yaml
 
 # ------------------------------------------------------------
 # Utility Functions
@@ -29,7 +32,7 @@ def load_plan(plan_path: str):
     if not os.path.exists(plan_path):
         print(f"❌ Plan file not found: {plan_path}")
         sys.exit(1)
-    with open(plan_path, "r") as f:
+    with open(plan_path) as f:
         plan = yaml.safe_load(f)
     if not plan or "actions" not in plan:
         print(f"❌ Invalid or empty copy plan: {plan_path}")

@@ -19,10 +19,18 @@ def emitter() -> TraceEventEmitter:
 def _manager_with_events(emitter: TraceEventEmitter) -> BudgetManager:
     specs = [
         bm.BudgetSpec(
-            name="run", scope_type="run", limit=bm.CostSnapshot.from_raw({"time_ms": 10}), mode="soft", breach_action="warn"
+            name="run",
+            scope_type="run",
+            limit=bm.CostSnapshot.from_raw({"time_ms": 10}),
+            mode="soft",
+            breach_action="warn",
         ),
         bm.BudgetSpec(
-            name="node", scope_type="node", limit=bm.CostSnapshot.from_raw({"time_ms": 5}), mode="hard", breach_action="stop"
+            name="node",
+            scope_type="node",
+            limit=bm.CostSnapshot.from_raw({"time_ms": 5}),
+            mode="hard",
+            breach_action="stop",
         ),
     ]
     manager = BudgetManager(specs=specs, trace=emitter)
@@ -60,7 +68,9 @@ def test_trace_payload_schema_validation(emitter: TraceEventEmitter) -> None:
             assert {"time_ms", "tokens"} == set(event.payload[key].keys())
 
 
-def test_trace_writer_snapshot_returns_deeply_immutable_payloads(emitter: TraceEventEmitter) -> None:
+def test_trace_writer_snapshot_returns_deeply_immutable_payloads(
+    emitter: TraceEventEmitter,
+) -> None:
     _manager_with_events(emitter)
     event = emitter.events[0]
     assert isinstance(event.payload, MappingProxyType)
@@ -69,7 +79,9 @@ def test_trace_writer_snapshot_returns_deeply_immutable_payloads(emitter: TraceE
     with pytest.raises(TypeError):
         inner["time_ms"] = 1  # type: ignore[index]
     with pytest.raises(TypeError):
-        event.payload["cost"] = MappingProxyType({"time_ms": 1.0, "tokens": 0})  # type: ignore[index]
+        event.payload["cost"] = MappingProxyType(  # type: ignore[index]
+            {"time_ms": 1.0, "tokens": 0}
+        )
 
 
 def test_trace_emitter_sink_error_handling(emitter: TraceEventEmitter) -> None:
@@ -96,10 +108,18 @@ def test_trace_validator_error_context(emitter: TraceEventEmitter) -> None:
     emitter.attach_validator(validator)
     specs = [
         bm.BudgetSpec(
-            name="run", scope_type="run", limit=bm.CostSnapshot.from_raw({"time_ms": 10}), mode="soft", breach_action="warn"
+            name="run",
+            scope_type="run",
+            limit=bm.CostSnapshot.from_raw({"time_ms": 10}),
+            mode="soft",
+            breach_action="warn",
         ),
         bm.BudgetSpec(
-            name="node", scope_type="node", limit=bm.CostSnapshot.from_raw({"time_ms": 5}), mode="hard", breach_action="stop"
+            name="node",
+            scope_type="node",
+            limit=bm.CostSnapshot.from_raw({"time_ms": 5}),
+            mode="hard",
+            breach_action="stop",
         ),
     ]
     manager = BudgetManager(specs=specs, trace=emitter)

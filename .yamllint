@@ -3,6 +3,9 @@ extends: default
 ignore: |
   codex/specs/**
   codex/agents/TASKS/**
+  codex/agents/**
+  codex/TESTS/**
+  codex/POSTEXECUTION/**
   .git/**
   eval/**
   cpp/build/**
