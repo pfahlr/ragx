@@ -26,7 +26,14 @@ def _seed(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("RAGX_SEED", "42")
 
 
-VOLATILE_META_FIELDS = {"requestId", "traceId", "spanId"}
+VOLATILE_META_FIELDS = {
+    # These fields legitimately diverge between transports or requests and should
+    # be excluded when comparing deterministic metadata for parity.
+    "requestId",
+    "traceId",
+    "spanId",
+    "transport",
+}
 
 
 def _stable_meta(meta: Mapping[str, Any]) -> dict[str, Any]:

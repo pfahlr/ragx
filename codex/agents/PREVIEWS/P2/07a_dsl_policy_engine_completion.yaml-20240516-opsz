@@ -1,0 +1,21 @@
+plan_preview: |
+  Reuse plan
+  - Baseline normalization, scope-checked push/pop, and trace recorder wiring from codex/implement-dsl-policy-engine-in-yaml will anchor the policy stack API and validation flow.
+  - Adopt ToolDescriptor modeling, per-tool PolicyDecision provenance, and loop/decision-aware linter traversal from codex/implement-dsl-policy-engine-in-yaml-reclz1 (after adding missing imports and integrating registry ownership).
+  - Bring in the PolicyDenial/PolicySnapshot/enforce() surfaces plus optional event sink contract from codex/implement-dsl-policy-engine-in-yaml-yp01n0 while replacing its intersection semantics with LIFO nearest-wins resolution.
+  - Lift candidate-oriented trace payload enrichment and decision-branch lint assertions from codex/implement-dsl-policy-engine-in-yaml-81p0id, keeping only the observability pieces.
+
+  Conflict resolution
+  - Align policy evaluation order by iterating stack layers in reverse (LIFO) and allowing deeper scopes to replace allow_* directives entirely; drop FIFO loops from 81p0id/yp01n0.
+  - Normalize all policies into canonical frozensets/tuples at push() time so linter + stack share one representation; reject unknown tools/tool_sets immediately (fixing reclz1 gaps).
+  - Unify trace emission via a helper that forwards PolicyTraceEvent objects to both the recorder (baseline branch) and optional sinks (yp01n0) while adding candidate lists (81p0id).
+
+  Redesign / simplification targets
+  - Refactor allowlist computation to reuse a single `_resolve_effective_directives()` routine that returns nearest allow/deny sets and tag filters without repeated expansion.
+  - Collapse disparate linter entry points into a FlowLinter class that can evaluate unit nodes, decision branches, and loop targets using cloned stacks seeded with global + graph policies.
+  - Replace spec-file dependent fixtures with inlined registries to keep tests hermetic and deterministic.
+
+  Open questions / tradeoffs
+  - Do we expose PolicyResolution.decisions publicly (as in reclz1) or keep it internal to avoid leaking implementation details? We may compromise by returning read-only MappingProxyType.
+  - How aggressively should we cache per-tag tool lookups versus recomputing each evaluation to avoid stale data when registries mutate between pushes?
+  - Should enforce() return denial metadata alongside the boolean to reduce duplicate snapshot calculations for callers that want both outcomes and reasons?

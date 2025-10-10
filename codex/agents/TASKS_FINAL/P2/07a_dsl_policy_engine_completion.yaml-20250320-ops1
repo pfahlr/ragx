@@ -1,0 +1,140 @@
+version: 1
+id: 07a_dsl_policy_engine_completion.plan
+title: Consolidated DSL policy engine completion
+summary: Merge the strongest ideas from four experimental branches into a spec-compliant policy stack, linter, and enforcement suite.
+description: |
+  This plan synthesizes the validated registry normalization and tracing from the base branch with the richer metadata,
+  candidate-aware reasoning, stack cloning, and enforcement pathways explored across the three experimental variants.
+  The outcome is a deterministic PolicyStack that honors nearest-scope precedence, emits structured traces, supports
+  runtime enforcement, and powers a linter that can reason about loops, decisions, and fallbacks.
+metadata:
+  owners: [pfahlr@gmail.com]
+  labels: [dsl, policy-engine, codex]
+  priority: P1
+  risk: medium
+  last_updated: 2025-03-20
+strategy:
+  tests_first: true
+  deterministic: true
+  golden_management: manual
+scope:
+  goals:
+    - Deliver a unified PolicyStack implementation that merges registry validation, per-scope resolution, candidate evaluation, and enforcement hooks.
+    - Extend the DSL linter to explore loop and decision contexts using stack cloning while preserving trace fidelity.
+    - Backfill regression tests for nested scopes, fallback exhaustion, and trace event contracts.
+  non_goals:
+    - Designing new DSL syntax beyond the master specification.
+    - Implementing runtime executors or planners beyond policy enforcement needs.
+assumptions:
+  - Tool and policy schemas continue to align with codex/specs/ragx_master_spec.yaml.
+  - Existing test harness (pytest, ruff, mypy, yamllint) remains green once new tests are added.
+constraints:
+  - Preserve deterministic trace ordering for reproducible policy debugging.
+  - Avoid network calls inside unit tests; rely on in-repo fixtures.
+structured_logging_contract:
+  format: jsonl
+  storage_path_prefix: s3://ragx/policy_engine/traces
+  latest_symlink: latest
+  retention: 30d
+  event_fields: [event, scope, payload.allowed, payload.denied, stack_depth]
+  metadata_fields: [flow_id, run_id, task_id]
+  volatile_fields: [timestamp]
+ci:
+  xfail_marker: policy_engine_known_issue
+  workflows:
+    - name: ensure_green
+      gates: [ruff, mypy, yamllint, pytest]
+      artifacts: [coverage.xml]
+      cache_dependency_paths: [codex/specs, pkgs/dsl]
+artifacts:
+  python_modules:
+    paths:
+      - pkgs/dsl/policy.py
+      - pkgs/dsl/linter.py
+  schemas:
+    paths:
+      - codex/specs/ragx_master_spec.yaml
+  documentation:
+    path: docs/policies.md
+test_matrix:
+  python: ["3.11"]
+  os: [ubuntu-22.04]
+test_plan:
+  unit:
+    - tests/unit/test_policy_stack_resolution.py
+    - tests/unit/test_linter_unreachable_tools.py
+  integration:
+    - tests/unit/test_runner_loops.py
+  property_based:
+    - tests/property/test_policy_tag_precedence.py
+  fixtures:
+    - tests/fixtures/policies/
+actions:
+  - stage: policy_stack_core
+    summary: Reconcile stack invariants, metadata modeling, and trace emission.
+    tasks:
+      - |
+          execution_mode: always
+          reusable: false
+          summary: Merge ToolDescriptor modeling with registry-backed validation and nearest-scope traversal.
+          adapted_from_branch:
+            - codex/implement-dsl-policy-engine-in-yaml
+            - codex/implement-dsl-policy-engine-in-yaml-reclz1
+          steps:
+            - Embed ToolDescriptor normalization inside PolicyStack so allow/deny references validate against the registry while exposing descriptor views.
+            - Rework effective_allowlist traversal to iterate newest→oldest, combining candidate filtering from -81p0id with implicit deny semantics from -reclz1.
+            - Restore policy_push/pop/resolved trace events with enriched payloads (candidates, denial reasons, stack depth).
+          tests:
+            - tests/unit/test_policy_stack_resolution.py::test_branch_policy_overrides
+            - tests/unit/test_policy_stack_resolution.py::test_allow_tags_and_tool_sets_union
+          artifacts:
+            - pkgs/dsl/policy.py
+  - stage: policy_enforcement
+    summary: Introduce runtime enforcement and violation tracing.
+    tasks:
+      - |
+          execution_mode: always
+          reusable: false
+          summary: Layer PolicySnapshot/enforce API onto the corrected PolicyStack.
+          adapted_from_branch:
+            - codex/implement-dsl-policy-engine-in-yaml-yp01n0
+          depends_on:
+            - policy_stack_core
+          steps:
+            - Produce immutable PolicySnapshot objects that capture allowed tools, denial metadata, and stack scopes without recomputing traces.
+            - Implement enforce() to emit policy_violation events through the shared trace emitter and optionally raise PolicyViolationError.
+            - Document enforcement semantics in docs/policies.md with examples for fallback escalation.
+          tests:
+            - tests/unit/test_policy_stack_resolution.py::test_enforce_violation_emits_trace
+            - tests/unit/test_policy_stack_resolution.py::test_snapshot_determinism
+          artifacts:
+            - pkgs/dsl/policy.py
+            - docs/policies.md
+  - stage: linter_and_observability
+    summary: Enhance linter to explore full policy contexts and validate traces.
+    tasks:
+      - |
+          execution_mode: always
+          reusable: true
+          summary: Refactor lint_unreachable_tools to use stack cloning with fallback and decision coverage.
+          adapted_from_branch:
+            - codex/implement-dsl-policy-engine-in-yaml-reclz1
+            - codex/implement-dsl-policy-engine-in-yaml-81p0id
+          depends_on:
+            - policy_stack_core
+          steps:
+            - Build a reusable analyzer that clones the PolicyStack per loop/decision branch and records trace context for unreachable findings.
+            - Validate fallback.try lists and decision branches emit precise issue paths (`graph.nodes[i]...`).
+            - Capture structured logging samples showing policy_push/pop/resolved/violation sequences for representative flows.
+          tests:
+            - tests/unit/test_linter_unreachable_tools.py::test_branch_override_clears_error
+            - tests/unit/test_linter_unreachable_tools.py::test_fallback_exhaustion_error
+            - tests/unit/test_runner_loops.py::test_loop_policy_context_propagates
+          artifacts:
+            - pkgs/dsl/linter.py
+            - docs/policies.md
+            - codex/fixtures/policy_traces.jsonl
+acceptance:
+  - tests/unit/test_policy_stack_resolution.py
+  - tests/unit/test_linter_unreachable_tools.py
+  - Updated docs/policies.md with enforcement guidance

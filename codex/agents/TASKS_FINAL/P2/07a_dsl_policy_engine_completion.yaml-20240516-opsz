@@ -1,0 +1,100 @@
+summary:
+  - codex/implement-dsl-policy-engine-in-yaml supplies the registry normalization, scope-safe push/pop, and baseline trace recorder we will retain.
+  - codex/implement-dsl-policy-engine-in-yaml-reclz1 contributes ToolDescriptor modelling, per-tool decision provenance, and branch/loop-aware linter scaffolding.
+  - codex/implement-dsl-policy-engine-in-yaml-81p0id informs trace payload enrichment (candidates, stack depth) for observability.
+  - codex/implement-dsl-policy-engine-in-yaml-yp01n0 contributes PolicyDenial/PolicySnapshot types, enforce() surface, and optional event sink wiring (after fixing LIFO semantics).
+conflict_resolution:
+  - Rebuild allowlist evaluation around LIFO stack traversal so nearest scopes override upstream directives; discard FIFO/intersection logic.
+  - Validate tool and tool_set references during push() using the owned registry, rejecting unknown names and cycles before evaluation.
+  - Standardize trace emission via a helper that records PolicyTraceEvent objects and forwards to optional sinks without duplicating payload assembly.
+exclusions:
+  - Drop yp01n0's intersection-based allowlist contraction and spec-file fixtures.
+  - Skip reclz1's assumption that callers pass tool registries into effective_allowlist(); stack retains ownership instead.
+open_questions:
+  - Determine whether PolicyResolution should expose MappingProxyType decisions publicly or keep them internal to avoid accidental mutation.
+  - Decide on caching strategy for tag-to-tool indexes versus recomputation trade-offs under frequent push/pop churn.
+refinement_opportunities:
+  - Add metrics hooks around enforce() outcomes to support future observability tasks.
+  - Consider memoizing tool-set expansions per scope to avoid repeated recursion in hot paths.
+shared_blocks:
+  - name: trace_event_emitter
+    implementation: |
+      def emit_policy_event(
+          recorder: PolicyTraceRecorder,
+          sink: Callable[[PolicyTraceEvent], None] | None,
+          *,
+          event: str,
+          scope: str,
+          payload: Mapping[str, object],
+      ) -> None:
+          record = PolicyTraceEvent(event=event, scope=scope, data=MappingProxyType(dict(payload)))
+          recorder.record(record)
+          if sink is not None:
+              sink(record)
+tasks:
+  - id: policy_stack_foundation
+    execution_mode: always
+    reusable: true
+    description: Implement PolicyStack with normalized registry + tool-set expansion, cycle detection, scope-checked push/pop, and LIFO directive resolution.
+    adapted_from_branch: codex/implement-dsl-policy-engine-in-yaml
+    source_files:
+      - pkgs/dsl/policy.py
+      - pkgs/dsl/__init__.py
+    artifacts:
+      - trace_event_emitter
+    tests:
+      - name: test_policy_stack_resolves_allow_and_deny
+        file: tests/unit/test_policy_stack_resolution.py
+      - name: test_policy_stack_rejects_unknown_tool_ref
+        file: tests/unit/test_policy_stack_resolution.py
+  - id: policy_decision_diagnostics
+    execution_mode: always
+    reusable: true
+    description: Add ToolDescriptor registry, PolicyDecision/PolicyResolution diagnostics map, and enriched trace payloads (candidates, stack depth).
+    adapted_from_branch: codex/implement-dsl-policy-engine-in-yaml-reclz1
+    depends_on: [policy_stack_foundation]
+    source_files:
+      - pkgs/dsl/models.py
+      - pkgs/dsl/policy.py
+    tests:
+      - name: test_policy_resolution_reports_sources
+        file: tests/unit/test_policy_stack_resolution.py
+      - name: test_trace_records_candidates_and_depth
+        file: tests/unit/test_policy_stack_resolution.py
+  - id: policy_enforcement_api
+    execution_mode: always
+    reusable: false
+    description: Introduce PolicyDenial/PolicySnapshot, enforce() API with PolicyViolationError, and optional event sink integration for push/pop/violation events.
+    adapted_from_branch: codex/implement-dsl-policy-engine-in-yaml-yp01n0
+    depends_on: [policy_decision_diagnostics]
+    source_files:
+      - pkgs/dsl/policy.py
+      - pkgs/dsl/__init__.py
+    tests:
+      - name: test_enforce_blocks_disallowed_tool
+        file: tests/unit/test_policy_stack_enforce.py
+      - name: test_enforce_emits_violation_event
+        file: tests/unit/test_policy_stack_enforce.py
+  - id: linter_reachability_analysis
+    execution_mode: always
+    reusable: true
+    description: Update FlowLinter to evaluate unit nodes, decision branches, and loop contexts using cloned stacks seeded with global/graph policies.
+    adapted_from_branch: codex/implement-dsl-policy-engine-in-yaml-reclz1
+    depends_on: [policy_decision_diagnostics]
+    source_files:
+      - pkgs/dsl/linter.py
+    tests:
+      - name: test_linter_flags_unreachable_nodes
+        file: tests/unit/test_linter_unreachable_tools.py
+      - name: test_linter_allows_branch_override
+        file: tests/unit/test_linter_unreachable_tools.py
+  - id: regression_test_hardening
+    execution_mode: always
+    reusable: false
+    description: Expand unit coverage for decision overrides, loop propagation, fallback reachability, and pop() scope mismatches; ensure fixtures are self-contained.
+    adapted_from_branch: codex/implement-dsl-policy-engine-in-yaml-81p0id
+    depends_on: [linter_reachability_analysis]
+    source_files:
+      - tests/unit/test_policy_stack_resolution.py
+      - tests/unit/test_linter_unreachable_tools.py
+      - tests/unit/test_policy_stack_enforce.py

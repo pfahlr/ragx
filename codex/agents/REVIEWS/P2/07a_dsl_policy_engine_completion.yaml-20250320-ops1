@@ -1,0 +1,49 @@
+metadata:
+  reviewer: gpt-5-codex
+  created_at: 2025-03-20T00:00:00Z
+  task: 07a_dsl_policy_engine_completion
+  scope: comparative_branch_review
+section_a: |
+  Branch: codex/implement-dsl-policy-engine-in-yaml
+  - ✅ Maintains canonical tool registry normalization with cycle detection for tool sets; `_expand_tool_refs` defends against unknown references and emits consistent `policy_push/pop/resolved` traces via `PolicyTraceRecorder` (`PolicyTraceEvent` payload mirrors spec contract).
+  - ✅ `effective_allowlist()` computes `(allow_tools ∪ allow_tags_matches) − (deny_tools ∪ deny_tags_matches)` while defaulting to "allow all" when no allow directives exist; nearest-scope precedence is respected per dimension by searching the stack in reverse.
+  - ⚠️ Lacks stack cloning or scope exploration for loops/branch policies, so `FlowLinter.find_unreachable_tools()` only evaluates a single stack path (global → node) and misses unreachable decision branches/fallback exhaustions.
+  - ⚠️ `PolicyResolution` exposes only coarse `allowed/blocked/reasons`, so downstream tooling cannot surface per-scope metadata or candidate-specific denials without recomputing.
+  - ⚠️ Test suite (`tests/unit/test_policy_stack_resolution.py`, `test_linter_unreachable_tools.py`) covers simple push/pop and global vs. node overrides but omits decision/loop stacks, fallback exhaustion, and trace-order assertions beyond happy paths.
+
+  Branch: codex/implement-dsl-policy-engine-in-yaml-81p0id
+  - ✅ Introduces candidate-aware `PolicyDecision` objects and richer trace payloads (stack depth, candidate list) plus linter coverage for decision branches and fallback lists.
+  - ❌ Processes stack frames oldest-to-newest and never re-allows tools once `state[tool]` becomes `False`; downstream scopes cannot relax upstream deny/allow filters, violating the spec’s "nearest scope wins" rule and making branch overrides ineffective.
+  - ❌ Drops tool-set recursion and cycle detection; `_resolve_tool_refs` silently treats nested sets as flat lists and raises `KeyError` only for unknown symbols encountered in policies, reducing diagnostic parity with the base branch.
+  - ❌ Trace contract diverges (`PolicyEvent`/`policy_allowlist`) and `push()` no longer accepts a `source`, so event payloads cannot be correlated with DSL paths.
+  - ⚠️ Linter path reports use `path="nodes.<id>"`, drifting from array-index addressing (`graph.nodes[i]`), and tests still miss loop policy scenarios.
+
+  Branch: codex/implement-dsl-policy-engine-in-yaml-reclz1
+  - ✅ Refactors policy evaluation around immutable `ToolDescriptor`s and per-tool `PolicyDecision` metadata, and adds `PolicyStack.clone()` so the linter can explore loop and decision contexts independently.
+  - ✅ Linter builds cartesian stacks by combining graph, loop, branch, and node policies, dramatically improving unreachable-tool detection fidelity (`lint_unreachable_tools`).
+  - ❌ `PolicyStack` no longer owns the canonical tool registry; `_expand_tool_entries` treats unknown references as literal tool names, so typos skip validation and silently cause implicit-deny behavior instead of raising `PolicyError`.
+  - ❌ Trace coverage regresses: no `policy_resolved` emission, push/pop payloads lack normalized policy dicts, and policies equal to `{}` are discarded (skipping traces) even though the spec expects explicit scope entry/exit traces.
+  - ⚠️ Tests validate branch override semantics and implicit deny, but still omit fallback/tool-set cycle cases and rely on manual fixture wiring for loops.
+
+  Branch: codex/implement-dsl-policy-engine-in-yaml-yp01n0
+  - ✅ Adds `PolicySnapshot` + `enforce()` API with structured `PolicyDenial` metadata and `policy_violation` events, enabling runtime enforcement hooks.
+  - ✅ Linter surfaces fallback exhaustion alongside unreachable tools and reuses the policy stack to emit `PolicyDenial` context in issues.
+  - ❌ Stack iteration order is oldest→newest; once a tool is removed from `allowed`, later scopes cannot re-allow it, so branch/loop overrides fail (identical regression to 81p0id).
+  - ❌ `_tools_with_tags_mapping()` records the first matching tag and never overwrites it, so nearer deny-tags cannot supersede distant ones; combined with the iteration bug this breaks tag precedence guarantees.
+  - ❌ `pop()` lacks scope validation, `push()` always appends even-empty policies (inflating `stack`), and no `policy_resolved` trace is emitted, so traceability/stack-safety regress relative to base.
+  - ⚠️ Tests bootstrap from the master spec (heavy I/O) but still do not cover loops, decision-option policies, or enforcement of `tool_sets` recursion/validation.
+
+redundancy_or_hallucination_check: |
+  - Both `-81p0id` and `-yp01n0` independently reinvent candidate-level allowlist evaluation yet share the same nearest-scope regression (processing frames oldest→newest) and omit trace parity—these are redundant mistakes rather than complementary ideas.
+  - No branch hallucinates nonexistent DSL fields, but event naming in `-81p0id` (`policy_allowlist`) and enforcement messaging in `-yp01n0` drift from the spec’s documented trace contract and should be realigned.
+
+synthesis_rationale: |
+  - Start from the base branch’s validated registry normalization, trace recorder, and error semantics to keep tool-set validation and scope-aware tracing intact.
+  - Fold in `reclz1`’s `ToolDescriptor` abstraction, per-tool `PolicyDecision` metadata, and stack cloning strategy so the linter can explore loop/decision contexts without mutating the live stack.
+  - Incorporate candidate-level evaluation and enriched denial reasons from `-81p0id`, but execute frames newest→oldest and reuse the trace recorder so nearest scopes truly dominate.
+  - Adapt `-yp01n0`’s `PolicySnapshot`/`enforce()` concepts by layering them atop the corrected allowlist engine, ensuring violation events reuse the shared trace emitter rather than bespoke sinks.
+
+optional_enhancements: |
+  - Extract a shared `TraceEventEmitter` to keep `policy_push/pop/resolved/violation` payloads consistent across stack, linter, and runtime enforcement.
+  - Augment tests with table-driven cases covering decision-option overrides, nested loop scopes, tool-set recursion/cycle detection, and fallback exhaustion to guard against regressions uncovered across the branches.
+  - Add property-based fuzzing for tag precedence to confirm nearest-scope deny-tags always dominate and that allowlists can expand as policies are pushed/popped.

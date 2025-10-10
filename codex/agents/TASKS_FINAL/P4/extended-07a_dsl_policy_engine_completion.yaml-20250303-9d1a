@@ -1,0 +1,50 @@
+meta:
+  code_task: 07a_dsl_policy_engine_completion.yaml
+  repo: pfahlr/
+  last_updated: 2025-03-03
+  phase: P4
+  merged_branch_excluded: true
+branch_ranking:
+  - branch: codex/implement-dsl-policy-engine-in-production-p4eaey
+    rank: 1
+    rationale: "Implements a production-ready stack with strict registry/tool-set validation, default trace capture, and rich violation diagnostics that emit structured events for enforcement and allowlist resolution while being exercised by targeted unit tests.【F:pkgs/dsl/policy.py†L83-L307】【F:pkgs/dsl/models.py†L11-L63】【F:tests/unit/test_policy_stack_enforce.py†L27-L82】"
+  - branch: codex/implement-dsl-policy-engine-in-production
+    rank: 2
+    rationale: "Adds descriptor-aware decisions, directive provenance, and snapshot helpers, but requires callers to provide their own recorder so traces silently disappear without an injected collector, making observability weaker than the leading branch.【F:pkgs/dsl/models.py†L24-L59】【F:pkgs/dsl/policy.py†L195-L304】【F:pkgs/dsl/policy.py†L104-L134】"
+  - branch: codex/implement-dsl-policy-engine-in-production-72ua42
+    rank: 3
+    rationale: "Captures nearest-scope directives with reusable metadata and emits comprehensive trace payloads, yet the snapshot surface only exposes denied tool names and coarse denial reasons, limiting downstream diagnostics versus richer decision objects.【F:pkgs/dsl/policy.py†L303-L360】【F:pkgs/dsl/models.py†L21-L37】"
+  - branch: codex/implement-dsl-policy-engine-in-production-5p284m
+    rank: 4
+    rationale: "Requires prebuilt ToolDescriptor registries, only surfaces per-tool decisions without aggregate allow/deny snapshots, and omits directive provenance, leaving both ergonomics and observability behind the other branches.【F:pkgs/dsl/policy.py†L64-L168】【F:pkgs/dsl/models.py†L39-L74】"
+extended_tasks:
+  - id: enrich_policy_resolution_metadata
+    description: "Integrate descriptor-backed decisions, directive provenance, and explicit snapshot helpers so policy evaluations return structured metadata without sacrificing existing event emissions."
+    source_files:
+      - pkgs/dsl/models.py
+      - pkgs/dsl/policy.py
+      - pkgs/dsl/__init__.py
+      - tests/unit/test_policy_stack_resolution.py
+      - tests/unit/test_policy_stack_enforce.py
+    adapted_from_branch: codex/implement-dsl-policy-engine-in-production
+    execution_mode: manual
+    reusable: true
+    implementation:
+      python: |
+        # Extend PolicyDecision to carry the originating ToolDescriptor plus granted_by/denied_by scopes.
+        # Mirror the PolicyResolution/PolicySnapshot structure so resolution metadata includes allowed, denied,
+        # stack_depth, candidates, and the resolved directive scopes as in the reference branch.【F:pkgs/dsl/models.py†L24-L59】【F:pkgs/dsl/policy.py†L240-L304】
+        # Add PolicyStack.snapshot() that delegates to a refactored _resolve(..., emit_trace=False) helper, while
+        # preserving existing event emission when effective_allowlist() is called with emit_trace=True.【F:pkgs/dsl/policy.py†L195-L304】
+        # Implement _resolve_directives to compute nearest-scope allow/deny sets once per evaluation and attach the
+        # mapping to PolicyResolution for downstream use.【F:pkgs/dsl/policy.py†L365-L398】
+        # Update enforce() to raise PolicyViolationError with the richer PolicyDenial (including the full decision) and
+        # ensure event payloads still match the production branch expectations.【F:pkgs/dsl/policy.py†L215-L229】
+        # Export the new symbols from pkgs/dsl/__init__.py and adjust tests to assert granted_by/denied_by scopes,
+        # directive payloads, and stack_depth values captured in snapshots.【F:tests/unit/test_policy_stack_resolution.py†L25-L67】
+    tests:
+      - tests/unit/test_policy_stack_resolution.py
+      - tests/unit/test_policy_stack_enforce.py
+    artifacts:
+      - name: policy_resolution_design_notes
+        file: docs/components/dsl_policy_resolution.md

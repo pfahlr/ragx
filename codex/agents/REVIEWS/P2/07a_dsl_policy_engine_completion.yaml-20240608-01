@@ -1,0 +1,30 @@
+run_id: 20240608-01
+review:
+  Branch: codex/implement-dsl-policy-engine-in-yaml
+    - Policy stack keeps its own normalized registry, expands tool sets with cycle detection, and emits structured push/pop/resolved events via the recorder; this gives us deterministic traces and validates references up front.
+    - Effective allowlist merges allow-tools and allow-tags and subtracts denies, but it only surfaces flat string reasons and lacks per-scope diagnostics or candidate filtering, so observability is limited compared to other variants.
+    - Flow linter walks graph nodes but never explores decision options or loop contexts, so it will miss scope-specific overrides that the DSL spec demands; tests cover only the straight-line happy path with a single unreachable unit.
+    - Test suite asserts nearest-scope wins with a single push/pop scenario and validates unknown reference errors, yet it omits branch, loop, and fallback combinations, leaving large parts of the spec untested.
+  Branch: codex/implement-dsl-policy-engine-in-yaml-81p0id
+    - Introduces `PolicyDecision` snapshots that include candidate filtering and denial messaging, and the linter inspects decision branches for unreachable targets—useful coverage we do not have elsewhere.
+    - Stack evaluation walks frames in insertion order and permanently flips entries in a mutable state map, so once a tool is excluded by an outer scope no nearer scope can re-allow it; this violates nearest-scope-wins semantics and contradicts the spec’s allowlist formula.
+    - Trace emitter renames the required `policy_resolved` event to `policy_allowlist`, and scope safety regresses because `pop()` no longer validates which frame is removed.
+    - Tests exercise candidate filtering and trace contents but do not cover override repairs or tool-set recursion, so the precedence bug slips through unnoticed.
+  Branch: codex/implement-dsl-policy-engine-in-yaml-reclz1
+    - Splits tool metadata into `ToolDescriptor`, tracks per-tool `PolicyDecision` objects, and clones stacks to evaluate branch/loop contexts—strong building blocks for linting complex flows.
+    - The stack no longer owns the tool registry: callers pass tool maps into `effective_allowlist`, so allow/deny entries referencing unknown tools silently become pseudo-tools; `_expand_tool_entries` also lacks cycle detection, letting recursive tool sets leak into the decision map.
+    - Trace coverage still omits a resolved snapshot event, and there is no violation pathway or enforcement API, so downstream observability remains incomplete.
+    - Tests validate implicit deny behaviour and node contexts but never assert rejection of bad tool references or fallback reachability, leaving critical error handling unguarded.
+  Branch: codex/implement-dsl-policy-engine-in-yaml-yp01n0
+    - Adds `PolicyViolationError`, an event sink, and `PolicySnapshot` with denial metadata, plus a linter that reports blocked fallbacks—valuable enforcement primitives.
+    - Allowlist computation intersects allowed sets while iterating frames oldest-to-newest, so later scopes cannot reintroduce tools filtered earlier; denial reasons accumulate even when an override should succeed, breaking nearest-scope wins just like 81p0id.
+    - Stack accepts empty or `None` policies and still emits events, but there is no path for branch/loop previews and the linter does not explore decision contexts, leaving major DSL features uncovered.
+    - Tests couple to the master spec YAML at runtime and do not assert branch overrides, so precedence bugs persist and the suite becomes fragile to unrelated spec edits.
+Redundancy or hallucination check:
+  - All branches agree on core primitives (push/pop/effective_allowlist) but only the base branch emits the spec-mandated `policy_resolved` trace; 81p0id and yp01n0 rename behaviour without updating the contract. No branch hallucinates unsupported DSL features, yet reclz1/yp01n0 assume optional branch coverage without actually implementing decision-aware linting.
+Synthesis rationale:
+  - Use the base branch as the structural backbone for stack ownership, tool-set validation, and canonical trace schema. Layer in reclz1’s `ToolDescriptor` model, per-tool decisions, and branch/loop context cloning, then port the richer diagnostics from 81p0id (candidate denial messaging) and yp01n0 (violation events and enforcement API) while fixing the precedence bug by evaluating frames in LIFO order. Ensure tests combine branch, loop, and fallback scenarios that previously slipped through.
+Optional enhancements:
+  - Extract a shared trace emitter so events from allowlist resolution and violations use one schema, enabling replayable observability hooks.
+  - Expand the linter test matrix to cover loops, branch overrides, and fallback success/denial paths, ideally with Hypothesis-based tool-set permutations.
+  - Add dedicated cycle-detection tests for tool-set expansion and negative cases for unknown tool references to prevent silent acceptance in future variants.

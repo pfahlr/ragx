@@ -1,0 +1,46 @@
+metadata:
+  generated_at: 2024-07-19T00:00:00Z
+  repo: pfahlr/ragx
+  task_id: 07a_dsl_policy_engine_completion
+  tags: [dsl, policy_engine, review, traceability]
+  execution_mode: comparative_review
+analysis:
+  branch_reviews:
+    - branch: codex/implement-dsl-policy-engine-in-yaml
+      bullets:
+        - Establishes the canonical `PolicyStack` contract with `PolicyDefinition` parsing, cycle-safe tool/tool-set expansion, and nearest-scope-wins resolution cached through `PolicyResolution` plus reason strings for denials.
+        - Maintains scope safety by requiring matching `pop(scope)` calls and records `policy_push`, `policy_pop`, and `policy_resolved` events through a `PolicyTraceRecorder`, preserving DSL trace schema fidelity.
+        - Validates tool references eagerly (raising `PolicyError` on unknown names) and guards set expansion against recursion, aligning with DSL override semantics and preventing hallucinated tools.
+        - Gaps: lacks an `enforce()` API for runtime policy checks, does not expose richer per-tool diagnostics beyond reason strings, and the linter scaffolding does not yet model decision/loop contexts; tests only cover simple resolution cases with no loop/decision coverage.
+    - branch: codex/implement-dsl-policy-engine-in-yaml-81p0id
+      bullets:
+        - Replaces immutable resolution snapshots with mutable tables (`state`, `denial_reasons`) and introduces candidate tracking meant for richer observability of evaluated tool IDs.
+        - Iterates frames oldest-to-newest, so outer `allow_tools` permanently mask inner overrides—breaking the spec’s nearest-scope precedence and blocking branch-local tool grants; `pop` no longer validates scope ordering.
+        - Drops `PolicyTraceRecorder` in favor of ad-hoc `policy_allowlist` events, removing the spec-required `policy_resolved` payload and skipping validation of policy payloads, so trace fidelity and error surfacing both regress.
+        - Eliminates tool/tool-set expansion checks and the dedicated `PolicyError`, letting unknown names silently pass; no additional tests were added, so the regression in override semantics and trace sequencing goes uncaught.
+    - branch: codex/implement-dsl-policy-engine-in-yaml-reclz1
+      bullets:
+        - Introduces `_PolicyFrame` + `ToolDescriptor` normalization and stack cloning so the linter can analyze loop/decision scopes with enriched metadata for each tool/tag combination.
+        - Restores reverse-order frame evaluation to recover nearest-scope precedence and captures branch context when resolving options, improving scope correctness compared to 81p0id.
+        - However, `push()` now ignores falsy policies, drops the `source`/scope validation metadata, and allows unknown tool names because tool-set expansion no longer runs; `pop()` lacks guard rails, so stack safety regresses.
+        - Trace events are appended directly to a list without policy snapshots, and `effective_allowlist()` requires callers to pass tool registries on every call; no new unit tests cover decision/loop policy analysis despite the new data structures.
+    - branch: codex/implement-dsl-policy-engine-in-yaml-yp01n0
+      bullets:
+        - Adds the long-needed `enforce()` API, `PolicyViolationError`, and `PolicySnapshot`/`PolicyDenial` structures plus an injectable event sink, giving the runner a way to emit `policy_violation` telemetry.
+        - Persists the tool registry on the stack, simplifying callers relative to reclz1, and structures violation payloads with scope + reason metadata suitable for observability pipelines.
+        - Still iterates frames in insertion order (inheriting the nearest-scope regression from 81p0id) and removes `pop` scope validation, so overrides in decision branches fail silently and stack misuse goes undetected.
+        - `policy_resolved` is never emitted, unknown tool references are accepted, and no loop/decision/trace sequencing tests accompany the new enforcement surface, leaving runner integration high risk.
+  redundancy_or_hallucination_check:
+    - None of the branches invent new DSL concepts, but 81p0id and yp01n0 hallucinate a `policy_allowlist` trace event that is unsupported by the spec while simultaneously omitting required `policy_resolved` telemetry.
+    - reclz1 and yp01n0 duplicate partial fixes for nearest-scope precedence; only reclz1 actually restores reverse iteration, so merging both without care would reintroduce the FIFO bug.
+    - All variants drop cycle detection or scope guards at some point, so we must intentionally retain baseline protections to avoid compounded regressions.
+  synthesis_rationale:
+    - Start from `codex/implement-dsl-policy-engine-in-yaml` for validated tool expansion, scope-safe push/pop, and canonical trace emission.
+    - Lift `_PolicyFrame`/`ToolDescriptor` modeling and branch-aware linter hooks from `...-reclz1`, but reinstate source bookkeeping and strict push/pop validation.
+    - Adopt the `enforce()` surface, structured `PolicySnapshot`, and violation sink patterns from `...-yp01n0` while rewriting resolution to reuse LIFO semantics and to emit the missing `policy_resolved` trace before violation checks.
+    - Reuse 81p0id’s candidate-tracking idea only as supplemental diagnostics attached to snapshots, avoiding its mutable state machine and reintroducing cycle-safe expansion + deterministic tracing.
+  optional_enhancements:
+    - Add targeted unit tests for decision-node overrides, loop-embedded scopes, and trace ordering (push/policy_resolved/enforce/pop) to lock regression-prone behaviors.
+    - Extract a shared `trace_event_emitter` utility so both the recorder and optional sinks share a single serialization path.
+    - Provide property-based tests or table-driven fixtures covering tag intersections to validate allow/deny precedence beyond the current name-only cases.
+    - Extend the linter tests to exercise fallback chains and unreachable branch detection using the richer diagnostics from reclz1.
