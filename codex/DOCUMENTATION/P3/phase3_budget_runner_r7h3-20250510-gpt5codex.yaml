@@ -1,0 +1,90 @@
+component:
+  name: phase3_budget_runner_r7h3
+  purpose: >-
+    Provides a canonical staging implementation of budget guards and FlowRunner integration,
+    consolidating normalization, budget orchestration, trace emission, and adapter execution loops.
+  cli_usage: []
+  public_interfaces:
+    - module: codex.code.phase3_budget_runner_r7h3.dsl.costs
+      exports:
+        - name: normalize_cost
+          description: Convert raw adapter estimates into canonical milliseconds/tokens metrics.
+        - name: combine_costs
+          description: Aggregate multiple cost mappings for cumulative arithmetic.
+        - name: subtract_costs
+          description: Compute remaining cost deltas when comparing limits vs. spend.
+    - module: codex.code.phase3_budget_runner_r7h3.dsl.budget
+      exports:
+        - name: BudgetSpec
+          description: Immutable scope budget with normalized limits and breach action.
+        - name: BudgetManager
+          description: Preview/commit orchestration for run/node/loop/spec scopes with immutable diagnostics.
+        - name: BudgetCheck
+          description: Preview outcome capturing allowed flag, dominant action, and per-scope statuses.
+        - name: BudgetChargeOutcome
+          description: Commit outcome reflecting remaining/overage mappings for trace emission.
+        - name: BudgetAction
+          description: Severity enum aligning with warn/stop/error semantics.
+        - name: BudgetBreachError
+          description: Exception raised when stop/error prevents execution.
+    - module: codex.code.phase3_budget_runner_r7h3.dsl.trace
+      exports:
+        - name: TraceWriter
+          description: Minimal emit interface expected by TraceEventEmitter.
+        - name: TraceEventEmitter
+          description: Emits immutable budget_charge/budget_breach/budget_commit payloads.
+    - module: codex.code.phase3_budget_runner_r7h3.dsl.runner
+      exports:
+        - name: FlowRunner
+          description: Executes FlowDefinition nodes via adapters with budget enforcement and trace emission.
+        - name: FlowDefinition
+          description: Immutable description of nodes participating in a run.
+        - name: NodeDefinition
+          description: Declares adapter binding, scope keys, and optional loop configuration for a node.
+        - name: LoopConfig
+          description: Loop metadata (max_iterations + scoped budgets) for iterative nodes.
+        - name: FlowRunResult
+          description: Structured result containing status, stop reason, and per-node outputs.
+        - name: FlowRunStatus
+          description: Enum representing completed/stopped/failed terminal states.
+  extension_hooks:
+    - name: ToolAdapter
+      type: protocol
+      description: Adapters implement estimate/execute to participate in FlowRunner.
+    - name: TraceWriter
+      type: protocol
+      description: Custom trace sinks can be injected by providing emit(event, payload).
+configurables:
+  budget_specs: >-
+    Mapping of scope identifiers to BudgetSpec instances controlling warn/stop/error semantics.
+  flow_scope_keys: >-
+    Default scope chain applied to every node executed by FlowRunner.
+  trace_clock: >-
+    Callable injected into TraceEventEmitter for deterministic timestamps (defaults provided by caller).
+automation_triggers:
+  - trigger: pytest codex/code/phase3_budget_runner_r7h3/tests -q
+    purpose: Validates cost normalization, budget manager semantics, and FlowRunner behaviours.
+error_contracts:
+  - exception: BudgetBreachError
+    raised_when: Preview indicates stop/error and commit is attempted or FlowRunner encounters hard breach.
+    mitigation: Handle exception to surface budget diagnostics and halt run gracefully.
+serialization:
+  trace_events: json-compatible
+  notes: Payloads use mapping proxies but remain JSON-serializable when converted by sinks.
+lifecycle:
+  initialization:
+    - BudgetManager constructed with canonical BudgetSpecs.
+    - FlowRunner created with adapters, BudgetManager, TraceEventEmitter, and flow scope keys.
+  runtime:
+    - FlowRunner previews budgets before each iteration, emits traces, commits allowed charges, and executes adapters.
+    - TraceEventEmitter records charge/breach/commit events per scope for observability pipelines.
+  shutdown:
+    - No persistent state beyond BudgetManager internal spend maps; callers may discard instances.
+typing_notes:
+  - All public dataclasses are frozen to encourage immutability.
+  - Cost mappings are coerced to floats to avoid integer rounding issues.
+security_notes:
+  - No external IO beyond injected TraceWriter; ensure writer sanitises payloads before persistence.
+performance_notes:
+  - Cost arithmetic operates on small dicts per scope; acceptable for synchronous runner usage.
+  - Trace emission duplicates payloads for breach events; sinks should handle lightweight payload copies efficiently.
