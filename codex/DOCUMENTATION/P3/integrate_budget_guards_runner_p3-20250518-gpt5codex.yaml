@@ -1,0 +1,54 @@
+component: integrate_budget_guards_runner_p3
+purpose: |
+  Stage the canonical budget data models, manager orchestration, and adapter-backed FlowRunner
+  inside the Phase 3 workspace for branch-isolated validation of budget guards and policy traces.
+cli_usage:
+  description: Execute the branch-scoped regression suite for budgets and runner integration.
+  command: pytest codex/code/integrate_budget_guards_runner_p3/tests -q
+public_interfaces:
+  - name: codex.code.integrate_budget_guards_runner_p3.dsl.trace.TraceEventEmitter
+    description: Emits immutable trace records with optional sink forwarding for observability pipelines.
+  - name: codex.code.integrate_budget_guards_runner_p3.dsl.budget_models.CostSnapshot
+    description: Normalises raw adapter estimates (seconds/milliseconds/tokens) into canonical charge units.
+  - name: codex.code.integrate_budget_guards_runner_p3.dsl.budget_manager.BudgetManager
+    description: Coordinates scope lifecycle, preview/commit flows, breach tracing, and state inspection.
+  - name: codex.code.integrate_budget_guards_runner_p3.dsl.flow_runner.FlowRunner
+    description: Executes nodes through adapters with integrated budget enforcement and policy violations handling.
+extension_hooks:
+  - hook: TraceEventEmitter.attach_sink
+    extension: Attach downstream logging/telemetry sinks to receive immutable trace events.
+  - hook: BudgetManager.record_breach
+    extension: Override to enrich or reroute breach diagnostics before raising stop conditions.
+configurable_options:
+  - name: BudgetSpec.mode
+    values: [hard, soft]
+    default: hard
+  - name: BudgetSpec.breach_action
+    values: [stop, warn]
+    default: stop
+automation_triggers:
+  - trigger: FlowRunner.run
+    outcome: Executes adapter nodes, enforcing budgets/policies and emitting trace records per node/run scope.
+  - trigger: BudgetManager.commit_charge
+    outcome: Persists spend totals and emits `budget_charge` events for downstream monitors.
+error_contracts:
+  - name: BudgetBreachError
+    raised_when: A blocking budget outcome is committed after preview signalling stop semantics.
+    payload: Contains the breached scope key and the associated BudgetChargeOutcome.
+  - name: BudgetError
+    raised_when: Manager invariants are broken (e.g., missing scope state or blocking decision without outcome).
+serialization:
+  trace_payloads: Immutable mapping proxies including scope metadata, spend totals, remaining budget, and overages.
+  cost_snapshot: JSON-compatible dict with `time_ms` (float) and `tokens` (int) for logging/telemetry.
+lifecycle:
+  - FlowRunner enters run scope -> per-node scope -> previews budgets -> records breach warnings -> commits charges or raises.
+  - BudgetManager retains last scope state in history for inspection after exit.
+typing:
+  language: Python 3.12
+  typing: Dataclasses and Protocols provide static typing for models and adapters.
+security:
+  - Trust boundary remains at adapter execution; FlowRunner assumes adapters are safe and synchronous.
+  - Trace payloads may include tool identifiers—ensure downstream sinks are access-controlled.
+performance:
+  - Budget computations are O(number of specs per scope) and rely on simple numeric arithmetic.
+  - Trace emission is synchronous; attach asynchronous sinks if high-volume execution becomes a bottleneck.

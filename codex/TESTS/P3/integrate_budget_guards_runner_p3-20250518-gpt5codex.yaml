@@ -1,0 +1,15 @@
+missing_tests:
+  task_id: 07b_budget_guards_and_runner_integration.yaml
+  proposed_tests:
+    - name: test_flow_runner_loop_scope_breach_stops_nested_execution
+      rationale: Current suite covers run/node scopes only; loop scope semantics and stop propagation remain untested.
+      source_module: codex/code/integrate_budget_guards_runner_p3/dsl/flow_runner.py
+      priority: high
+    - name: test_policy_and_budget_violation_same_node
+      rationale: Need regression asserting simultaneous policy denial and budget breach ordering for trace emission.
+      source_module: codex/code/integrate_budget_guards_runner_p3/dsl/flow_runner.py
+      priority: medium
+    - name: test_budget_manager_reenter_scope_error_message
+      rationale: Entering an already active scope should raise with informative error; currently unverified.
+      source_module: codex/code/integrate_budget_guards_runner_p3/dsl/budget_manager.py
+      priority: low

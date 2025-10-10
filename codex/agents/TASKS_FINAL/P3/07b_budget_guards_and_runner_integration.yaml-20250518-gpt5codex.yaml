@@ -1,0 +1,71 @@
+summary: Re-stage canonical budget manager and FlowRunner integration with schema-aligned traces for branch-specific testing.
+justification: |
+  Phase 2 established the object model (CostSnapshot, BudgetSpec, BudgetDecision), manager orchestration, and FlowRunner hooks.
+  Phase 3 must port these pieces into the new branch workspace while validating budget + policy behaviour and immutable tracing.
+  The plan mirrors the prior "work" branch but enforces branch-scoped tests and adds coverage for trace payload immutability.
+steps:
+  - analyse_prior_artifacts: Review P2 previews/reviews/postexecution outputs to reuse tested abstractions and avoid regressions.
+  - stage_branch_workspace: Create codex/code/integrate_budget_guards_runner_p3 with module skeletons and branch-local __init__ files.
+  - author_tests_first: Port and extend budget model/manager/runner tests into branch-scoped suite asserting trace emissions.
+  - implement_domain_models: Recreate CostSnapshot, BudgetSpec, BudgetChargeOutcome, and BudgetDecision with normalization helpers.
+  - implement_budget_manager: Provide scope lifecycle, preview/commit/record breach flows, and trace emission.
+  - implement_flow_runner: Integrate adapters, budgets, and policy stack with stop/warn semantics and policy trace forwarding.
+  - validate_trace_emitter: Ensure TraceEventEmitter emits immutable payloads and supports sink attachment (unit tested).
+  - run_pytest: Execute pytest for branch tests verifying red/green cycle.
+modules:
+  codex/code/integrate_budget_guards_runner_p3/__init__.py: Package marker for branch workspace.
+  codex/code/integrate_budget_guards_runner_p3/dsl/__init__.py: DSL namespace init exporting key classes.
+  codex/code/integrate_budget_guards_runner_p3/dsl/trace.py: Immutable trace event dataclass and emitter with sink support.
+  codex/code/integrate_budget_guards_runner_p3/dsl/budget_models.py: Budget scope keys, specs, cost snapshots, and decision helpers.
+  codex/code/integrate_budget_guards_runner_p3/dsl/budget_manager.py: Scope-aware manager orchestrating preview/commit and traces.
+  codex/code/integrate_budget_guards_runner_p3/dsl/flow_runner.py: Adapter-backed FlowRunner wiring budgets and policies.
+tests:
+  - file: codex/code/integrate_budget_guards_runner_p3/tests/conftest.py
+    focus: Insert repository root onto sys.path for imports; branch-isolated fixtures.
+  - file: codex/code/integrate_budget_guards_runner_p3/tests/test_trace_emitter.py
+    coverage: Ensure TraceEventEmitter returns immutable events and forwards to sinks.
+  - file: codex/code/integrate_budget_guards_runner_p3/tests/test_budget_models.py
+    coverage: Cost normalization, charge math, decision blocking, trace payload immutability.
+  - file: codex/code/integrate_budget_guards_runner_p3/tests/test_budget_manager.py
+    coverage: Scope lifecycle, preview/commit stop semantics, breach tracing, history inspection.
+  - file: codex/code/integrate_budget_guards_runner_p3/tests/test_flow_runner_budget_integration.py
+    coverage: Adapter integration, policy enforcement, run/node budgets, breach warnings/stops, trace sequencing.
+run_order:
+  - author_tests_first
+  - implement_domain_models
+  - implement_budget_manager
+  - implement_flow_runner
+  - validate_trace_emitter
+  - run_pytest
+interfaces:
+  - name: TraceEventEmitter
+    contract: emit(event, scope_type, scope_id, payload) -> TraceEvent; payload is immutable mapping; optional sink callback.
+  - name: BudgetManager
+    contract: enter_scope/exit_scope, preview_charge returning BudgetDecision, commit_charge raising BudgetBreachError for blocking outcomes, record_breach for warnings.
+  - name: FlowRunner
+    contract: run(flow_id, run_id, nodes) -> list[NodeExecution]; integrates PolicyStack.enforce and BudgetManager charges per scope.
+  - name: ToolAdapter
+    contract: estimate_cost(node) -> Mapping; execute(node) -> object; FlowRunner obtains adapters by tool key.
+tdd_coverage_targets:
+  budget_models: 0.9
+  budget_manager: 0.9
+  flow_runner: 0.85
+  trace: 0.9
+review_checklist:
+  - Validate trace events use MappingProxyType to prevent mutation.
+  - Confirm BudgetManager history retains last scope state post-exit for inspection tests.
+  - Ensure FlowRunner stops on blocking budget outcomes and emits budget_breach before raising.
+  - Verify PolicyStack interactions raise PolicyViolationError and propagate traces.
+  - Check tests reside under codex/code/integrate_budget_guards_runner_p3/tests/ per branch requirement.
+outputs:
+  - codex/agents/TASKS_FINAL/P3/07b_budget_guards_and_runner_integration.yaml-20250518-gpt5codex.yaml
+  - codex/code/integrate_budget_guards_runner_p3/dsl/trace.py
+  - codex/code/integrate_budget_guards_runner_p3/dsl/budget_models.py
+  - codex/code/integrate_budget_guards_runner_p3/dsl/budget_manager.py
+  - codex/code/integrate_budget_guards_runner_p3/dsl/flow_runner.py
+  - codex/code/integrate_budget_guards_runner_p3/tests/*
+  - PREVIEW/P3/07b_budget_guards_and_runner_integration.yaml-20250518-gpt5codex.md
+  - REVIEW/P3/07b_budget_guards_and_runner_integration.yaml-20250518-gpt5codex.md
+  - POSTEXECUTION/P3/07b_budget_guards_and_runner_integration.yaml-20250518-gpt5codex.md
+  - codex/DOCUMENTATION/P3/integrate_budget_guards_runner_p3-20250518-gpt5codex.yaml
+  - codex/TESTS/P3/integrate_budget_guards_runner_p3-20250518-gpt5codex.yaml
