@@ -1,0 +1,61 @@
+component:
+  name: sandbox_flow_runner_budget_integration
+  purpose: |
+    Demonstrate canonical budget management, policy enforcement, and trace emission for the FlowRunner
+    integration milestone in a sandbox environment.
+cli_usage:
+  entrypoints:
+    - command: python -m pytest codex/code/phase3-07b-budget-guards-b3c8/tests -q
+      description: Execute the sandbox regression suite covering budget manager and runner integration.
+public_interfaces:
+  classes:
+    - name: dsl.budget.BudgetManager
+      responsibilities:
+        - Register run/loop/node budget specs.
+        - Provide preflight and commit decisions with immutable outcomes.
+    - name: dsl.trace.TraceEventEmitter
+      responsibilities:
+        - Emit policy and budget events with immutable payloads.
+        - Supply event history for audit-friendly assertions.
+    - name: dsl.runner.FlowRunner
+      responsibilities:
+        - Execute loop-based flows with adapters, budgets, and policies.
+        - Produce `RunResult` summaries and feed TraceEventEmitter.
+  extension_points:
+    - name: dsl.runner.ToolAdapter
+      type: protocol
+      notes: Implement `estimate` and `execute` to integrate real tool adapters.
+configurables:
+  budgets:
+    - field: BudgetSpec.limit_ms
+      description: Millisecond ceiling enforced per scope.
+    - field: BudgetSpec.mode
+      description: Determines hard vs soft breach semantics.
+    - field: BudgetSpec.breach_action
+      description: Controls whether breaches warn or stop execution.
+  policies:
+    - field: PolicyStack.allowlist
+      description: Restricts execution to allowed node ids when provided.
+automation_triggers:
+  - name: trace_event_emitter
+    description: Traces may be forwarded to automation pipelines that validate schema compliance before deployment.
+error_contracts:
+  budget:
+    - condition: Unknown ScopeKey
+      raises: KeyError
+    - condition: Negative BudgetSpec.limit_ms
+      raises: ValueError
+  policy:
+    - condition: Mismatched `PolicyStack.complete` order
+      raises: RuntimeError
+serialization:
+  trace_events:
+    format: mapping-proxy payloads suitable for JSON serialization.
+    lifecycle: Events remain in-memory for test assertions; emitter exposes immutable snapshots.
+typing_notes:
+  - Budget dataclasses and enums provide explicit typing for testability and IDE support.
+  - FlowRunner utilises the `ToolAdapter` protocol to maintain loose coupling with adapter implementations.
+security_notes:
+  - No external I/O; sandbox adapters execute deterministic in-memory actions only.
+performance_notes:
+  - Sequential scope charging avoids redundant commit calls once a stop decision is produced, reducing overhead in tight loops.
