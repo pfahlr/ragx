@@ -1,39 +1,107 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://spec.ragx.ai/mcp/envelope.schema.json",
-  "title": "RAGX MCP Envelope",
-  "type": "object",
-  "$comment": "JSON-RPC requests and notifications share this envelope. Notifications omit 'id'.",
-  "additionalProperties": false,
-  "required": ["jsonrpc", "method", "params"],
-  "properties": {
-    "id": {
-      "description": "Deterministic request identifier (UUID or stable string).",
-      "$comment": "When absent the envelope is treated as a notification.",
-      "type": ["string", "integer", "null"]
-    },
-    "jsonrpc": {
-      "description": "JSON-RPC protocol version indicator.",
-      "type": "string",
-      "const": "2.0"
-    },
-    "method": {
-      "description": "Fully qualified method invoked via MCP transport.",
-      "type": "string",
-      "minLength": 1
-    },
-    "params": {
-      "description": "Transport-specific payload validated against per-tool schemas.",
-      "type": "object"
-    },
-    "meta": {
-      "description": "Optional metadata emitted in envelopes.",
+  "title": "RAGX JSON-RPC 2.0 Envelope",
+  "$comment": "Shared schema covering JSON-RPC requests, notifications, and responses.",
+  "oneOf": [
+    {"$ref": "#/$defs/request"},
+    {"$ref": "#/$defs/notification"},
+    {"$ref": "#/$defs/response"}
+  ],
+  "$defs": {
+    "commonRequest": {
       "type": "object",
-      "additionalProperties": true
+      "additionalProperties": false,
+      "properties": {
+        "jsonrpc": {
+          "description": "JSON-RPC protocol version indicator.",
+          "type": "string",
+          "const": "2.0"
+        },
+        "id": {
+          "description": "Deterministic request identifier (UUID or stable string).",
+          "type": ["string", "integer", "null"]
+        },
+        "method": {
+          "description": "Fully qualified method invoked via MCP transport.",
+          "type": "string",
+          "minLength": 1
+        },
+        "params": {
+          "description": "Transport-specific payload validated against per-tool schemas.",
+          "type": "object"
+        },
+        "meta": {
+          "description": "Optional metadata emitted in envelopes.",
+          "type": "object",
+          "additionalProperties": true
+        },
+        "idempotencyKey": {
+          "description": "Optional idempotency token to deduplicate requests.",
+          "type": "string"
+        }
+      }
     },
-    "idempotencyKey": {
-      "description": "Optional idempotency token to deduplicate requests.",
-      "type": "string"
+    "request": {
+      "allOf": [
+        {"$ref": "#/$defs/commonRequest"},
+        {
+          "required": ["jsonrpc", "id", "method"],
+          "properties": {
+            "params": {"type": "object"}
+          }
+        }
+      ]
+    },
+    "notification": {
+      "allOf": [
+        {"$ref": "#/$defs/commonRequest"},
+        {
+          "required": ["jsonrpc", "method"],
+          "not": {"required": ["id"]}
+        }
+      ]
+    },
+    "response": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "jsonrpc": {
+          "description": "JSON-RPC protocol version indicator.",
+          "type": "string",
+          "const": "2.0"
+        },
+        "id": {
+          "description": "Identifier copied from the corresponding request.",
+          "type": ["string", "integer", "null"]
+        },
+        "result": {
+          "description": "Successful response payload.",
+          "type": ["object", "array", "string", "number", "boolean", "null"]
+        },
+        "error": {
+          "description": "Error object returned when a request fails.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["code", "message"],
+          "properties": {
+            "code": {"type": "integer"},
+            "message": {"type": "string"},
+            "data": {"type": ["object", "array", "string", "number", "boolean", "null"]}
+          }
+        }
+      },
+      "required": ["jsonrpc", "id"],
+      "oneOf": [
+        {
+          "required": ["result"],
+          "not": {"required": ["error"]}
+        },
+        {
+          "required": ["error"],
+          "not": {"required": ["result"]}
+        }
+      ]
     }
   }
 }
