@@ -1,0 +1,62 @@
+summary: Integrate canonical budget manager and trace emission into a self-contained FlowRunner sandbox.
+justification: >-
+  Prior phase reviews highlighted the need to combine the adapter-driven runner from the baseline branch
+  with immutable budget models and a shared trace emitter. This plan sequences domain modeling, trace
+  plumbing, and runner orchestration so we can write targeted tests before implementation.
+steps:
+  - name: establish_budget_domain
+    description: Finalize immutable value objects, normalization helpers, and manager APIs for scope budgets.
+  - name: build_trace_and_policy_bridges
+    description: Provide a shared TraceEventEmitter and lightweight PolicyStack stub to validate ordering.
+  - name: integrate_runner_control_flow
+    description: Wire FlowRunner to consult the manager, honor breach actions, and emit deterministic traces.
+modules:
+  - path: codex/code/phase3-07b-budget-guards-b3c8/dsl/budget.py
+    role: Immutable budget models and BudgetManager orchestration.
+  - path: codex/code/phase3-07b-budget-guards-b3c8/dsl/trace.py
+    role: TraceEventEmitter producing schema-aligned policy and budget events.
+  - path: codex/code/phase3-07b-budget-guards-b3c8/dsl/policy.py
+    role: Minimal PolicyStack enforcing allow/deny semantics for runner integration tests.
+  - path: codex/code/phase3-07b-budget-guards-b3c8/dsl/runner.py
+    role: FlowRunner executing adapters with budget and policy enforcement.
+tests:
+  - path: codex/code/phase3-07b-budget-guards-b3c8/tests/test_budget_manager.py
+    coverage_targets:
+      - codex/code/phase3-07b-budget-guards-b3c8/dsl/budget.py
+    mocks:
+      - Fake time provider for deterministic timestamps.
+  - path: codex/code/phase3-07b-budget-guards-b3c8/tests/test_flow_runner_budget_integration.py
+    coverage_targets:
+      - codex/code/phase3-07b-budget-guards-b3c8/dsl/trace.py
+      - codex/code/phase3-07b-budget-guards-b3c8/dsl/policy.py
+      - codex/code/phase3-07b-budget-guards-b3c8/dsl/runner.py
+    mocks:
+      - Stub ToolAdapter implementations returning deterministic costs.
+run_order:
+  - tests/test_budget_manager.py
+  - tests/test_flow_runner_budget_integration.py
+interfaces:
+  - name: BudgetManager
+    contract: Provides preflight and commit methods returning immutable decisions and charge outcomes per scope.
+  - name: TraceEventEmitter
+    contract: Emits budget and policy events in a deterministic order with immutable payloads.
+  - name: FlowRunner.run
+    contract: Executes a flow descriptor, enforces policies, consults the manager, and returns a RunResult capturing stop reasons.
+tdd_coverage_targets:
+  - file: codex/code/phase3-07b-budget-guards-b3c8/dsl/budget.py
+    min_line_coverage: 0.85
+  - file: codex/code/phase3-07b-budget-guards-b3c8/dsl/runner.py
+    min_line_coverage: 0.85
+review_checklist:
+  - Verify cost normalization handles seconds and milliseconds inputs.
+  - Ensure soft breach warnings emit trace events without stopping loops.
+  - Confirm hard breaches stop loop execution and annotate RunResult stop_reason.
+  - Validate policy trace ordering remains push -> resolved -> pop alongside budget events.
+  - Check dataclasses are frozen to avoid mutable payload regressions.
+outputs:
+  - codex/code/phase3-07b-budget-guards-b3c8/dsl/budget.py
+  - codex/code/phase3-07b-budget-guards-b3c8/dsl/trace.py
+  - codex/code/phase3-07b-budget-guards-b3c8/dsl/policy.py
+  - codex/code/phase3-07b-budget-guards-b3c8/dsl/runner.py
+  - codex/code/phase3-07b-budget-guards-b3c8/tests/test_budget_manager.py
+  - codex/code/phase3-07b-budget-guards-b3c8/tests/test_flow_runner_budget_integration.py
