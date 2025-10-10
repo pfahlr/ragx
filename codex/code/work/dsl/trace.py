@@ -27,11 +27,19 @@ class TraceEventEmitter:
     def __init__(self) -> None:
         self._events: list[TraceEvent] = []
         self._sink: Callable[[TraceEvent], None] | None = None
+        self._validator: Callable[[TraceEvent], None] | None = None
 
     def attach_sink(self, sink: Callable[[TraceEvent], None] | None) -> None:
         """Attach or clear an external sink that receives emitted events."""
 
         self._sink = sink
+
+    def attach_validator(
+        self, validator: Callable[[TraceEvent], None] | None
+    ) -> None:
+        """Register a validator invoked for every emitted event."""
+
+        self._validator = validator
 
     def emit(
         self,
@@ -48,6 +56,8 @@ class TraceEventEmitter:
             scope_id=scope_id,
             payload=MappingProxyType(data),
         )
+        if self._validator is not None:
+            self._validator(record)
         self._events.append(record)
         if self._sink is not None:
             self._sink(record)
