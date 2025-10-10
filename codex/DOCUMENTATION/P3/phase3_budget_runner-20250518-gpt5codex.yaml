@@ -1,0 +1,57 @@
+component: phase3_budget_runner
+purpose: |
+  Provide immutable budget models, a scope-aware BudgetManager, and adapter-backed FlowRunner
+  integration that unifies policy enforcement with budget guards while emitting schema-aligned
+  trace events.
+cli_usage:
+  description: Execute targeted validation for the phase3 budget runner package.
+  command: pytest codex/code/phase3_budget_runner/tests -q
+public_interfaces:
+  - name: codex.code.phase3_budget_runner.dsl.trace.TraceEventEmitter
+    description: Emits immutable `TraceEvent` records and optionally forwards them to a sink.
+  - name: codex.code.phase3_budget_runner.dsl.budget_models.CostSnapshot
+    description: Normalised cost structure supporting unit conversion and arithmetic helpers.
+  - name: codex.code.phase3_budget_runner.dsl.budget_models.BudgetSpec
+    description: Declarative limit definition capturing scope, breach mode, and actions.
+  - name: codex.code.phase3_budget_runner.dsl.budget_manager.BudgetManager
+    description: Coordinates scope lifecycle, preview/commit flows, and breach telemetry.
+  - name: codex.code.phase3_budget_runner.dsl.flow_runner.FlowRunner
+    description: Executes flow nodes through adapters while enforcing policies and budgets.
+extension_hooks:
+  - hook: codex.code.phase3_budget_runner.dsl.trace.TraceEventEmitter.attach_sink
+    extension: Route trace events to external logging or validation sinks.
+  - hook: codex.code.phase3_budget_runner.dsl.budget_manager.BudgetManager.record_breach
+    extension: Inject additional notification channels before hard stops propagate.
+configurable_options:
+  - name: BudgetSpec.mode
+    values: [hard, soft]
+    default: hard
+  - name: BudgetSpec.breach_action
+    values: [stop, warn]
+    default: stop
+automation_triggers:
+  - trigger: FlowRunner._apply_budget
+    outcome: Charges budgets on estimate results and raises `BudgetBreachError` when stop conditions occur.
+  - trigger: PolicyStack.enforce
+    outcome: Validates tool invocation against active policies prior to adapter execution.
+error_contracts:
+  - name: codex.code.phase3_budget_runner.dsl.budget_manager.BudgetBreachError
+    raised_when: Hard-stop or stop-configured budgets breach during preview/commit.
+    payload: Includes the offending scope key and breached BudgetChargeOutcome.
+  - name: codex.code.phase3_budget_runner.dsl.budget_manager.BudgetError
+    raised_when: Manager state is inconsistent (e.g., missing blocking outcome, unknown scope).
+serialization:
+  trace_payloads: Immutable mapping proxies containing scope metadata, totals, remaining, and overage metrics.
+  cost_snapshot: Dict with `time_ms` (float) and `tokens` (int) fields used by adapters and traces.
+lifecycle:
+  - enter_scope -> preview_charge -> record_breach (optional) -> commit_charge -> exit_scope.
+  - FlowRunner orchestrates run scope creation, per-node scopes, policy enforcement, and trace emission.
+typing:
+  language: Python 3.12
+  typing: Dataclasses with explicit annotations; Protocol defines ToolAdapter contract.
+security:
+  - Assumes adapters are trusted Python callables; no sandboxing provided.
+  - Trace payloads may contain tool identifiers; ensure sinks are access-controlled.
+performance:
+  - Operations rely on simple arithmetic and mapping proxies; overhead is minimal for unitary flows.
+  - Trace emission is synchronous; attach async sink if high throughput is required.
