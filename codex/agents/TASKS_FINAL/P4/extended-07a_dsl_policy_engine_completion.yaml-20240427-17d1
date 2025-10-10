@@ -1,0 +1,153 @@
+meta:
+  code_task: 07a_dsl_policy_engine_completion.yaml
+  repo: pfahlr/
+  last_updated: 2024-04-27
+  phase: P4
+  merged_branch_excluded: true
+
+branch_ranking:
+  - branch: codex/implement-dsl-policy-engine-in-production
+    rank: 1
+    rationale: "Implements a full PolicyStack with scoped directive precedence, policy tracing, and enforcement snapshots while keeping the API aligned with the spec; only the unreachable-tool linter remains unimplemented."
+  - branch: codex/implement-dsl-policy-engine-in-production-72ua42
+    rank: 2
+    rationale: "Adds structured denial diagnostics and richer scope metadata, but normalizes tool registries differently and still omits the linter, leaving some integration friction."
+  - branch: codex/implement-dsl-policy-engine-in-production-p4eaey
+    rank: 3
+    rationale: "Introduces stack cloning and violation snapshots yet diverges from the accepted PolicyResolution API and requires tool sets at construction, which complicates adoption."
+  - branch: codex/implement-dsl-policy-engine-in-production-5p284m
+    rank: 4
+    rationale: "Provides the lightest implementation—missing directive scope metadata, denial context, and the linter—so it cannot satisfy downstream consumers without extensive rewrites."
+
+extended_tasks:
+  - id: dsl_policy_snapshot_denials
+    description: "Extend PolicySnapshot to expose structured PolicyDenial records (tool, scope, matched tags) for reuse by enforcement and future linter passes."
+    source_files:
+      - pkgs/dsl/models.py
+      - pkgs/dsl/policy.py
+      - tests/unit/test_policy_stack_resolution.py
+      - tests/unit/test_policy_stack_enforce.py
+    adapted_from_branch: codex/implement-dsl-policy-engine-in-production-72ua42
+    execution_mode: manual
+    reusable: true
+    implementation:
+      python: |
+        from dataclasses import dataclass
+        from types import MappingProxyType
+
+        @dataclass(frozen=True, slots=True)
+        class PolicyDenial:
+            tool: str
+            denied_by: str | None
+            reasons: tuple[str, ...]
+            matched_tags: tuple[str, ...]
+            decision: PolicyDecision
+
+        @dataclass(frozen=True, slots=True)
+        class PolicySnapshot(PolicyResolution):
+            denials: Mapping[str, PolicyDenial]
+
+        def _make_snapshot(self, resolution: PolicyResolution) -> PolicySnapshot:
+            denials = {
+                tool: PolicyDenial(
+                    tool=tool,
+                    denied_by=decision.denied_by,
+                    reasons=decision.reasons,
+                    matched_tags=decision.matched_tags,
+                    decision=decision,
+                )
+                for tool, decision in resolution.decisions.items()
+                if not decision.allowed
+            }
+            return PolicySnapshot(
+                allowed=resolution.allowed,
+                denied=resolution.denied,
+                decisions=resolution.decisions,
+                stack_depth=resolution.stack_depth,
+                candidates=resolution.candidates,
+                directives=resolution.directives,
+                denials=MappingProxyType(denials),
+            )
+    tests:
+      - pytest -k "policy_stack_enforce or policy_stack_resolution"
+    artifacts:
+      - name: policy_snapshot_denials_fixture
+        file: tests/fixtures/dsl/policy_snapshot_denials.json
+
+  - id: dsl_policy_stack_clone_and_violation_snapshot
+    description: "Add PolicyStack.clone and enrich PolicyViolationError with the PolicySnapshot that triggered it to support branch/loop exploration."
+    source_files:
+      - pkgs/dsl/models.py
+      - pkgs/dsl/policy.py
+      - tests/unit/test_policy_stack_enforce.py
+    adapted_from_branch: codex/implement-dsl-policy-engine-in-production-p4eaey
+    execution_mode: manual
+    reusable: true
+    implementation:
+      python: |
+        class PolicyViolationError(PolicyError):
+            def __init__(self, denial: PolicyDenial, snapshot: PolicySnapshot) -> None:
+                super().__init__(
+                    f"Tool '{denial.tool}' blocked by policy: {', '.join(denial.reasons)}"
+                )
+                self.denial = denial
+                self.snapshot = snapshot
+
+        class PolicyStack:
+            def __init__(..., trace: PolicyTraceRecorder | None = None, ...):
+                self._trace = trace or PolicyTraceRecorder()
+                ...
+
+            def clone(self) -> "PolicyStack":
+                clone = PolicyStack(
+                    tools={d.name: d.metadata for d in self._registry.values()},
+                    tool_sets=self._tool_sets,
+                    trace=PolicyTraceRecorder(),
+                    event_sink=self._event_sink,
+                )
+                clone._frames = list(self._frames)
+                return clone
+
+            def enforce(...):
+                snapshot = self.snapshot([tool])
+                denial = snapshot.denials.get(tool)
+                if denial and raise_on_violation:
+                    raise PolicyViolationError(denial, snapshot)
+                return snapshot
+    tests:
+      - pytest tests/unit/test_policy_stack_enforce.py
+      - pytest -k "policy_stack_clone"
+    artifacts:
+      - name: policy_stack_clone_trace
+        file: tests/fixtures/dsl/policy_clone_trace.jsonl
+
+  - id: dsl_policy_stack_internal_recorder
+    description: "Expose an always-on PolicyTraceRecorder via PolicyStack.recorder so tests and linters can subscribe to emitted policy events without wiring custom sinks."
+    source_files:
+      - pkgs/dsl/policy.py
+      - tests/unit/test_policy_stack_resolution.py
+    adapted_from_branch: codex/implement-dsl-policy-engine-in-production-5p284m
+    execution_mode: optional
+    reusable: true
+    implementation:
+      python: |
+        class PolicyStack:
+            def __init__(..., trace: PolicyTraceRecorder | None = None, ...):
+                self._trace = trace or PolicyTraceRecorder()
+                self._event_sink = event_sink
+                ...
+
+            @property
+            def recorder(self) -> PolicyTraceRecorder:
+                return self._trace
+
+            def _emit(...):
+                record = PolicyTraceEvent(...)
+                self._trace.record(record)
+                if self._event_sink:
+                    self._event_sink(record)
+    tests:
+      - pytest -k "policy_stack and trace"
+    artifacts:
+      - name: policy_trace_events_snapshot
+        file: tests/fixtures/dsl/policy_trace_events.jsonl
