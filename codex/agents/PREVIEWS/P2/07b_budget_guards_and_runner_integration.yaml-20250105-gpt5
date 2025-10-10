@@ -1,0 +1,28 @@
+plan_preview:
+  reuse_plan:
+    codex/integrate-budget-guards-with-runner:
+      - Keep adapter-driven FlowRunner, PolicyStack enforcement order, and baseline acceptance fixtures as the scaffolding to retrofit budgets.
+    codex/integrate-budget-guards-with-runner-zwi2ny:
+      - Lift immutable BudgetSpec/CostSnapshot value objects and TraceWriter abstraction, rewriting soft-mode detection to honor breach_action defaults.
+    codex/integrate-budget-guards-with-runner-pbdel9:
+      - Reuse BudgetCharge remaining/overage accounting and mapping_proxy trace payloads, plugging them into the shared recorder emitted from zwi2ny.
+    codex/implement-budget-guards-with-test-first-approach:
+      - Adopt BudgetManager preflight/commit APIs and Recorder wiring, but reintroduce concrete FlowRunner execution rather than stubs.
+    codex/implement-budget-guards-with-test-first-approach-qhq0jq:
+      - Merge BudgetMode enum, BudgetCheck preview outcomes, and LoopSummary DTOs to cover soft vs hard enforcement paths.
+    codex/implement-budget-guards-with-test-first-approach-8wxk32:
+      - Integrate NodeExecution dataclass, deterministic Cost arithmetic, and injectable factories while ensuring adapters feed actual executions.
+    codex/implement-budget-guards-with-test-first-approach-fa0vm9:
+      - Keep ToolAdapter protocol and structured BudgetBreach metadata, rewriting charge mutation to avoid shared dictionaries and `_LoopStopSignal` reliance.
+  conflicts:
+    - Soft budget semantics differ (zwi2ny treats everything as hard, pbdel9 stops silently, qhq0jq issues warnings). Plan: centralize mode+breach_action resolution inside BudgetManager with explicit outcomes.
+    - Runner control flow varies: base branch executes adapters synchronously, fa0vm9 introduces loop stop exceptions, qhq0jq fabricates outputs. Plan: retain base adapter execution, use manager-returned stop flags to break loops cleanly, and drop mock execution paths.
+    - Trace pipelines diverge between PolicyStack-only events (base) and ad-hoc budget events (pbdel9/fa0vm9). Plan: implement a unified RunnerTraceEmitter that routes both policy and budget events through immutable payloads.
+  redesign_targets:
+    - Consolidate BudgetMeter, BudgetManager, and BudgetCharge/Check types into a cohesive module exposing preflight/commit per scope with immutable dataclasses.
+    - Simplify FlowRunner loop orchestration to consume manager outcomes (warnings, breaches, stop reasons) without bespoke exception hierarchies.
+    - Refactor trace APIs so PolicyStack and BudgetManager share a recorder sink while preserving schema-compliant event names.
+  open_questions:
+    - Should RunResult include raw trace events or rely on external sinks only? (affects backward compatibility with existing tests.)
+    - How to order policy vs budget events when both fire for the same node—policy push/resolve first, then budget charge, or interleave?
+    - Do we need async-safe adapters in this milestone or can we defer concurrency until after budget integration ships?
