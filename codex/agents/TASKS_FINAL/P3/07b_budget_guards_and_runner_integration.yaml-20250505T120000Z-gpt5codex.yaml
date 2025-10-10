@@ -1,0 +1,96 @@
+summary: "Implement canonical budget management and FlowRunner integration with trace emission"
+justification: >-
+  Prior phases converged on using fa0vm9's runner scaffolding with zwi2ny's immutable
+  value objects and pbdel9's overage accounting. This plan completes the integration by
+  codifying cost normalization, a reusable BudgetManager lifecycle, and FlowRunner hooks
+  that emit structured budget and policy traces.
+steps:
+  - id: domain_models
+    description: Finalize budget value objects and normalization helpers for consistent metrics.
+    inputs:
+      - PREVIEW/P2/07b_budget_guards_and_runner_integration.yaml-20250427T160000Z-gpt5codex
+      - REVIEWS/P2/07b_budget_guards_and_runner_integration.yaml-20250427T160000Z-gpt5codex
+    outputs:
+      - codex/code/07b_budget_guards_and_runner_integration.yaml/budget_models.py
+      - codex/code/07b_budget_guards_and_runner_integration.yaml/costs.py
+  - id: manager_and_traces
+    description: Build BudgetManager lifecycle and TraceEventEmitter to coordinate scope state and observability.
+    inputs:
+      - codex/code/07b_budget_guards_and_runner_integration.yaml/budget_models.py
+      - codex/code/07b_budget_guards_and_runner_integration.yaml/costs.py
+    outputs:
+      - codex/code/07b_budget_guards_and_runner_integration.yaml/budget_manager.py
+      - codex/code/07b_budget_guards_and_runner_integration.yaml/trace_emitter.py
+  - id: runner_integration
+    description: Implement FlowRunner orchestration using adapters, PolicyStack, BudgetManager, and TraceEventEmitter.
+    inputs:
+      - pkgs/dsl/policy.py
+      - codex/code/07b_budget_guards_and_runner_integration.yaml/budget_manager.py
+      - codex/code/07b_budget_guards_and_runner_integration.yaml/trace_emitter.py
+    outputs:
+      - codex/code/07b_budget_guards_and_runner_integration.yaml/flow_runner.py
+modules:
+  - path: codex/code/07b_budget_guards_and_runner_integration.yaml/__init__.py
+    role: Package marker exporting FlowRunner and BudgetManager conveniences.
+  - path: codex/code/07b_budget_guards_and_runner_integration.yaml/budget_models.py
+    role: Immutable budget domain objects (BudgetSpec, CostSnapshot, BudgetCharge, BudgetMode).
+  - path: codex/code/07b_budget_guards_and_runner_integration.yaml/costs.py
+    role: Cost normalization utilities enforcing canonical metric units and validation.
+  - path: codex/code/07b_budget_guards_and_runner_integration.yaml/budget_manager.py
+    role: BudgetManager orchestrating scope stacks, preview/commit lifecycle, and breach semantics.
+  - path: codex/code/07b_budget_guards_and_runner_integration.yaml/trace_emitter.py
+    role: TraceEventEmitter producing immutable payloads for budget and policy events.
+  - path: codex/code/07b_budget_guards_and_runner_integration.yaml/flow_runner.py
+    role: FlowRunner integrating adapters, PolicyStack enforcement, budgets, and traces.
+tests:
+  - path: codex/code/07b_budget_guards_and_runner_integration.yaml/tests/test_costs.py
+    targets:
+      - codex/code/07b_budget_guards_and_runner_integration.yaml/costs.py
+    coverage: "≥90% line coverage"
+    mocks:
+      - none
+  - path: codex/code/07b_budget_guards_and_runner_integration.yaml/tests/test_budget_manager.py
+    targets:
+      - codex/code/07b_budget_guards_and_runner_integration.yaml/budget_manager.py
+      - codex/code/07b_budget_guards_and_runner_integration.yaml/budget_models.py
+    coverage: "≥90% line coverage"
+    mocks:
+      - TraceEventEmitter mock to capture emissions
+  - path: codex/code/07b_budget_guards_and_runner_integration.yaml/tests/test_flow_runner.py
+    targets:
+      - codex/code/07b_budget_guards_and_runner_integration.yaml/flow_runner.py
+      - codex/code/07b_budget_guards_and_runner_integration.yaml/trace_emitter.py
+    coverage: "≥85% line coverage"
+    mocks:
+      - Fake ToolAdapter implementations
+      - PolicyStack from pkgs.dsl.policy exercised with deterministic registry
+run_order:
+  - Write and validate unit tests for costs and models
+  - Extend tests for BudgetManager and trace emission
+  - Add FlowRunner integration tests covering budget and policy scenarios
+  - Implement modules to satisfy the tests in the same order
+interfaces:
+  - name: ToolAdapterProtocol
+    description: Adapter objects must expose estimate(node) and execute(node) hooks returning cost mappings and results.
+  - name: PolicyStackIntegration
+    description: FlowRunner uses pkgs.dsl.policy.PolicyStack to resolve candidates before execution and emits policy traces.
+  - name: TraceEventEmitterAPI
+    description: Provides emit_budget_charge, emit_budget_breach, emit_policy_resolved, emit_policy_violation, emit_loop_stop.
+tdd_coverage_targets:
+  statements: 0.85
+  branches: 0.75
+review_checklist:
+  - Cost normalization handles seconds→milliseconds conversion deterministically.
+  - BudgetManager enforces warn vs stop semantics with immutable snapshots.
+  - FlowRunner stops on hard breaches and records stop reasons in trace events.
+  - PolicyStack integration emits policy_resolved and policy_violation events.
+  - Tests cover simultaneous policy violation and soft budget warnings.
+outputs:
+  code:
+    - codex/code/07b_budget_guards_and_runner_integration.yaml/*.py
+  tests:
+    - codex/code/07b_budget_guards_and_runner_integration.yaml/tests/*.py
+  docs:
+    - codex/agents/PREVIEW/P3/07b_budget_guards_and_runner_integration.yaml-20250505T120000Z-gpt5codex.md
+    - codex/agents/REVIEW/P3/07b_budget_guards_and_runner_integration.yaml-20250505T120000Z-gpt5codex.md
+    - codex/agents/POSTEXECUTION/P3/07b_budget_guards_and_runner_integration.yaml-20250505T120000Z-gpt5codex.md
