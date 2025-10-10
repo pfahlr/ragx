@@ -1,0 +1,15 @@
+missing_tests:
+  task_id: 07b_budget_guards_and_runner_integration.yaml
+  proposed_tests:
+    - name: test_nested_loop_budget_stop_propagation
+      rationale: Exercise nested loop scopes to ensure inner loop breaches emit stop events without leaking scopes in the outer loop.
+      source_module: codex/code/work/dsl/flow_runner.py
+      priority: high
+    - name: test_loop_soft_warn_allows_iteration_progress
+      rationale: Validate that soft loop budgets with `breach_action: warn` emit breaches yet continue executing subsequent iterations.
+      source_module: codex/code/work/dsl/flow_runner.py
+      priority: medium
+    - name: test_trace_validator_error_context
+      rationale: Assert that validator exceptions can annotate failures with event metadata for downstream logging.
+      source_module: codex/code/work/dsl/trace.py
+      priority: low

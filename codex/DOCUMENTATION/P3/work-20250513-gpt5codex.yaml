@@ -1,0 +1,52 @@
+component: budget_guard_runner_phase3_loop_extension
+purpose: |
+  Extend the Phase 3 budget guard integration with loop-aware FlowRunner execution, validator-backed trace
+  emission, and hardened policy/budget interactions so soft stop semantics and schema compliance are enforced.
+cli_usage:
+  description: Run deterministic validation for loop, policy, and trace integrations.
+  command: pytest codex/code/work/tests -q
+public_interfaces:
+  - name: codex.code.work.dsl.trace.TraceEventEmitter.attach_validator
+    description: Registers a callable that validates each emitted event before it is stored or forwarded.
+  - name: codex.code.work.dsl.flow_runner.FlowRunner.run
+    description: Executes nodes (including loop bodies) via adapters with policy and budget enforcement plus trace emission.
+  - name: codex.code.work.dsl.flow_runner.NodeExecution
+    description: Immutable execution record capturing node id, tool, result, and optional loop iteration metadata.
+extension_hooks:
+  - hook: TraceEventEmitter.attach_sink
+    extension: Forward validated events to structured logging or telemetry systems.
+  - hook: FlowRunner._run_loop
+    extension: Override loop scheduling or tracing behaviour for advanced DSL constructs.
+configurable_options:
+  - name: BudgetSpec.breach_action
+    values: [stop, warn]
+    default: stop
+  - name: Loop node stop.max_iterations
+    values: integer >= 0 (0 interpreted as no iterations)
+    default: 0
+automation_triggers:
+  - trigger: PolicyStack.enforce
+    outcome: Prevents adapter execution when policies deny the tool, leaving budgets untouched.
+  - trigger: BudgetManager.record_breach
+    outcome: Emits immutable breach payloads prior to stop decisions.
+error_contracts:
+  - name: BudgetBreachError
+    raised_when: A budget preview detects a blocking outcome (run/node/loop scope) that requires halting execution.
+    payload: Includes the scope metadata and immutable BudgetChargeOutcome snapshot.
+  - name: PolicyViolationError
+    raised_when: PolicyStack denies a tool before execution; FlowRunner emits `policy_violation` traces and re-raises.
+serialization:
+  trace_payloads: MappingProxy-based payloads with cost, remaining, overage, loop identifiers, and iteration counters.
+  node_execution: Dataclass serialisable to dict for debugging or history persistence.
+lifecycle:
+  - run_scope.enter -> (loop_start?)* -> node_start -> budget preview -> optional breach -> commit -> adapter.execute -> node_complete -> loop_complete -> run_complete
+  - BudgetManager history retains last spent snapshot per scope for inspection after exit.
+typing:
+  language: Python 3.12
+  typing: Protocol for adapters, dataclasses for DTOs, explicit Optional typing for loop context.
+security:
+  - Policy enforcement occurs before adapter execution; adapters themselves must remain trusted.
+  - Trace validators can enforce schema constraints to prevent leaking malformed payloads to sinks.
+performance:
+  - Loop orchestration reuses synchronous previews/commits; overhead is linear in executed nodes.
+  - Validator hook introduces negligible cost unless the callable performs heavy schema validation.
