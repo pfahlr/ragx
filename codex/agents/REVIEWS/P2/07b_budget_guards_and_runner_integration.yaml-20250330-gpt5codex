@@ -1,0 +1,51 @@
+metadata:
+  reviewer: gpt-5-codex
+  generated_at: 2025-03-30T00:00:00Z
+  source_task: codex/agents/TASKS/07b_budget_guards_and_runner_integration.yaml
+comparative_review:
+  - label: "Branch: codex/integrate-budget-guards-with-runner"
+    bullets:
+      - "Strengths: retains the adapter-driven FlowRunner path with live tool adapters and baseline acceptance harness intact, preserving end-to-end execution fidelity." 
+      - "Weaknesses: budget enforcement still revolves around dict-based `BudgetChargeResult`/`BudgetWarning` plumbing, so cost normalization and breach metadata remain loosely typed and leak mutable mappings into callers." 
+      - "Trace/Test posture: exercises legacy runner tests but lacks coverage for richer budget telemetry or policy trace parity, leaving push/pop/policy events unvalidated under budget stress." 
+  - label: "Branch: codex/integrate-budget-guards-with-runner-zwi2ny"
+    bullets:
+      - "Strengths: introduces immutable `BudgetSpec`/`CostSnapshot` dataclasses plus a `TraceWriter` abstraction, yielding deterministic payloads and a reusable sink contract." 
+      - "Weaknesses: replaces adapter execution with `_execute_node` mock costs, mutates the DSL schema (`spec['graph']`), and leaves missing imports/double breach emission bugs that destabilize runtime semantics." 
+      - "Trace/Test posture: emits structured `budget_charge`/`budget_breach` events yet drops e2e adapter coverage; no regression asserts loop stop behavior or policy enforcement coupling." 
+  - label: "Branch: codex/integrate-budget-guards-with-runner-pbdel9"
+    bullets:
+      - "Strengths: upgrades `BudgetCharge` payloads with immutable `remaining`/`overages` snapshots and keeps adapter-based FlowRunner orchestration plus timestamped tracing." 
+      - "Weaknesses: charges mutate `_spent` before rejecting hard breaches, lacks epsilon guards on float accumulation, and bypasses `breach_action="stop"` once exceptions bubble, so loop soft stops regress." 
+      - "Trace/Test posture: maintains baseline hard/soft budget unit tests but omits assertions on the new trace payloads or adapter protocol changes, risking silent contract drift." 
+  - label: "Branch: codex/implement-budget-guards-with-test-first-approach"
+    bullets:
+      - "Strengths: layers a comprehensive `BudgetManager` orchestrating run/node/loop scopes with preflight vs commit semantics and immutable trace events, aligning with policy trace architecture." 
+      - "Weaknesses: FlowRunner is stubbed (plan/run raise NotImplementedError), so no actual execution, adapter calls, or budget enforcement occurs; the redesign cannot satisfy acceptance tests without major fill-in." 
+      - "Trace/Test posture: extensive unit coverage around the manager but e2e runner suites are removed, eliminating decision/loop stop checks and policy/budget integration tests." 
+  - label: "Branch: codex/implement-budget-guards-with-test-first-approach-qhq0jq"
+    bullets:
+      - "Strengths: formalizes `BudgetMode`, `Cost`, and preview (`BudgetCheck`) vs commit (`BudgetCharge`) flows, enabling deterministic loop preflight and structured breach reporting." 
+      - "Weaknesses: runner assumes full execution context yet stubs adapter outputs, diverges from 07b DSL scope expectations, and duplicates trace plumbing without reconciling with existing sinks." 
+      - "Trace/Test posture: warns/raise pathways exist but no integration tests cover node/spec budgets or ensure trace payload schemas remain aligned with policy events." 
+  - label: "Branch: codex/implement-budget-guards-with-test-first-approach-8wxk32"
+    bullets:
+      - "Strengths: adopts immutable `Cost`/`BudgetDecision` dataclasses with arithmetic helpers, providing precise remaining snapshots and reusable preview decisions." 
+      - "Weaknesses: relies on `last_decision` side effects for `can_spend`, mixes millisecond units with second-based inputs, and leaves loop/run wiring incomplete so predictive stops read stale data." 
+      - "Trace/Test posture: focuses on decision serialization/arithmetics but omits loop stop and trace emission regression tests, so scope handling remains unproven." 
+  - label: "Branch: codex/implement-budget-guards-with-test-first-approach-fa0vm9"
+    bullets:
+      - "Strengths: captures `BudgetBreach` diagnostics with level/limit/attempted fields, injects `budget_factory` for dependency inversion, and preserves adapter-driven runner loop wiring." 
+      - "Weaknesses: still leans on mutable dict normalization, never propagates soft-breach signals into stop decisions, and leaves policy enforcement disconnected from budget outcomes." 
+      - "Trace/Test posture: keeps legacy e2e coverage but lacks new assertions for breach metadata or shared trace schema, so observability benefits remain unverified." 
+redundancy_or_hallucination_check:
+  - "No branch invents unsupported DSL scopes, but several duplicate trace recorder logic; ensure future synthesis avoids re-implementing writer abstractions already provided by zwi2ny." 
+synthesis_rationale:
+  - "Start from the proven adapter-driven FlowRunner baseline (codex/integrate-budget-guards-with-runner/pbdel9) to keep execution and stop-reason semantics intact." 
+  - "Adopt zwi2ny's immutable `BudgetSpec`/`CostSnapshot` types and trace-writer abstraction as the canonical data/observability layer." 
+  - "Fold in the BudgetManager orchestration idea from the test-first branch while reusing fa0vm9's breach metadata to surface diagnostics without sacrificing runtime wiring." 
+  - "Incorporate 8wxk32's arithmetic helpers only after resolving unit normalization, ensuring previews/charges share a consistent snapshot contract." 
+optional_enhancements:
+  - "Add schema-driven validation for budget trace events to prevent payload drift across policy/budget recorders." 
+  - "Introduce deterministic integration tests covering run/node/loop/spec budgets with both soft and hard breach actions, exercising adapter-based execution." 
+  - "Extract shared trace emission utilities into a dedicated module to satisfy observability reuse without duplicating logic across manager and runner layers." 
