@@ -1,0 +1,104 @@
+version: 1
+component: FlowRunnerBudgetIntegrationPrototype
+purpose: >-
+  Provide a deterministic FlowRunner slice that exercises budget enforcement and trace emission while
+  remaining decoupled from external adapters or persistence layers.
+cli_usage:
+  - command: python -m pytest codex/code/work/tests
+    description: Execute unit tests that verify cost normalisation, budget manager semantics, and runner loops.
+public_interfaces:
+  - module: codex.code.work.pkgs.dsl.costs
+    objects:
+      - name: normalize_cost
+        type: function
+        doc: Convert heterogeneous metrics into canonical integers and validate keys.
+      - name: accumulate_cost
+        type: function
+        doc: Sum two cost dictionaries while preserving schema validation.
+  - module: codex.code.work.pkgs.dsl.budget
+    objects:
+      - name: BudgetSpec
+        type: dataclass
+        doc: Immutable configuration describing metric, limit, mode, and breach action.
+      - name: BudgetChargeOutcome
+        type: dataclass
+        doc: Structured result for trace payloads and diagnostics.
+      - name: BudgetMeter
+        type: class
+        doc: Per-scope counter enforcing soft/hard/stop semantics.
+      - name: BudgetBreachError
+        type: exception
+        doc: Raised when a hard budget cannot be honoured.
+      - name: BudgetStopSignal
+        type: exception
+        doc: Signals loop stop conditions without marking run failure.
+  - module: codex.code.work.pkgs.dsl.budget_manager
+    objects:
+      - name: BudgetManager
+        type: class
+        doc: Registers scopes, charges costs, and emits trace payloads for each event.
+  - module: codex.code.work.pkgs.dsl.trace
+    objects:
+      - name: TraceEventEmitter
+        type: class
+        doc: Facade that wraps a TraceWriter and enforces immutable payload emission.
+  - module: codex.code.work.pkgs.dsl.policy
+    objects:
+      - name: PolicyStack
+        type: class
+        doc: Minimal allow/deny evaluator used during node execution.
+      - name: PolicyViolationError
+        type: exception
+        doc: Raised when a node attempts to execute a tool outside the effective allowlist.
+  - module: codex.code.work.pkgs.dsl.runner
+    objects:
+      - name: FlowRunner
+        type: class
+        doc: Executes nodes and loops using adapters with budget and policy enforcement.
+      - name: RunResult
+        type: dataclass
+        doc: Structured outcome containing status, outputs, and accumulated warnings.
+base_classes:
+  - class: BudgetError
+    module: codex.code.work.pkgs.dsl.budget
+    role: Shared base for all budget enforcement exceptions.
+extension_hooks:
+  - location: FlowRunner._execute_unit
+    description: Override to support additional node kinds (decision, transform) while reusing budget hooks.
+  - location: BudgetManager.register_scope
+    description: Attach scope metadata (tenant, environment) before trace emission when integrating with the full runner.
+configurable_options:
+  - name: BudgetSpec.mode
+    description: Toggle between `soft` and `hard` enforcement at scope registration time.
+  - name: FlowRunner.id_factory
+    description: Inject deterministic run identifiers for reproducible testing.
+automation_triggers:
+  - name: phase3_runner
+    description: Optional script placeholder for future CI automation of this prototype.
+error_contracts:
+  - name: BudgetBreachError
+    behaviour: Raises on hard budgets; carries `outcome` with scope, overage, and action fields.
+  - name: BudgetStopSignal
+    behaviour: Raised to halt loops; caller should treat as graceful stop.
+serialization:
+  payloads:
+    - name: budget_charge
+      format: immutable mapping proxy, ready for JSON serialisation by upstream TraceWriter implementations.
+    - name: policy_resolved
+      format: JSON-safe primitives containing sorted allow/deny tuples.
+lifecycle:
+  phases:
+    - name: run_start
+      description: Emitted before node traversal begins.
+    - name: per_node_execution
+      description: Executes tool adapters, charges budgets, and appends outputs.
+    - name: run_end
+      description: Final trace event capturing terminal status.
+typing_notes:
+  - All public functions are type hinted for Python 3.12; enums and dataclasses support static analysis tooling.
+security_considerations:
+  - No external I/O or subprocesses invoked; adapters are provided as in-memory doubles for tests.
+  - Policy enforcement currently limited to allow/deny lists; audit logging hooks can be added where `emit_policy_resolution` is called.
+performance_notes:
+  - Cost normalisation coerces to integers to keep arithmetic deterministic and lightweight.
+  - BudgetManager caches warnings per scope and clears them via `consume_warnings` to avoid repeated allocations.

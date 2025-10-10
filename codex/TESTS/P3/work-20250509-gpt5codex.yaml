@@ -1,0 +1,15 @@
+missing_tests:
+  task_id: 07b_budget_guards_and_runner_integration.yaml
+  proposed_tests:
+    - name: test_budget_manager_rejects_negative_costs
+      rationale: Ensure normalization rejects negative metrics rather than silently clamping, preventing inaccurate remaining budgets.
+      source_module: codex/code/work/pkgs/dsl/costs.py
+      priority: medium
+    - name: test_flow_runner_policy_violation_traced
+      rationale: Validate that disallowed tools raise PolicyViolationError and emit `policy_violation` traces for observability.
+      source_module: codex/code/work/pkgs/dsl/runner.py
+      priority: high
+    - name: test_loop_budget_soft_warning_sequence
+      rationale: Cover soft loop budgets that warn but do not stop to ensure warnings propagate without breaking iteration counts.
+      source_module: codex/code/work/pkgs/dsl/runner.py
+      priority: medium

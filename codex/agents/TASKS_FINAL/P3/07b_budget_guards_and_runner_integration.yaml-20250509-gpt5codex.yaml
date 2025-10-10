@@ -1,0 +1,72 @@
+summary: Integrate a budget-aware FlowRunner with deterministic trace emission by combining canonical budget models, a scope-aware manager, and adapter-driven execution.
+justification: |
+  Previous phases converged on three pillars: (1) immutable budget value objects with explicit remaining/overage math, (2) a BudgetManager orchestrating preview/commit flows per scope, and (3) FlowRunner wiring that preserves adapter execution semantics while emitting TraceWriter-backed events. This plan fuses those agreements while addressing review findings about soft-budget handling, loop stop signalling, and cost normalization drift.
+steps:
+  - name: Establish canonical cost and budget models
+    description: Create normalized cost utilities and immutable budget dataclasses with breach semantics adopted from zwi2ny/pbdel9/qhq0jq branches.
+  - name: Implement BudgetManager orchestration
+    description: Provide run/node/loop/spec scope registration, preview, charge, and trace outcome emission hooks, ensuring soft warnings and stop signals are surfaced consistently.
+  - name: Rewire FlowRunner execution with adapters and traces
+    description: Build a runner loop that estimates and charges budgets, drives adapters, and emits policy/budget events via the shared TraceEventEmitter while supporting loop stop actions.
+modules:
+  - path: codex/code/work/pkgs/__init__.py
+    role: Package marker for pkgs namespace used by tests and runner modules.
+  - path: codex/code/work/pkgs/dsl/__init__.py
+    role: Namespace initializer ensuring the DSL modules are importable.
+  - path: codex/code/work/pkgs/dsl/costs.py
+    role: Houses cost normalization helpers to standardize seconds→milliseconds and metric validation.
+  - path: codex/code/work/pkgs/dsl/budget.py
+    role: Defines BudgetSpec, CostSnapshot, BudgetChargeOutcome, and BudgetMeter abstractions with immutable bookkeeping.
+  - path: codex/code/work/pkgs/dsl/budget_manager.py
+    role: Encapsulates scope-aware BudgetManager coordinating preview/charge lifecycle and trace metadata synthesis.
+  - path: codex/code/work/pkgs/dsl/trace.py
+    role: Provides TraceWriter protocol and TraceEventEmitter emitting immutable payloads for budget/policy events.
+  - path: codex/code/work/pkgs/dsl/policy.py
+    role: Implements a minimal PolicyStack enforcing allowlist/denylist semantics for runner integration.
+  - path: codex/code/work/pkgs/dsl/runner.py
+    role: Implements FlowRunner using adapters, PolicyStack, and BudgetManager to execute nodes/loops with trace emission.
+tests:
+  - path: codex/code/work/tests/test_costs_and_budget_manager.py
+    coverage: Validate normalization edge cases, BudgetMeter breach handling, and manager scope orchestration.
+    mocks: Use deterministic fake TraceWriter and clock/id factories.
+  - path: codex/code/work/tests/test_flow_runner_budget_integration.py
+    coverage: Ensure FlowRunner enforces run/node/loop budgets, emits trace payloads, and respects policy allowlists during adapter execution.
+    mocks: Fake adapters providing estimate/execute hooks with deterministic costs and outputs.
+run_order:
+  - tests/test_costs_and_budget_manager.py
+  - tests/test_flow_runner_budget_integration.py
+  - implement pkgs/dsl/costs.py
+  - implement pkgs/dsl/budget.py
+  - implement pkgs/dsl/budget_manager.py
+  - implement pkgs/dsl/trace.py
+  - implement pkgs/dsl/policy.py
+  - implement pkgs/dsl/runner.py
+interfaces:
+  budget_models:
+    description: BudgetSpec and BudgetChargeOutcome dataclasses consumed by BudgetManager and FlowRunner.
+  trace_emitter:
+    description: TraceEventEmitter exposes emit(event, payload) used by FlowRunner; wraps TraceWriter dependency.
+  tool_adapter_protocol:
+    description: Runner expects adapters with estimate(spec) and execute(spec) returning outputs+cost.
+tdd_coverage_targets:
+  - module: codex/code/work/pkgs/dsl/costs.py
+    target: 95
+  - module: codex/code/work/pkgs/dsl/budget.py
+    target: 90
+  - module: codex/code/work/pkgs/dsl/budget_manager.py
+    target: 90
+  - module: codex/code/work/pkgs/dsl/runner.py
+    target: 85
+review_checklist:
+  - All budget breach actions (warn, error, stop) produce expected outcomes and trace payloads.
+  - Cost normalization handles seconds/duration_ms consistently and rejects unknown metrics.
+  - FlowRunner stops loops on budget stop signals and surfaces run halt status.
+  - PolicyStack ensures only allowed tools execute and violations are traced.
+  - Tests cover run/node/loop scopes with both soft and hard budgets.
+outputs:
+  preview: PREVIEW/P3/07b_budget_guards_and_runner_integration.yaml-20250509-gpt5codex.md
+  review: REVIEW/P3/07b_budget_guards_and_runner_integration.yaml-20250509-gpt5codex.md
+  postexecution: POSTEXECUTION/P3/07b_budget_guards_and_runner_integration.yaml-20250509-gpt5codex.md
+  documentation: codex/DOCUMENTATION/P3/work-20250509-gpt5codex.yaml
+  missing_tests: codex/TESTS/P3/work-20250509-gpt5codex.yaml
+  optional_runner: codex/code/07b_budget_guards_and_runner_integration.yaml/phase3_runner.py
