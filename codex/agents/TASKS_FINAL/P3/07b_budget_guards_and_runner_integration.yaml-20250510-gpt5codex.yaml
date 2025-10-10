@@ -1,0 +1,62 @@
+summary: "Phase 3 integrates canonical budget manager and FlowRunner wiring with trace emission"
+justification: |
+  Previous phases concluded that we must merge the object-oriented BudgetManager from test-first branches
+  with the adapter-driven FlowRunner while retaining immutable telemetry. The plan consolidates cost
+  normalization, breach semantics, and trace emission so we can validate run/node/loop scopes with
+  deterministic fixtures before filling in the implementation.
+steps:
+  - name: finalise_cost_normalization
+    description: Implement shared helpers to convert adapter estimates into canonical millisecond/token costs.
+  - name: budget_manager_scopes
+    description: Build BudgetManager preview/commit lifecycle with immutable outcomes for run/node/loop/spec scopes.
+  - name: trace_emitter_contract
+    description: Provide TraceEventEmitter that decorates TraceWriter to emit schema-compliant budget events.
+  - name: runner_integration
+    description: Wire FlowRunner to use adapters, BudgetManager, and TraceEventEmitter while respecting policy placeholders.
+modules:
+  - path: codex/code/phase3_budget_runner_r7h3/dsl/costs.py
+    role: Canonical cost normalization utilities shared across manager and runner.
+  - path: codex/code/phase3_budget_runner_r7h3/dsl/budget.py
+    role: Budget dataclasses, BudgetMode enum, BudgetManager orchestration, and outcome objects.
+  - path: codex/code/phase3_budget_runner_r7h3/dsl/trace.py
+    role: TraceWriter protocol and TraceEventEmitter responsible for immutable payload emission.
+  - path: codex/code/phase3_budget_runner_r7h3/dsl/runner.py
+    role: FlowRunner facade coordinating adapters, policy hooks, and budget enforcement with traces.
+tests:
+  - path: codex/code/phase3_budget_runner_r7h3/tests/test_costs_and_manager.py
+    coverage: Validate normalization edge cases, BudgetManager warnings/stops/errors, and immutable outcomes.
+    mocks: Use fake clock/id factories and stub TraceWriter.
+  - path: codex/code/phase3_budget_runner_r7h3/tests/test_flow_runner_budget_integration.py
+    coverage: Exercise FlowRunner across loop iterations, soft/hard breaches, and trace sequencing with fake adapters.
+    mocks: Provide deterministic adapters and policy stack double.
+run_order:
+  - pytest codex/code/phase3_budget_runner_r7h3/tests/test_costs_and_manager.py
+  - pytest codex/code/phase3_budget_runner_r7h3/tests/test_flow_runner_budget_integration.py
+interfaces:
+  - name: TraceWriter
+    contract: emit(event: str, payload: Mapping[str, Any]) -> None returning immediately.
+  - name: ToolAdapter
+    contract: estimate(context) -> Mapping[str, float]; execute(context) -> Dict[str, Any].
+  - name: BudgetManager
+    contract: preview(scope, cost) -> BudgetCheck; commit(scope, cost, metadata) -> BudgetChargeOutcome.
+tdd_coverage_targets:
+  - module: dsl/budget.py
+    threshold: 0.85
+  - module: dsl/runner.py
+    threshold: 0.8
+review_checklist:
+  - Ensure cost normalization enforces milliseconds and immutable payloads.
+  - Verify BudgetManager handles warn/stop/error consistently and exposes diagnostics.
+  - Confirm FlowRunner emits budget_charge and budget_breach events in deterministic order.
+  - Validate adapters are exercised in tests (no mocks bypassing lifecycle).
+outputs:
+  costs_module: codex/code/phase3_budget_runner_r7h3/dsl/costs.py
+  budget_module: codex/code/phase3_budget_runner_r7h3/dsl/budget.py
+  trace_module: codex/code/phase3_budget_runner_r7h3/dsl/trace.py
+  runner_module: codex/code/phase3_budget_runner_r7h3/dsl/runner.py
+  tests_primary: codex/code/phase3_budget_runner_r7h3/tests/
+  documentation_preview: codex/agents/PREVIEW/P3/07b_budget_guards_and_runner_integration.yaml-20250510-gpt5codex.md
+  documentation_review: codex/agents/REVIEW/P3/07b_budget_guards_and_runner_integration.yaml-20250510-gpt5codex.md
+  documentation_postexecution: codex/agents/POSTEXECUTION/P3/07b_budget_guards_and_runner_integration.yaml-20250510-gpt5codex.md
+  developer_metadata: codex/DOCUMENTATION/P3/phase3_budget_runner_r7h3-20250510-gpt5codex.yaml
+  missing_tests: codex/TESTS/P3/phase3_budget_runner_r7h3-20250510-gpt5codex.yaml
