@@ -1,0 +1,43 @@
+metadata:
+  reviewer: gpt-5-codex
+  date: 2024-05-16
+  repo: pfahlr/ragx
+  task: 07a_dsl_policy_engine_completion
+analysis: |
+  Branch: codex/implement-dsl-policy-engine-in-yaml
+  - Policy stack stores a normalized tool registry (tags validated, cycle-safe tool-set expansion) and enforces scope discipline on pop(), giving us the cleanest baseline for registry hygiene and stack safety. PolicyTraceRecorder + PolicyTraceEvent provide deterministic traces, though there is no optional sink for downstream logging.
+  - effective_allowlist() respects nearest-wins per dimension by walking the stack in reverse, unions allow_tools with allow_tags at evaluation time, and records denial reasons (`denied:tool:*`, `denied:tag:*`, `not_in_allowlist`). However, it recomputes tool-set expansion each call and never emits which layer granted access, leaving diagnostics minimal versus the richer detail in other branches.
+  - FlowLinter() checks unit nodes and fallbacks against the current stack, but it only considers globals.policy + node.policy; graph-level, decision-option, and loop scopes are ignored so unreachable branches slip through. Tests cover allow/tag merges and fallback validation yet omit decisions/loops and pop() mismatch cases.
+  - Unique contributions: robust normalization, cycle detection during push, scope-checked pop(), compact PolicyResolution with read-only mapping, and an inline trace recorder compatible with spec semantics.
+
+  Branch: codex/implement-dsl-policy-engine-in-yaml-81p0id
+  - PolicyStack here flattens traces to PolicyEvent entries and introduces PolicyDecision (per-candidate) plus optional candidate filtering. Unfortunately, evaluation iterates frames in FIFO order and the allow/deny helpers only turn tools OFF—once a global frame filters a tool out, later (more local) scopes cannot re-allow it. That violates the spec's "nearest wins" rule and prevents branch overrides; tests never catch it.
+  - Normalization is shallow (no iterable/type validation, no cycle detection), pop() drops frames without scope verification, and `_resolve_tool_refs` allows recursive tool sets without guardrails. ValueError on empty tool registries makes linting partial flows brittle.
+  - lint_unreachable_tools adds decision-branch analysis and fallback reasoning but still ignores loop control scopes and never inspects globals.policy. Tests cover candidate filtering and branch diagnostics yet miss denial precedence and error handling for unknown refs.
+  - Unique contributions worth salvaging: candidate-focused PolicyDecision diagnostics, trace payload contents (`candidates`, `stack_depth`), and decision-branch lint coverage. Major regressions: scoping precedence, irreversible allowlist filters, missing validation.
+
+  Branch: codex/implement-dsl-policy-engine-in-yaml-reclz1
+  - Introduces ToolDescriptor model, PolicyDecision detail (`allowed`, `source`, `scope`, `detail`), and PolicyResolution.decisions map. Clone() enables branch exploration and the linter indexes loop + decision policies to build per-path stacks, giving the most complete reachability analysis.
+  - However, PolicyStack lacks a tool registry altogether; callers must pass tool maps into effective_allowlist() every time. Without registry ownership, push() can't validate allow/deny references, `_expand_tool_entries` silently accepts unknown names, and tool-set cycles remain unchecked. Multiple imports (Iterable, Sequence, MutableSequence) are missing, so the module will not run as-is. Empty/falsey policies are dropped on push() which prevents explicit clears.
+  - Tests emphasise hierarchical overrides and implicit deny, but never exercise tool-set validation, cycle errors, or stack pop mismatch. Linter tests ensure branch policies unblock paths, yet no loop iteration budget or scope enforcement checks exist.
+  - Unique contributions: ToolDescriptor normalization, per-tool decision provenance, branch/loop-aware linter scaffolding, and clone() reuse. Must fix missing imports and registry validation to make it viable.
+
+  Branch: codex/implement-dsl-policy-engine-in-yaml-yp01n0
+  - Adds PolicyDenial, PolicySnapshot, an enforce() API with PolicyViolationError, and optional event sink wiring for policy_push/pop/violation—all valuable for runner integration and observability. Allow/deny normalization validates entries and records provenance strings.
+  - Core logic is flawed: allowed tools start as the entire registry and every policy frame intersects (`allowed &= subset`). Thus a narrower upstream allowlist permanently removes tools; downstream scopes cannot widen access, again breaking nearest-wins semantics. Deny reasons default to the latest scope even when earlier frames blocked the tool, muddying diagnostics.
+  - Tool/tag expansion runs against stored registry so unknown names raise immediately, but tool_sets are required (no default {}). `effective_allowlist` never caches results and recomputes tags each time. Linter reuses the stack but only looks at globals/flow policy + node policies; loops, decisions, and branch overrides are absent. Tests rely on reading codex/specs/ragx_master_spec.yaml and miss imports (Path, yaml fixtures), so they fail before reaching assertions.
+  - Unique contributions: enforcement API with violation trace emission, PolicySnapshot for bulk inspection, and richer denial metadata. Major regressions: allowlist intersection semantics, overreliance on external spec file in tests, and sparse linter coverage.
+
+  Redundancy / hallucination check
+  - No branch invents unsupported DSL directives, but 81p0id and yp01n0 both hallucinate FIFO scope precedence that contradicts the spec. reclz1 omits registry ownership entirely, assuming callers supply descriptors each time. Tests in yp01n0 hallucinate spec fields (`tool_registry`, `tool_sets`) at top level instead of using globals.tools/tool_sets.
+
+  Synthesis rationale
+  - Use codex/implement-dsl-policy-engine-in-yaml as the structural baseline for registry normalization, cycle-safe tool-set expansion, scope-checked stack ops, and trace recorder contract.
+  - Merge reclz1's ToolDescriptor + per-tool PolicyDecision diagnostics and its branch/loop-aware linter traversal (after fixing imports and registry validation) to provide richer decision provenance.
+  - Incorporate yp01n0's PolicyDenial/PolicySnapshot/enforce() + optional event sink, but rewrite allowlist evaluation to honour LIFO precedence and union semantics instead of intersection.
+  - Borrow 81p0id's trace payload structure (candidate lists, stack depth) for trace enrichment while retaining LIFO semantics and validation from the baseline.
+
+  Optional enhancements
+  - Extract a shared trace_event_emitter that can broadcast to both the in-memory recorder and optional external sinks (per codex directives).
+  - Add targeted tests for decision-option overrides, loop scope propagation, tool-set cycle detection, and pop() scope mismatch to lock in behaviour.
+  - Cache normalized ToolDescriptor registry and tag indexes to avoid recomputation inside effective_allowlist and linter paths.
