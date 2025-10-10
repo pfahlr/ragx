@@ -1,0 +1,101 @@
+plan_preview:
+  branch_inclusions:
+    - codex/integrate-budget-guards-with-runner: base PolicyStack + minimal budget meter contract
+    - codex/integrate-budget-guards-with-runner-pbdel9: structured BudgetCharge payloads for diagnostics
+    - codex/integrate-budget-guards-with-runner-zwi2ny: trace writer abstraction and CostSnapshot math
+    - codex/implement-budget-guards-with-test-first-approach: BudgetManager preflight/commit separation
+    - codex/implement-budget-guards-with-test-first-approach-fa0vm9: loop execution and adapter orchestration
+  conflict_resolution:
+    - Normalize all cost structures to `usd/tokens/calls/time_ms` and convert seconds input on ingest.
+    - Collapse exception surface to `BudgetBreachError` + `PolicyViolationError`, mapping branch-specific names to spec.
+    - Unify tracing via a single recorder emitting `policy_*` and `budget_*` events with schema-backed payloads.
+  exclusions:
+    - Drop bespoke enums (`BudgetMode`, `BudgetDecision`) in favor of lightweight dataclasses with explicit fields.
+    - Remove implicit loop defer logic baked into meters; loop stop semantics belong in runner control flow.
+  open_questions:
+    - Should BudgetManager stream traces to the same recorder as PolicyStack or expose a secondary channel?
+    - Do adapters need async hooks for estimation or is synchronous cost reporting sufficient for MVP?
+refinement_opportunities:
+  - Isolate cost normalization into `pkgs/dsl/models.py` so PolicyStack and BudgetManager share immutable DTOs.
+  - Introduce schema validation for trace payloads (jsonschema or pydantic-lite) to catch contract drift early.
+shared_blocks:
+  - name: budget_cost_model
+    implementation: |
+      @dataclass(frozen=True, slots=True)
+      class CostSnapshot:
+          usd: float = 0.0
+          tokens: float = 0.0
+          calls: float = 0.0
+          time_ms: float = 0.0
+
+          @classmethod
+          def from_mapping(cls, payload: Mapping[str, object]) -> "CostSnapshot":
+              return cls(
+                  usd=_coerce_float(payload.get("usd")),
+                  tokens=_coerce_float(payload.get("tokens")),
+                  calls=_coerce_float(payload.get("calls")),
+                  time_ms=_normalize_time(payload.get("time_ms"), payload.get("time_sec")),
+              )
+  - name: trace_event_emitter
+    implementation: |
+      def emit_trace(recorders: Sequence[Callable[[dict[str, object]], None]], **payload: object) -> None:
+          frozen = mapping_proxy(payload)
+          for sink in recorders:
+              sink(frozen)
+tasks:
+  - id: establish_budget_domain_model
+    execution_mode: always
+    reusable: true
+    description: >
+      Rebuild BudgetMeter around CostSnapshot, BudgetCharge, and BudgetWarning DTOs while preserving cycle/unknown-tool validation.
+      Merge best of pbdel9 diagnostics with zwi2ny normalization, ensuring seconds inputs are converted to milliseconds.
+    source_files:
+      - pkgs/dsl/budget.py
+      - pkgs/dsl/models.py
+    adapted_from_branch: codex/integrate-budget-guards-with-runner-pbdel9
+    implementation_ref: budget_cost_model
+    tests:
+      - name: test_budget_meter_limits_hard_and_soft
+        file: tests/unit/test_budget_meter_limits.py
+  - id: introduce_budget_manager_layer
+    execution_mode: always
+    reusable: true
+    description: >
+      Restore BudgetManager preflight/commit APIs with deterministic trace emission and shared recorder wiring.
+      Align exception handling with PolicyViolationError while reusing CostSnapshot math.
+    source_files:
+      - pkgs/dsl/budget.py
+      - pkgs/dsl/trace.py
+    adapted_from_branch: codex/implement-budget-guards-with-test-first-approach
+    dependencies: [establish_budget_domain_model]
+    tests:
+      - name: test_flow_runner_budget_manager
+        file: tests/unit/test_flow_runner_budget_manager.py
+  - id: integrate_runner_budget_guards
+    execution_mode: always
+    reusable: false
+    description: >
+      Wire FlowRunner loop execution to BudgetManager, emit budget/policy traces, and respect breach_action semantics.
+      Use fa0vm9 loop orchestration but collapse onto shared trace emitter to avoid duplicate plumbing.
+    source_files:
+      - pkgs/dsl/runner.py
+      - pkgs/dsl/trace.py
+    adapted_from_branch: codex/implement-budget-guards-with-test-first-approach-fa0vm9
+    dependencies: [introduce_budget_manager_layer]
+    tests:
+      - name: test_runner_budget_stop
+        file: tests/e2e/test_runner_budget_stop.py
+      - name: test_policy_stack_enforce
+        file: tests/unit/test_policy_stack_enforce.py
+handoff_contract:
+  expected_consumer: gpt-5-codex
+  input_format: schema://codex/specs/schemas/full_task.schema.json
+  output_type: executable-python+unit-tests
+codex_directives:
+  must:
+    - attribute reused logic to specific branches
+    - emit `policy_resolved` trace
+    - reuse shared trace recorder between policy and budget layers
+  do_not:
+    - introduce asynchronous adapters in runner
+    - change task acceptance criteria
