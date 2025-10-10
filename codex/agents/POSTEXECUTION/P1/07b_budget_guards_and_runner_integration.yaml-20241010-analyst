@@ -1,0 +1,15 @@
+post_execution_feedback:
+  was_successful: null
+  failed_tasks: []
+  recommended_revisions: []
+handoff_contract:
+  expected_consumer: gpt-5-codex
+  input_format: schema://codex/specs/schemas/full_task.schema.json
+  output_type: executable-python+unit-tests
+codex_directives:
+  must:
+    - attribute reused logic to specific branches
+    - emit policy_resolved trace
+  do_not:
+    - invent new tools or APIs not evidenced in branch diffs
+    - skip PolicyViolationError enforcement path
