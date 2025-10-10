@@ -1,0 +1,15 @@
+missing_tests:
+  task_id: 07b_budget_guards_and_runner_integration.yaml
+  proposed_tests:
+    - name: test_budget_manager_multiple_metrics
+      rationale: Validate simultaneous breaches across heterogeneous metrics and ensure warnings aggregate correctly.
+      source_module: codex/code/work/budget.py
+      priority: medium
+    - name: test_flow_runner_commit_stop_reason
+      rationale: Cover scenarios where commit-stage stop is triggered after execution to assert stop_reason == "budget_commit" and confirm node_end traces still emit.
+      source_module: codex/code/work/runner.py
+      priority: high
+    - name: property_budget_normalisation_invariants
+      rationale: Use property-based testing to ensure `_normalize_cost` handles decimal inputs and ignores unsupported metrics deterministically.
+      source_module: codex/code/work/budget.py
+      priority: medium

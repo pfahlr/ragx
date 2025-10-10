@@ -1,0 +1,97 @@
+summary:
+  component: codex.code.work.runner.FlowRunner
+  purpose: Coordinated execution harness combining policy enforcement with budget metering and trace emission.
+  status: experimental
+cli:
+  usage: Not exposed via CLI; instantiate `FlowRunner` from application code with adapter, policy, and budget manager collaborators.
+interfaces:
+  - name: TraceEventEmitter.emit
+    description: Normalises payloads and forwards trace events to optional sinks.
+    parameters:
+      event: Event name string (e.g., `budget_charge`, `policy_violation`).
+      scope: Identifier for the entity emitting the event.
+      payload: Mapping serialised via `mapping_proxy` to ensure immutability.
+    returns: `TraceEvent` instance captured locally and optionally forwarded.
+  - name: BudgetManager.preflight
+    description: Calculates projected remaining budgets and determines whether execution may proceed.
+    parameters:
+      scope: Budget scope identifier (run/loop/node/etc.).
+      projected_cost: Mapping of metrics to estimated spend.
+    returns: `BudgetCheck` with remaining budgets, breaches, warnings, and stop flag.
+  - name: BudgetManager.commit
+    description: Persists cost spend, emits trace events, and returns immutable diagnostics.
+    parameters:
+      scope: Budget scope identifier.
+      actual_cost: Mapping of metrics to realised spend.
+    returns: `BudgetChargeOutcome` including spent totals, remaining limits, breaches, and stop indicator.
+  - name: FlowRunner.run
+    description: Executes each node via the adapter, enforcing policies and budgets until completion or stop.
+    parameters:
+      flow: `FlowDefinition` containing run scope and ordered node list.
+    returns: `RunResult` with executed node records, warnings, and optional stop reason.
+extension_points:
+  adapters:
+    protocol: `ToolAdapter`
+    methods:
+      - name: estimate
+        contract: Return deterministic cost estimates keyed by metric names.
+      - name: execute
+        contract: Execute node work and return (result payload, actual cost mapping).
+  policies:
+    component: `PolicyStack`
+    hooks:
+      - enforce(node)
+configuration:
+  options:
+    - name: BudgetSpec.breach_action
+      type: enum[warn|stop]
+      default: stop
+      description: Controls whether soft-mode budgets halt execution or emit warnings.
+automation:
+  triggers:
+    - on `budget_breach` events consumers may halt downstream orchestration or alert operators.
+    - trace buffers can feed structured logging pipelines as defined in Phase-2 specs.
+errors:
+  - name: PolicyViolationError
+    raised_by: `PolicyStack.enforce`
+    contract: Raised when tool is denied; trace event `policy_violation` emitted prior to exception.
+  - name: KeyError
+    raised_by: `BudgetManager.preflight/commit`
+    contract: Unknown scope requested; caller must register scope beforehand.
+serialization:
+  events:
+    - name: budget_charge
+      payload:
+        charged: Mapping[str, float]
+        spent: Mapping[str, float]
+        remaining: Mapping[str, float]
+        overages: Mapping[str, float]
+        warnings: tuple[str, ...]
+    - name: budget_breach
+      payload:
+        breaches: list[metric, limit, observed/ projected, overage]
+        stop: bool (commit phase)
+        phase: preflight|commit (optional)
+    - name: policy_resolved
+      payload:
+        tool: str
+        status: allowed
+    - name: policy_violation
+      payload:
+        tool: str
+lifecycle:
+  phases:
+    - configure BudgetSpecs and TraceEventEmitter
+    - instantiate BudgetManager, PolicyStack, FlowRunner with shared emitter
+    - execute FlowRunner.run; inspect RunResult and trace buffer
+    - drain trace emitter to logging sinks or tests
+typing:
+  strict: Uses dataclasses with type annotations; mypy-compatible when repository config enables checking of codex modules.
+security:
+  trust_boundary: FlowRunner does not execute untrusted code; adapter implementations must guard against unsafe inputs.
+  considerations:
+    - Trace payloads avoid embedding secrets; adapters should scrub sensitive data before returning results.
+performance:
+  notes:
+    - Budget arithmetic is O(metrics) per node; metrics sets are expected to remain small (tokens/time counts).
+    - Trace emission involves mapping_proxy copies to guarantee immutability; overhead acceptable for DSL control-plane workloads.

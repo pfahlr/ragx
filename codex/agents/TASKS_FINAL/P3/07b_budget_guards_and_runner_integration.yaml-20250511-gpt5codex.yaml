@@ -1,0 +1,77 @@
+summary: Integrate immutable budget domain models with a trace-aware FlowRunner harness while preserving adapter and policy wiring.
+justification: |
+  Phase-2 reviews identified the need to combine the stable adapter-driven FlowRunner with
+  immutable budget models, a cohesive BudgetManager, and trace emission shared between
+  policy and budget layers. The chosen approach keeps the baseline runner execution but
+  layers an object-oriented budget subsystem that normalises costs and honours soft vs
+  hard breach semantics. Trace events are funnelled through a reusable emitter to avoid
+  the mutable payload regressions flagged across prior branches.
+steps:
+  - id: domain_models
+    description: Establish immutable budget dataclasses and helpers for cost normalisation.
+    rationale: Aligns with zwi2ny and pbdel9 strengths while removing mutable charge state.
+  - id: manager_orchestration
+    description: Implement BudgetManager preflight/commit lifecycle with trace emission hooks.
+    rationale: Synthesises orchestration concepts from test-first branches and ensures
+      breach_action semantics are enforced consistently.
+  - id: runner_integration
+    description: Retrofit FlowRunner to invoke adapters, enforce policies, and coordinate
+      BudgetManager outcomes while emitting schema-aligned events.
+    rationale: Restores the baseline end-to-end loop highlighted in reviews and adds
+      coverage for combined policy+budget behaviour.
+modules:
+  - path: codex/code/work/budget.py
+    role: Budget data models, cost helpers, and BudgetManager orchestration.
+  - path: codex/code/work/trace.py
+    role: Shared TraceEvent/TraceEventEmitter abstractions for policy and budget events.
+  - path: codex/code/work/runner.py
+    role: FlowRunner facade coordinating adapters, policies, and budgets with trace outputs.
+tests:
+  - path: codex/code/work/tests/test_budget_manager.py
+    coverage_targets:
+      - BudgetManager preflight/commit soft and hard semantics
+      - Trace emission of budget_charge/budget_breach events
+    fixtures: deterministic trace recorder, fake scope specs
+  - path: codex/code/work/tests/test_flow_runner.py
+    coverage_targets:
+      - FlowRunner stop reasoning on budget breaches
+      - Policy trace emission alongside budget traces
+      - Node execution record integrity
+run_order:
+  - Write budget manager unit tests (fail expected)
+  - Write flow runner integration tests (fail expected)
+  - Implement trace emitter, budget module, then runner to satisfy tests
+  - Execute pytest for targeted suite
+interfaces:
+  - name: TraceEventEmitter.emit
+    contract: Accepts event metadata and produces immutable payload snapshots routed to optional sinks.
+  - name: BudgetManager.preflight
+    contract: Returns BudgetCheck including stop/warn semantics without mutating internal state.
+  - name: BudgetManager.commit
+    contract: Persists spend, emits traces, and returns BudgetChargeOutcome with immutable diagnostics.
+  - name: FlowRunner.run
+    contract: Executes nodes via adapter/policy checks, halting when BudgetManager instructs a stop.
+tdd_coverage_targets:
+  codex/code/work/budget.py: 0.9
+  codex/code/work/runner.py: 0.85
+  codex/code/work/trace.py: 0.8
+review_checklist:
+  - Validate cost normalisation handles unknown metrics deterministically.
+  - Ensure trace payloads use mapping_proxy to prevent mutation.
+  - Confirm FlowRunner stop reasons map to manager outcomes without exceptions.
+  - Check warnings vs hard-stop semantics align with BudgetMode and breach_action.
+outputs:
+  plan: codex/agents/TASKS_FINAL/P3/07b_budget_guards_and_runner_integration.yaml-20250511-gpt5codex.yaml
+  tests:
+    - codex/code/work/tests/test_budget_manager.py
+    - codex/code/work/tests/test_flow_runner.py
+  modules:
+    - codex/code/work/budget.py
+    - codex/code/work/trace.py
+    - codex/code/work/runner.py
+  documentation:
+    - PREVIEW/P3/07b_budget_guards_and_runner_integration.yaml-20250511-gpt5codex.md
+    - REVIEW/P3/07b_budget_guards_and_runner_integration.yaml-20250511-gpt5codex.md
+    - POSTEXECUTION/P3/07b_budget_guards_and_runner_integration.yaml-20250511-gpt5codex.md
+    - codex/DOCUMENTATION/P3/work-20250511-gpt5codex.yaml
+  missing_tests: codex/TESTS/P3/work-20250511-gpt5codex.yaml
