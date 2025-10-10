@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
+from copy import deepcopy
 from dataclasses import dataclass
 
 __all__ = ["CanonicalError"]
@@ -126,4 +127,5 @@ class CanonicalError:
         if not isinstance(template, _JsonRpcErrorTemplate):  # pragma: no cover - defensive
             raise TypeError("JSON-RPC mapping must be a _JsonRpcErrorTemplate")
         http_status = cls.to_http_status(code)
-        return template.build_payload(canonical_code=code, http_status=http_status)
+        payload = template.build_payload(canonical_code=code, http_status=http_status)
+        return deepcopy(payload)
