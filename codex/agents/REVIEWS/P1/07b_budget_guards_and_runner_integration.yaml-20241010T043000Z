@@ -1,0 +1,253 @@
+metadata:
+  last_updated: 2024-10-10T04:30:00Z
+  repo: pfahlr/ragx
+  tags: [dsl, codex_task, policy_engine, traceability, refactor]
+  execution_mode: plan_synthesis
+analysis:
+  branch_diffs:
+    - from: codex/integrate-budget-guards-with-runner
+      to: codex/integrate-budget-guards-with-runner-zwi2ny
+      git_diff: |
+        diff --git a/pkgs/dsl/runner.py b/pkgs/dsl/runner.py
+        index 0f8509b..1f2e0c4 100644
+        --- a/pkgs/dsl/runner.py
+        +++ b/pkgs/dsl/runner.py
+        @@ -1,261 +1,285 @@
+        +"""Minimal FlowRunner implementation with budget integration."""
+        +
+         from __future__ import annotations
+        
+        -import json
+        +import time
+         import uuid
+        -from collections.abc import Callable, Mapping
+        -from dataclasses import dataclass, field
+        -from pathlib import Path
+        +from collections.abc import Callable, Mapping, MutableMapping, Sequence
+        +from dataclasses import asdict, dataclass
+        +from types import MappingProxyType
+         from typing import Any
+        
+        -from .budget import BudgetBreachError, BudgetMeter
+        +from .budget import (
+        +    BudgetBreachHard,
+        +    BudgetChargeOutcome,
+        +    BudgetMeter,
+        +    BudgetRemaining,
+        +    BudgetSpec,
+        +    CostSnapshot,
+        +)
+        +from .trace import InMemoryTraceWriter, TraceWriter
+        
+        -__all__ = ["RunResult", "FlowRunner"]
+        +__all__ = ["FlowRunner", "RunResult"]
+        
+        
+        -@dataclass(slots=True)
+        +@dataclass(slots=True, frozen=True)
+         class RunResult:
+        -    """Minimal run result returned by :class:`FlowRunner`."""
+        +    """Structured result returned by :meth:`FlowRunner.run`."""
+      commentary: |
+        Branch `zwi2ny` layers a reusable `TraceWriter` abstraction and richer loop bookkeeping onto the base runner but keeps the policy stack identical.  It introduces `BudgetSpec`/`BudgetRemaining` types, yet their constructors are incomplete (no validation for unknown metrics), and loop control still assumes every control node is a loop, so policy hooks remain unused.
+    - from: codex/integrate-budget-guards-with-runner
+      to: codex/integrate-budget-guards-with-runner-pbdel9
+      git_diff: |
+        diff --git a/pkgs/dsl/runner.py b/pkgs/dsl/runner.py
+        index 0f8509b..991f000 100644
+        --- a/pkgs/dsl/runner.py
+        +++ b/pkgs/dsl/runner.py
+        @@ -1,261 +1,260 @@
+        +"""Minimal FlowRunner implementation with budget enforcement and tracing."""
+        +
+         from __future__ import annotations
+        
+        -import json
+        +import time
+         import uuid
+        -from collections.abc import Callable, Mapping
+        -from dataclasses import dataclass, field
+        -from pathlib import Path
+        +from collections.abc import Callable, Mapping, Sequence
+        +from dataclasses import dataclass
+         from typing import Any
+        
+        -from .budget import BudgetBreachError, BudgetMeter
+        +from .budget import BudgetBreachHard, BudgetError, BudgetMeter
+        +from .models import mapping_proxy
+        +
+        +__all__ = ["FlowRunner", "RunResult"]
+        
+        -__all__ = ["RunResult", "FlowRunner"]
+        +TraceEvent = Mapping[str, Any]
+      commentary: |
+        Branch `pbdel9` pushes further by normalising run/node outputs into immutable `mapping_proxy` views, adds explicit `TraceEvent` typing, and bifurcates hard-stop vs stop-on-breach behaviour.  However, budget events never emit `policy_resolved`/`violation` hooks and loop stopping only considers hard breaches—soft limits only log warnings without surfacing via stop reasons.
+    - from: codex/integrate-budget-guards-with-runner
+      to: codex/implement-budget-guards-with-test-first-approach
+      git_diff: |
+        diff --git a/pkgs/dsl/runner.py b/pkgs/dsl/runner.py
+        index 0f8509b..b9c7f2f 100644
+        --- a/pkgs/dsl/runner.py
+        +++ b/pkgs/dsl/runner.py
+        @@ -1,261 +1,75 @@
+        -from __future__ import annotations
+        -
+        -import json
+        -import uuid
+        -from collections.abc import Callable, Mapping
+        -from dataclasses import dataclass, field
+        -from pathlib import Path
+        -from typing import Any
+        -
+        -from .budget import BudgetBreachError, BudgetMeter
+        +"""FlowRunner scaffolding with budget integration hooks."""
+        +
+        +from __future__ import annotations
+        +
+        +from collections.abc import Mapping
+        +
+        +from .budget import BudgetManager
+        +from .trace import RunnerTraceRecorder
+        
+        -__all__ = ["RunResult", "FlowRunner"]
+        +__all__ = [
+        +    "FlowRunner",
+        +]
+      commentary: |
+        The `implement-budget-guards-with-test-first-approach` branch replaces the executable runner with a thin façade around an unimplemented `BudgetManager`.  While it sketches desirable entrypoints (`prepare_budgets`, recorder plumbing), it drops working enforcement, loop execution, and trace semantics—making it unsuitable without substantial fill-in.
+    - from: codex/integrate-budget-guards-with-runner
+      to: codex/implement-budget-guards-with-test-first-approach-qhq0jq
+      git_diff: |
+        diff --git a/pkgs/dsl/runner.py b/pkgs/dsl/runner.py
+        index 0f8509b..fc9bad1 100644
+        --- a/pkgs/dsl/runner.py
+        +++ b/pkgs/dsl/runner.py
+        @@ -1,261 +1,364 @@
+         from __future__ import annotations
+        
+        -import json
+        +import time
+         import uuid
+        -from collections.abc import Callable, Mapping
+        +from collections.abc import Callable, Mapping, Sequence
+         from dataclasses import dataclass, field
+        -from pathlib import Path
+        -from typing import Any
+        +from typing import cast
+        
+        -from .budget import BudgetBreachError, BudgetMeter
+        +from .budget import (
+        +    BudgetCharge,
+        +    BudgetCheck,
+        +    BudgetExceededError,
+        +    BudgetMeter,
+        +    BudgetMode,
+        +    Cost,
+        +)
+        
+        -__all__ = ["RunResult", "FlowRunner"]
+        +__all__ = [
+        +    "FlowRunner",
+        +    "RunResult",
+        +    "LoopSummary",
+        +    "LoopIterationContext",
+        +    "LoopIterationResult",
+        +]
+      commentary: |
+        Branch `qhq0jq` prototypes a richer execution contract—distinguishing loop summaries, adding preflight budget previews, and surfacing soft-limit warnings.  Its `BudgetMeter` supports mode-aware preview/charge and structured `BudgetCheck` results, but the runner never wires outputs or traces back into the PolicyStack, and it assumes a `BudgetMeter.from_spec` constructor not present elsewhere.
+    - from: codex/integrate-budget-guards-with-runner
+      to: codex/implement-budget-guards-with-test-first-approach-8wxk32
+      git_diff: |
+        diff --git a/pkgs/dsl/runner.py b/pkgs/dsl/runner.py
+        index 0f8509b..f21f1f3 100644
+        --- a/pkgs/dsl/runner.py
+        +++ b/pkgs/dsl/runner.py
+        @@ -1,261 +1,396 @@
+        +"""Minimal FlowRunner implementation focused on budget enforcement."""
+        +
+         from __future__ import annotations
+        
+        -import json
+        +import math
+        +import time
+         import uuid
+        -from collections.abc import Callable, Mapping
+        -from dataclasses import dataclass, field
+        -from pathlib import Path
+        +from collections.abc import Callable, Iterable, Mapping, Sequence
+        +from dataclasses import dataclass
+         from typing import Any
+        
+        -from .budget import BudgetBreachError, BudgetMeter
+        +from .budget import BudgetDecision, BudgetExceededError, BudgetMeter, Cost
+        +
+        +__all__ = [
+        +    "NodeExecution",
+        +    "RunResult",
+        +    "FlowRunner",
+        +]
+      commentary: |
+        Branch `8wxk32` introduces adapter-driven node execution, explicit cost modelling, and trace emission on run start/end.  It keeps hierarchical loop walking and budgets but lacks hard/soft differentiation (breach action never honoured) and the run result regenerates a new UUID instead of returning the run's actual id.
+    - from: codex/integrate-budget-guards-with-runner
+      to: codex/implement-budget-guards-with-test-first-approach-fa0vm9
+      git_diff: |
+        diff --git a/pkgs/dsl/runner.py b/pkgs/dsl/runner.py
+        index 0f8509b..1d3feb5 100644
+        --- a/pkgs/dsl/runner.py
+        +++ b/pkgs/dsl/runner.py
+        @@ -1,261 +1,418 @@
+         diff --git a/pkgs/dsl/runner.py b/pkgs/dsl/runner.py
+         index 0f8509b..1d3feb5 100644
+         --- a/pkgs/dsl/runner.py
+         +++ b/pkgs/dsl/runner.py
+         @@ -1,261 +1,418 @@
+         +"""Minimal FlowRunner implementation with budget integration."""
+         +
+          from __future__ import annotations
+        
+        -import json
+        -import uuid
+         from collections.abc import Callable, Mapping
+        -from dataclasses import dataclass, field
+        -from pathlib import Path
+        -from typing import Any
+        +from dataclasses import dataclass
+        +from types import MappingProxyType
+        +from typing import Any, Protocol
+        +from uuid import uuid4
+        
+        -from .budget import BudgetBreachError, BudgetMeter
+        +from .budget import BudgetBreach, BudgetCharge, BudgetExceededError, BudgetMeter
+        
+        -__all__ = ["RunResult", "FlowRunner"]
+        +
+        +class ToolAdapter(Protocol):
+        +    """Adapter interface used by the runner tests."""
+      commentary: |
+        Branch `fa0vm9` is the most feature-complete runner: it defines adapter protocols with estimate/execute phases, tracks nested loop contexts, and emits trace records on every charge/breach.  Its `BudgetMeter` supports preflight checks and breach metadata, but enforcement stops at per-node granularity—policy stack integration and unknown tool validation remain TODO, and returning a fresh run id on exit breaks trace correlation.
+  summary_of_findings:
+    common_flaws:
+      - None of the branches integrate the PolicyStack into the runner execution path, so tool allow/deny decisions never gate adapter execution.
+      - Soft budget breaches rarely influence control flow; only hard-mode loops stop, leaving soft warnings invisible to callers.
+      - Several runners regenerate a new run_id in the RunResult instead of reporting the id used during execution.
+    unique_strengths:
+      - Branch `zwi2ny` contributes the cleanest trace writer abstraction and consistent loop iteration telemetry.
+      - Branch `pbdel9` normalises outputs and trace payloads via `mapping_proxy`, ensuring immutability downstream.
+      - Branch `qhq0jq` implements budget preview semantics (`BudgetCheck`) that support both hard and soft guardrails before execution.
+      - Branch `fa0vm9` couples adapter protocols with hierarchical meter contexts, enabling reuse across unit and loop scopes.
+    critical_gaps:
+      - The stubbed `BudgetManager` branch removes executable logic entirely; adopting its interfaces would require substantial reimplementation.
+      - None of the variants validate unknown tools against the registry before enqueuing execution, leaving a gap in policy/budget alignment.
+      - Loop stop reasons and trace schema diverge across branches—no implementation emits the full `push`, `policy_resolved`, `policy_violation`, `pop` contract defined in the spec.
+confidence_notes:
+  - area: enforce() semantics
+    confidence: medium
+    reason: PolicyStack implementations are consistent, but no branch exercises the API end-to-end with the runner, so interaction bugs remain possible.
+coverage_gaps:
+  - missing: Unit tests for `policy_resolved` trace emission and PolicyViolationError pathways.
+  - missing: Regression coverage for loop budget breach actions across hard/soft modes.
+traceability_checklist:
+  - must-emit: push
+  - must-emit: pop
+  - must-emit: policy_resolved
+  - must-raise: PolicyViolationError
