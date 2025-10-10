@@ -200,7 +200,7 @@ analysis:
       - codex/implement-budget-guards-with-test-first-approach introduces a `BudgetManager` orchestration layer separating preflight vs commit flows.
     critical_gaps:
       - Branches with redesigned budgets (`zwi2ny`, `8wxk32`) omit necessary imports, preventing modules from loading.
-      - `implement-budget-guards-with-test-first-approach` removes executable runner logic altogether, blocking integration.
+      - "`implement-budget-guards-with-test-first-approach` removes executable runner logic altogether, blocking integration."
       - None of the branches validates cycles/unknown tool sets within budget specs when loops reference shared meters.
 confidence_notes:
   - area: enforce() semantics
