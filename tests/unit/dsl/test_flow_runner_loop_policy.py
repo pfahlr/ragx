@@ -1,14 +1,14 @@
 from __future__ import annotations
 
-from typing import Callable
+from collections.abc import Callable
 
 import pytest
 
-from codex.code.work.dsl import budget_models as bm
-from codex.code.work.dsl.budget_manager import BudgetManager
-from codex.code.work.dsl.flow_runner import FlowRunner, ToolAdapter
-from codex.code.work.dsl.trace import TraceEventEmitter
+from pkgs.dsl import budget_models as bm
+from pkgs.dsl.budget_manager import BudgetManager
+from pkgs.dsl.flow_runner import FlowRunner, ToolAdapter
 from pkgs.dsl.policy import PolicyStack, PolicyViolationError
+from pkgs.dsl.trace import TraceEventEmitter
 
 
 class LoopAwareAdapter(ToolAdapter):
@@ -94,7 +94,11 @@ def test_loop_scope_stop_emits_trace_and_breaks_iterations(
         "max_iterations": 5,
     }
 
-    results = runner.run(flow_id="flow-loop", run_id="run-loop", nodes=[loop_node])
+    results = runner.run(
+        flow_id="flow-loop",
+        run_id="run-loop",
+        nodes=[loop_node],
+    )
 
     assert [exec.node_id for exec in results] == ["node-a", "node-a"]
     assert [exec.iteration for exec in results] == [1, 2]
@@ -102,7 +106,10 @@ def test_loop_scope_stop_emits_trace_and_breaks_iterations(
 
     events = [(evt.event, evt.scope_type) for evt in trace_emitter.events]
     assert ("loop_start", "loop") in events
-    assert any(evt.event == "loop_stop" and evt.scope_id == "loop-1" for evt in trace_emitter.events)
+    assert any(
+        evt.event == "loop_stop" and evt.scope_id == "loop-1"
+        for evt in trace_emitter.events
+    )
     assert adapter.executed.count("node-a@1") == 1
 
 

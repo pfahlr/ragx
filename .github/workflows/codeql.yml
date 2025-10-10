@@ -1,6 +1,6 @@
 name: codeql
 
-on:
+'on':
   push:
     branches:
       - main

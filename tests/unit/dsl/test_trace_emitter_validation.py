@@ -1,6 +1,6 @@
 import pytest
 
-from codex.code.work.dsl.trace import TraceEventEmitter
+from pkgs.dsl.trace import TraceEventEmitter
 
 
 def _budget_validator(event):

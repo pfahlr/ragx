@@ -1,8 +1,8 @@
 import pytest
 
-from codex.code.work.dsl import budget_models as bm
-from codex.code.work.dsl.budget_manager import BudgetManager, BudgetBreachError
-from codex.code.work.dsl.trace import TraceEventEmitter
+from pkgs.dsl import budget_models as bm
+from pkgs.dsl.budget_manager import BudgetBreachError, BudgetManager
+from pkgs.dsl.trace import TraceEventEmitter
 
 
 @pytest.fixture()
@@ -57,7 +57,10 @@ class TestBudgetManager:
         with pytest.raises(BudgetBreachError):
             manager.commit_charge(decision)
         events = trace_emitter.events
-        assert any(evt.event == "budget_breach" and evt.payload["spec_name"] == "run-hard" for evt in events)
+        assert any(
+            evt.event == "budget_breach" and evt.payload["spec_name"] == "run-hard"
+            for evt in events
+        )
 
     def test_soft_breach_warns_but_commits(self, trace_emitter: TraceEventEmitter) -> None:
         manager = BudgetManager(

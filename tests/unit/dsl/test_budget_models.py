@@ -1,6 +1,6 @@
 import pytest
 
-from codex.code.work.dsl import budget_models as bm
+from pkgs.dsl import budget_models as bm
 
 
 class TestCostSnapshot:

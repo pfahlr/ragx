@@ -1,14 +1,18 @@
 import pytest
 
-from codex.code.work.dsl import budget_models as bm
-from codex.code.work.dsl.budget_manager import BudgetBreachError, BudgetManager
-from codex.code.work.dsl.flow_runner import FlowRunner, ToolAdapter
-from codex.code.work.dsl.trace import TraceEventEmitter
+from pkgs.dsl import budget_models as bm
+from pkgs.dsl.budget_manager import BudgetBreachError, BudgetManager
+from pkgs.dsl.flow_runner import FlowRunner, ToolAdapter
 from pkgs.dsl.policy import PolicyStack
+from pkgs.dsl.trace import TraceEventEmitter
 
 
 class FakeAdapter(ToolAdapter):
-    def __init__(self, cost_by_node: dict[str, dict[str, float]], results: dict[str, object]) -> None:
+    def __init__(
+        self,
+        cost_by_node: dict[str, dict[str, float]],
+        results: dict[str, object],
+    ) -> None:
         self._cost_by_node = cost_by_node
         self._results = results
         self.executed: list[str] = []
@@ -54,7 +58,11 @@ def budget_manager(trace_emitter: TraceEventEmitter) -> BudgetManager:
 
 
 @pytest.fixture()
-def flow_runner(budget_manager: BudgetManager, policy_stack: PolicyStack, trace_emitter: TraceEventEmitter) -> FlowRunner:
+def flow_runner(
+    budget_manager: BudgetManager,
+    policy_stack: PolicyStack,
+    trace_emitter: TraceEventEmitter,
+) -> FlowRunner:
     adapters = {"echo": FakeAdapter(cost_by_node={}, results={})}
     return FlowRunner(
         adapters=adapters,
@@ -91,7 +99,10 @@ def test_hard_node_breach_stops_execution(
     assert excinfo.value.scope.scope_type == "node"
     assert adapter.executed == ["n1"]
     events = trace_emitter.events
-    assert any(evt.event == "budget_breach" and evt.scope_type == "node" for evt in events)
+    assert any(
+        evt.event == "budget_breach" and evt.scope_type == "node"
+        for evt in events
+    )
 
 
 def test_run_budget_not_charged_when_node_rejected(
@@ -157,7 +168,9 @@ def test_soft_run_breach_warns_but_allows_completion(
     ]
     results = runner.run(flow_id="flow-2", run_id="run-2", nodes=nodes)
     assert [record.node_id for record in results] == ["n1", "n2"]
-    assert manager.spent(bm.ScopeKey("run", "run-2"), "run-soft").time_ms == pytest.approx(120.0)
+    run_scope = bm.ScopeKey("run", "run-2")
+    spent_time = manager.spent(run_scope, "run-soft").time_ms
+    assert spent_time == pytest.approx(120.0)
     events = [evt.event for evt in trace_emitter.events]
     assert "budget_breach" in events
     assert events.count("budget_charge") == 2

@@ -15,6 +15,23 @@ from .trace import TraceEventEmitter
 __all__ = ["ToolAdapter", "NodeExecution", "FlowRunner"]
 
 
+def _coerce_int(value: object) -> int | None:
+    """Best-effort conversion of raw loop limits to integers."""
+
+    if isinstance(value, bool):
+        return int(value)
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float):
+        return int(value)
+    if isinstance(value, str):
+        try:
+            return int(value)
+        except ValueError:
+            return None
+    return None
+
+
 @runtime_checkable
 class ToolAdapter(Protocol):
     """Protocol implemented by tool adapters."""
@@ -103,15 +120,22 @@ class FlowRunner:
         executions: list[NodeExecution],
     ) -> None:
         loop_id = str(raw_loop["id"])
-        body = list(raw_loop.get("body", []))
+        body_entries = raw_loop.get("body", [])
+        body: list[Mapping[str, object]] = []
+        if isinstance(body_entries, Iterable):
+            for entry in body_entries:
+                if not isinstance(entry, Mapping):
+                    raise TypeError("loop body entries must be mappings")
+                body.append(entry)
+        else:
+            raise TypeError("loop body must be iterable")
+
         stop_cfg = raw_loop.get("stop")
         max_iterations_value: int | None = None
         if isinstance(stop_cfg, Mapping):
-            raw_limit = stop_cfg.get("max_iterations")
-            if raw_limit is not None:
-                max_iterations_value = int(raw_limit)
+            max_iterations_value = _coerce_int(stop_cfg.get("max_iterations"))
         if max_iterations_value is None and "max_iterations" in raw_loop:
-            max_iterations_value = int(raw_loop.get("max_iterations", 0))
+            max_iterations_value = _coerce_int(raw_loop.get("max_iterations"))
         loop_scope = bm.ScopeKey(scope_type="loop", scope_id=loop_id)
         self._budgets.enter_scope(loop_scope)
         unlimited = max_iterations_value is None
@@ -207,7 +231,7 @@ class FlowRunner:
         scope_id = f"{node_id}@{iteration}" if iteration is not None else node_id
         node_scope = bm.ScopeKey(scope_type="node", scope_id=scope_id)
         self._budgets.enter_scope(node_scope)
-        payload = {"tool": tool}
+        payload: dict[str, object] = {"tool": tool}
         if iteration is not None:
             payload["iteration"] = iteration
         if loop_id is not None:

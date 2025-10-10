@@ -52,7 +52,9 @@ def manager() -> BudgetManager:
     return BudgetManager(specs=specs)
 
 
-def _enter_all_scopes(manager: BudgetManager) -> tuple[bm.ScopeKey, bm.ScopeKey, bm.ScopeKey, bm.ScopeKey]:
+def _enter_all_scopes(
+    manager: BudgetManager,
+) -> tuple[bm.ScopeKey, bm.ScopeKey, bm.ScopeKey, bm.ScopeKey]:
     run = bm.ScopeKey(scope_type="run", scope_id="run-1")
     loop = bm.ScopeKey(scope_type="loop", scope_id="loop-1")
     node = bm.ScopeKey(scope_type="node", scope_id="node-1")
@@ -133,7 +135,8 @@ def test_property_based_budget_charge_precision() -> None:
         if charge.new_total.time_ms <= spec.limit.time_ms:
             assert charge.overage.time_ms == pytest.approx(0.0)
         else:
-            assert charge.overage.time_ms == pytest.approx(charge.new_total.time_ms - spec.limit.time_ms)
+            over_time = charge.new_total.time_ms - spec.limit.time_ms
+            assert charge.overage.time_ms == pytest.approx(over_time)
         if charge.new_total.tokens <= spec.limit.tokens:
             assert charge.overage.tokens == 0
         else:
