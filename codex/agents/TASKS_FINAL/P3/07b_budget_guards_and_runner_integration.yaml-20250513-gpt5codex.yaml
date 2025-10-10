@@ -1,0 +1,101 @@
+version: 1
+id: 07b_budget_guards_and_runner_integration.phase3
+summary: Canonicalize budget scope management and integrate it into the FlowRunner with shared trace emission.
+justification: >-
+  Earlier phases highlighted conflicting budget semantics, mutable trace payloads, and missing
+  policy enforcement within the runner. This plan standardizes immutable budget models, routes
+  outcomes through a shared TraceEventEmitter, and rewires the FlowRunner to cooperate with the
+  existing PolicyStack while respecting soft and hard breach actions.
+steps:
+  - id: domain-model
+    description: Define immutable cost and budget data classes plus BudgetManager scope orchestration.
+    risks:
+      - reconciling overage math across nested scopes
+    mitigations:
+      - enforce normalization helpers and mapping_proxy payloads in unit tests
+  - id: trace-emitter
+    description: Build TraceEventEmitter atop TraceWriter to publish immutable policy/budget events.
+    risks:
+      - drifting payload schema vs. expectations from phase-2 reviews
+    mitigations:
+      - unit-test schema fields and immutability
+  - id: runner-integration
+    description: Implement FlowRunner that wires adapters, PolicyStack, and BudgetManager with deterministic stop reasons.
+    risks:
+      - loop stop ordering when both policy and budget breaches occur
+    mitigations:
+      - encode deterministic precedence in tests (budget breach stops loop but returns policy snapshot)
+modules:
+  - path: codex/code/07b_budget_guards_and_runner_integration.yaml/budget.py
+    role: Immutable budget domain types, normalization helpers, and BudgetManager scope orchestration.
+  - path: codex/code/07b_budget_guards_and_runner_integration.yaml/trace.py
+    role: TraceWriter protocol, TraceEvent dataclass, and TraceEventEmitter helpers for policy/budget events.
+  - path: codex/code/07b_budget_guards_and_runner_integration.yaml/runner.py
+    role: FlowRunner implementation coordinating PolicyStack, ToolAdapters, and BudgetManager.
+  - path: codex/code/07b_budget_guards_and_runner_integration.yaml/adapters.py
+    role: ToolAdapter protocol plus simple context/result dataclasses for deterministic adapter doubles.
+tests:
+  - path: codex/code/07b_budget_guards_and_runner_integration.yaml/tests/test_budget_manager.py
+    targets: [codex/code/07b_budget_guards_and_runner_integration.yaml/budget.py]
+    coverage: '>=90%'
+    mocks:
+      - use sentinel TraceEventEmitter doubles to avoid runner dependency
+  - path: codex/code/07b_budget_guards_and_runner_integration.yaml/tests/test_trace_emitter.py
+    targets: [codex/code/07b_budget_guards_and_runner_integration.yaml/trace.py]
+    coverage: '>=95%'
+    mocks:
+      - fake TraceWriter capturing events for assertions
+  - path: codex/code/07b_budget_guards_and_runner_integration.yaml/tests/test_flow_runner_budget_integration.py
+    targets:
+      - codex/code/07b_budget_guards_and_runner_integration.yaml/runner.py
+      - codex/code/07b_budget_guards_and_runner_integration.yaml/budget.py
+      - codex/code/07b_budget_guards_and_runner_integration.yaml/trace.py
+    coverage: '>=90%'
+    mocks:
+      - deterministic ToolAdapter doubles executing against in-memory context
+run_order:
+  - step: write unit tests for budget.py (domain-model)
+  - step: implement budget.py to satisfy tests
+  - step: write unit tests for trace.py (trace-emitter)
+  - step: implement trace.py
+  - step: write integration-style unit tests for runner.py (runner-integration)
+  - step: implement runner.py and adapters.py utilities
+interfaces:
+  - name: CostSnapshot
+    type: dataclass
+    responsibilities: hold normalized cost metrics, support arithmetic, ensure immutability
+  - name: BudgetManager
+    type: class
+    responsibilities: manage nested budget scopes, compute charge outcomes, expose stop signals
+  - name: TraceEventEmitter
+    type: class
+    responsibilities: format and emit immutable trace events for policy and budget operations
+  - name: FlowRunner
+    type: class
+    responsibilities: execute nodes via ToolAdapters, enforce PolicyStack, charge budgets, and stop loops deterministically
+  - name: ToolAdapter
+    type: protocol
+    responsibilities: provide estimate/execute hooks returning structured cost data for runner consumption
+tdd_coverage_targets:
+  codex/code/07b_budget_guards_and_runner_integration.yaml/budget.py: 0.9
+  codex/code/07b_budget_guards_and_runner_integration.yaml/trace.py: 0.95
+  codex/code/07b_budget_guards_and_runner_integration.yaml/runner.py: 0.9
+review_checklist:
+  - Verify CostSnapshot normalization handles unknown metrics deterministically and preserves immutability.
+  - Confirm BudgetManager propagates charges to ancestor scopes and returns immutable remaining/overage payloads.
+  - Ensure TraceEventEmitter emits mapping_proxy payloads and includes required fields (event, scope_type, scope_id, payload).
+  - Check FlowRunner stops loops when BudgetManager signals hard breach and emits loop summaries.
+  - Validate PolicyStack interactions still raise on violations and traces include policy_resolved events.
+outputs:
+  - type: test
+    path: codex/code/07b_budget_guards_and_runner_integration.yaml/tests
+  - type: module
+    path: codex/code/07b_budget_guards_and_runner_integration.yaml
+  - type: doc
+    path: codex/agents/PREVIEWS/P3
+  - type: doc
+    path: codex/agents/REVIEWS/P3
+  - type: doc
+    path: codex/agents/POSTEXECUTION/P3
+  - type: optional_runner
+    path: codex/code/07b_budget_guards_and_runner_integration.yaml/phase3_runner.py
