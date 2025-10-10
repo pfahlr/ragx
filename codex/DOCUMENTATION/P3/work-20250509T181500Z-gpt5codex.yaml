@@ -1,0 +1,59 @@
+component: budget_guard_runner_phase3
+purpose: |
+  Extend the FlowRunner so loop scopes participate in budget enforcement and emit structured
+  stop summaries while preserving adapter-driven execution and immutable tracing.
+cli_usage:
+  description: Run branch-specific regression tests for loop and policy scenarios.
+  command: pytest codex/code/work/tests -q
+public_interfaces:
+  - name: codex.code.work.dsl.flow_runner.FlowRunner
+    description: Adapter-backed runner coordinating policies, budgets, and loop orchestration.
+  - name: codex.code.work.dsl.flow_runner.ToolAdapter
+    description: Protocol defining `estimate_cost` and `execute` hooks used by FlowRunner.
+  - name: codex.code.work.dsl.flow_runner.NodeExecution
+    description: Immutable record capturing node id, tool, and execution result.
+  - name: codex.code.work.dsl.trace.TraceEventEmitter
+    description: Emits immutable trace events and now receives PolicyStack events via the bridge.
+extension_hooks:
+  - hook: FlowRunner._execute_loop
+    extension: Override to customise loop stop behaviour or integrate external telemetry.
+  - hook: TraceEventEmitter.attach_sink
+    extension: Forward loop summaries and policy/budget events to structured logging backends.
+configurable_options:
+  - name: BudgetSpec.mode
+    values: [hard, soft]
+    default: hard
+  - name: BudgetSpec.breach_action
+    values: [stop, warn]
+    default: stop
+  - name: Loop.stop.max_iterations
+    values: integer >= 1
+    default: 1
+automation_triggers:
+  - trigger: PolicyStack.enforce
+    outcome: Emits policy trace events and blocks adapter execution when denials occur.
+  - trigger: FlowRunner._charge_active_scopes
+    outcome: Applies preview/commit across run, loop, and node scopes before each execution.
+error_contracts:
+  - name: BudgetBreachError
+    raised_when: Hard-stop budgets (run/node/loop) breach during preview.
+    payload: Scope metadata plus breached `BudgetChargeOutcome`.
+  - name: PolicyViolationError
+    raised_when: PolicyStack denies a tool; budgets are not charged for the attempted node.
+serialization:
+  trace_payloads:
+    loop_summary: {loop_id, run_id, flow_id, iterations, max_iterations, stop_reason, breached, breach_spec?, remaining?, overage?}
+    budget_charge: Immutable payload via BudgetChargeOutcome.to_trace_payload().
+  cost_snapshot: {time_ms: float, tokens: int}
+lifecycle:
+  - run_scope enter -> node/loop execution -> loop summary emission -> run_scope exit
+  - Loop scopes push optional policies, preview budgets each iteration, and emit summaries on exit.
+typing:
+  language: Python 3.12
+  typing: Protocols for adapters, dataclasses for executions, Mapping inputs for nodes.
+security:
+  - FlowRunner assumes adapters are trusted and deterministic; no sandboxing is performed.
+  - Trace bridge forwards policy payloads verbatim; ensure downstream sinks handle sensitive metadata appropriately.
+performance:
+  - Loop budget checks reuse existing preview/commit operations; complexity scales linearly with executed nodes.
+  - Trace emission remains synchronous; consider asynchronous sinks for high-frequency loop iterations.

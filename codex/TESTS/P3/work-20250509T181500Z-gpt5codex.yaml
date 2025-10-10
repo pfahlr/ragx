@@ -1,0 +1,11 @@
+missing_tests:
+  task_id: 07b_budget_guards_and_runner_integration.yaml
+  proposed_tests:
+    - name: test_loop_soft_budget_warning_does_not_stop
+      rationale: Ensure soft loop budgets emit breach warnings yet allow subsequent iterations and that summaries report `breached: true` with `stop_reason: warn`.
+      source_module: codex/code/work/dsl/flow_runner.py
+      priority: medium
+    - name: test_policy_resolution_trace_payload_integrity
+      rationale: Validate that `policy_resolved` events emitted through the bridge include the expected allow/deny metadata for multiple candidate tools.
+      source_module: codex/code/work/dsl/flow_runner.py
+      priority: medium

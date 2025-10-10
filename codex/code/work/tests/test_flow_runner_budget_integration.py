@@ -1,20 +1,31 @@
+"""Baseline FlowRunner integration tests covering policy vs budget precedence."""
+
+from __future__ import annotations
+
 import pytest
 
 from codex.code.work.dsl import budget_models as bm
 from codex.code.work.dsl.budget_manager import BudgetBreachError, BudgetManager
 from codex.code.work.dsl.flow_runner import FlowRunner, ToolAdapter
 from codex.code.work.dsl.trace import TraceEventEmitter
-from pkgs.dsl.policy import PolicyStack
+from pkgs.dsl.policy import PolicyStack, PolicyViolationError
 
 
 class FakeAdapter(ToolAdapter):
-    def __init__(self, cost_by_node: dict[str, dict[str, float]], results: dict[str, object]) -> None:
+    """Simple adapter returning predetermined costs and results per node."""
+
+    def __init__(
+        self,
+        *,
+        cost_by_node: dict[str, dict[str, float]],
+        results: dict[str, object],
+    ) -> None:
         self._cost_by_node = cost_by_node
         self._results = results
         self.executed: list[str] = []
 
     def estimate_cost(self, node: dict[str, object]) -> dict[str, float]:  # type: ignore[override]
-        return self._cost_by_node[node["id"]]
+        return dict(self._cost_by_node[node["id"]])
 
     def execute(self, node: dict[str, object]) -> object:  # type: ignore[override]
         self.executed.append(node["id"])
@@ -28,8 +39,10 @@ def trace_emitter() -> TraceEventEmitter:
 
 @pytest.fixture()
 def policy_stack(trace_emitter: TraceEventEmitter) -> PolicyStack:
-    tools = {"echo": {"tags": []}}
-    return PolicyStack(tools=tools, trace=None, event_sink=None)
+    tools = {"echo": {"tags": []}, "denied": {"tags": []}}
+    stack = PolicyStack(tools=tools, trace=None, event_sink=None)
+    stack.push({"allow_tools": ["echo"]}, scope="global")
+    return stack
 
 
 @pytest.fixture()
@@ -38,30 +51,19 @@ def budget_manager(trace_emitter: TraceEventEmitter) -> BudgetManager:
         bm.BudgetSpec(
             name="run-soft",
             scope_type="run",
-            limit=bm.CostSnapshot.from_raw({"time_ms": 100}),
+            limit=bm.CostSnapshot.from_raw({"time_ms": 200}),
             mode="soft",
             breach_action="warn",
         ),
         bm.BudgetSpec(
             name="node-hard",
             scope_type="node",
-            limit=bm.CostSnapshot.from_raw({"time_ms": 50}),
+            limit=bm.CostSnapshot.from_raw({"time_ms": 80}),
             mode="hard",
             breach_action="stop",
         ),
     ]
     return BudgetManager(specs=specs, trace=trace_emitter)
-
-
-@pytest.fixture()
-def flow_runner(budget_manager: BudgetManager, policy_stack: PolicyStack, trace_emitter: TraceEventEmitter) -> FlowRunner:
-    adapters = {"echo": FakeAdapter(cost_by_node={}, results={})}
-    return FlowRunner(
-        adapters=adapters,
-        budget_manager=budget_manager,
-        policy_stack=policy_stack,
-        trace=trace_emitter,
-    )
 
 
 def test_hard_node_breach_stops_execution(
@@ -71,8 +73,8 @@ def test_hard_node_breach_stops_execution(
 ) -> None:
     adapter = FakeAdapter(
         cost_by_node={
-            "n1": {"time_ms": 40},
-            "n2": {"time_ms": 60},
+            "n1": {"time_ms": 60},
+            "n2": {"time_ms": 90},
         },
         results={"n1": "ok", "n2": "fail"},
     )
@@ -94,9 +96,7 @@ def test_hard_node_breach_stops_execution(
     assert any(evt.event == "budget_breach" and evt.scope_type == "node" for evt in events)
 
 
-def test_soft_run_breach_warns_but_allows_completion(
-    trace_emitter: TraceEventEmitter,
-) -> None:
+def test_soft_run_breach_warns_but_allows_completion(trace_emitter: TraceEventEmitter) -> None:
     specs = [
         bm.BudgetSpec(
             name="run-soft",
@@ -108,6 +108,7 @@ def test_soft_run_breach_warns_but_allows_completion(
     ]
     manager = BudgetManager(specs=specs, trace=trace_emitter)
     policy = PolicyStack(tools={"echo": {"tags": []}}, trace=None, event_sink=None)
+    policy.push({"allow_tools": ["echo"]}, scope="global")
     adapter = FakeAdapter(
         cost_by_node={
             "n1": {"time_ms": 60},
@@ -131,3 +132,46 @@ def test_soft_run_breach_warns_but_allows_completion(
     events = [evt.event for evt in trace_emitter.events]
     assert "budget_breach" in events
     assert events.count("budget_charge") == 2
+
+
+def test_policy_violation_prevents_budget_charge(
+    trace_emitter: TraceEventEmitter,
+) -> None:
+    specs = [
+        bm.BudgetSpec(
+            name="run-hard",
+            scope_type="run",
+            limit=bm.CostSnapshot.from_raw({"time_ms": 10}),
+            mode="hard",
+            breach_action="stop",
+        ),
+        bm.BudgetSpec(
+            name="node-hard",
+            scope_type="node",
+            limit=bm.CostSnapshot.from_raw({"time_ms": 10}),
+            mode="hard",
+            breach_action="stop",
+        ),
+    ]
+    manager = BudgetManager(specs=specs, trace=trace_emitter)
+    policy = PolicyStack(
+        tools={"denied": {"tags": []}},
+        trace=None,
+        event_sink=None,
+    )
+    policy.push({"deny_tools": ["denied"]}, scope="global")
+    adapter = FakeAdapter(
+        cost_by_node={"n1": {"time_ms": 50}},
+        results={"n1": "should-not-run"},
+    )
+    runner = FlowRunner(
+        adapters={"denied": adapter},
+        budget_manager=manager,
+        policy_stack=policy,
+        trace=trace_emitter,
+    )
+    with pytest.raises(PolicyViolationError):
+        runner.run(flow_id="flow-violation", run_id="run-violation", nodes=[{"id": "n1", "tool": "denied", "params": {}}])
+    events = [evt.event for evt in trace_emitter.events]
+    assert "policy_violation" in events
+    assert "budget_charge" not in events

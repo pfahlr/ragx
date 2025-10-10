@@ -1,0 +1,69 @@
+summary: Extend FlowRunner to handle loop budget stops and policy/budget interaction traces
+justification: |
+  Phase 2 landed the shared budget models, BudgetManager, and baseline FlowRunner wiring
+  but post-execution feedback highlighted missing coverage for loop scopes and concurrent
+  policy + budget breaches. This phase addresses those high-priority gaps so the runner
+  honours stop semantics without regressing adapter execution or trace immutability.
+steps:
+  - name: tests_loop_and_policy
+    description: Add regression tests for loop-scope budget stops and policy denial precedence
+      to drive FlowRunner improvements.
+  - name: flow_runner_loops
+    description: Implement loop scope orchestration, policy trace bridging, and stop
+      summaries within FlowRunner while preserving existing run/node behaviour.
+  - name: documentation_and_followups
+    description: Record design tradeoffs, coverage outcomes, and residual missing tests for
+      future augmentation.
+modules:
+  - path: codex/code/work/dsl/flow_runner.py
+    role: Extend FlowRunner with loop scope management, policy trace bridging, and
+      structured loop summaries.
+  - path: codex/code/work/tests/test_flow_runner_budget_integration.py
+    role: Ensure baseline integration tests import dependencies and exercise policy tracing.
+  - path: codex/code/work/tests/test_flow_runner_loops.py
+    role: New test coverage for loop budget stops and policy/budget interplay.
+  - path: codex/code/work/tests/conftest.py
+    role: Provide shared fixtures/utilities for FlowRunner loop tests (policy bridge, adapters).
+  - path: codex/code/work/tests/__init__.py
+    role: Maintain test package initialisation after new fixtures are introduced.
+  - path: codex/code/work/dsl/__init__.py
+    role: Export updated FlowRunner symbol metadata if needed by tests.
+  - path: codex/code/work/dsl/trace.py
+    role: Support optional policy trace bridging helper reused by FlowRunner.
+  - path: codex/code/work/dsl/budget_manager.py
+    role: Surface lightweight helper for graceful loop-stop handling if required by FlowRunner.
+tests:
+  - path: codex/code/work/tests/test_flow_runner_budget_integration.py
+    coverage: Policy violation precedence over budgets and trace bridging assertions.
+    mocks: Fake adapter with deterministic cost stream; PolicyStack fixture.
+  - path: codex/code/work/tests/test_flow_runner_loops.py
+    coverage: Loop scope entry/exit, budget breach stop semantics, loop summary trace payloads.
+    mocks: Fake adapter cost iterator, stub loop specification, patched PolicyStack sink.
+run_order:
+  - pytest codex/code/work/tests/test_flow_runner_budget_integration.py
+  - pytest codex/code/work/tests/test_flow_runner_loops.py
+interfaces:
+  flow_runner: [FlowRunner.run, FlowRunner._execute_node, FlowRunner._execute_loop]
+  trace: [TraceEventEmitter.emit]
+  budget_manager: [BudgetManager.enter_scope, BudgetManager.preview_charge, BudgetManager.commit_charge, BudgetManager.record_breach]
+  policy: [PolicyStack.effective_allowlist, PolicyStack.enforce, PolicyStack.push, PolicyStack.pop]
+tdd_coverage_targets:
+  codex/code/work/dsl/flow_runner.py: 85
+  codex/code/work/tests/test_flow_runner_loops.py: 90
+review_checklist:
+  - Confirm FlowRunner stops loops on loop-scope breaches without aborting the entire run.
+  - Verify policy denial prevents budget charging and emits policy_violation traces.
+  - Ensure TraceEventEmitter payloads remain immutable mapping proxies.
+  - Check run/node budget behaviour remains unchanged by loop enhancements.
+  - Validate new tests fail against the prior implementation and pass after updates.
+outputs:
+  plan: codex/agents/TASKS_FINAL/P3/07b_budget_guards_and_runner_integration.yaml-20250509T181500Z-gpt5codex.yaml
+  tests: codex/code/work/tests
+  implementation: codex/code/work/dsl
+  documentation:
+    preview: codex/agents/PREVIEW/P3/07b_budget_guards_and_runner_integration.yaml-20250509T181500Z-gpt5codex.md
+    review: codex/agents/REVIEW/P3/07b_budget_guards_and_runner_integration.yaml-20250509T181500Z-gpt5codex.md
+    postexecution: codex/agents/POSTEXECUTION/P3/07b_budget_guards_and_runner_integration.yaml-20250509T181500Z-gpt5codex.md
+    metadata: codex/DOCUMENTATION/P3/work-20250509T181500Z-gpt5codex.yaml
+  missing_tests: codex/TESTS/P3/work-20250509T181500Z-gpt5codex.yaml
+  optional_runner: codex/code/work/phase3_runner.py
