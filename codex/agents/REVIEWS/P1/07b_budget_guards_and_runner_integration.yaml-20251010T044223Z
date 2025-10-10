@@ -1,0 +1,388 @@
+metadata:
+  last_updated: 2025-10-10T04:42:23Z
+  repo: pfahlr/ragx
+  tags: [dsl, codex_task, policy_engine, traceability, refactor]
+  execution_mode: plan_synthesis
+analysis:
+  branch_diffs:
+    - from: codex/integrate-budget-guards-with-runner
+      to: codex/integrate-budget-guards-with-runner-zwi2ny
+      git_diff: |
+        diff --git a/pkgs/dsl/trace.py b/pkgs/dsl/trace.py
+        new file mode 100644
+        index 0000000..0a7cb3a
+        --- /dev/null
+        +++ b/pkgs/dsl/trace.py
+        @@ -0,0 +1,46 @@
+        +"""Trace writer utilities for the DSL runner."""
+        +
+        +from __future__ import annotations
+        +
+        +from collections.abc import Mapping, MutableMapping, Sequence
+        +from dataclasses import dataclass
+        +from types import MappingProxyType
+        +
+        +__all__ = ["TraceEvent", "TraceWriter", "InMemoryTraceWriter"]
+        +
+        +
+        +@dataclass(slots=True, frozen=True)
+        +class TraceEvent:
+        +    """Single trace event emitted during runner execution."""
+        +
+        +    event: str
+        +    payload: Mapping[str, object]
+        +
+        +
+        +class TraceWriter:
+        +    """Abstract trace sink used by the runner."""
+        +
+        +    def emit(self, event: str, payload: Mapping[str, object]) -> None:  # pragma: no cover
+        +        raise NotImplementedError
+        +
+        +    def snapshot(self) -> Sequence[Mapping[str, object]]:  # pragma: no cover
+        +        raise NotImplementedError
+        +
+        +
+        +class InMemoryTraceWriter(TraceWriter):
+        +    """Simple trace writer that buffers events in memory."""
+        +
+        +    def __init__(self) -> None:
+        +        self._events: list[MutableMapping[str, object]] = []
+        +
+        +    def emit(self, event: str, payload: Mapping[str, object]) -> None:
+        +        record: MutableMapping[str, object] = {"event": event}
+        +        record.update(payload)
+        +        self._events.append(record)
+        +
+        +    def snapshot(self) -> Sequence[Mapping[str, object]]:
+        +        return tuple(MappingProxyType(dict(event)) for event in self._events)
+        +
+        +    @property
+        +    def events(self) -> Sequence[Mapping[str, object]]:
+        +        return self.snapshot()
+      commentary: |
+        Adds a reusable runner tracing surface but leaves `FlowRunner` unchanged. Helpful for observability yet detached from policy stack emitters (no shared schema or sink plumbing).
+    - from: codex/integrate-budget-guards-with-runner
+      to: codex/integrate-budget-guards-with-runner-pbdel9
+      git_diff: |
+        diff --git a/pkgs/dsl/budget.py b/pkgs/dsl/budget.py
+        index 4f8d3a1..f6d57d2 100644
+        --- a/pkgs/dsl/budget.py
+        +++ b/pkgs/dsl/budget.py
+        @@
+        -class BudgetBreachError(BudgetError):
+        -    """Raised when a hard budget cap would be exceeded."""
+        -
+        -    def __init__(
+        -        self,
+        -        *,
+        -        scope: str,
+        -        metric: str,
+        -        limit: float,
+        -        attempted: float,
+        -    ) -> None:
+        -        super().__init__(
+        -            f"{scope} budget hard cap exceeded for {metric}: "
+        -            f"attempted {attempted:.4f} against limit {limit:.4f}"
+        -        )
+        -        self.scope = scope
+        -        self.metric = metric
+        -        self.limit = limit
+        -        self.attempted = attempted
+        +class BudgetBreachHard(BudgetError):
+        +    """Raised when a hard budget is exceeded."""
+        +
+        +    def __init__(self, scope: str, overages: Mapping[str, float]) -> None:
+        +        formatted = ", ".join(
+        +            f"{field}:+{amount:.4g}"
+        +            for field, amount in overages.items()
+        +            if amount > 0
+        +        ) or "no remaining capacity"
+        +        super().__init__(f"Budget exceeded for {scope}: {formatted}")
+        +        self.scope = scope
+        +        self.overages = mapping_proxy(
+        +            {field: float(amount) for field, amount in overages.items() if amount > 0}
+        +        )
+        diff --git a/pkgs/dsl/__init__.py b/pkgs/dsl/__init__.py
+        index 9d13936..e65654f 100644
+        --- a/pkgs/dsl/__init__.py
+        +++ b/pkgs/dsl/__init__.py
+        @@
+        -from .budget import (
+        -    BudgetBreachError,
+        -    BudgetChargeResult,
+        -    BudgetError,
+        -    BudgetMeter,
+        -    BudgetWarning,
+        -)
+        +from .budget import (
+        +    BudgetBreachHard,
+        +    BudgetCharge,
+        +    BudgetError,
+        +    BudgetMeter,
+        +)
+        diff --git a/pkgs/dsl/runner.py b/pkgs/dsl/runner.py
+        index 0f8509b..7ad8e2d 100644
+        --- a/pkgs/dsl/runner.py
+        +++ b/pkgs/dsl/runner.py
+        @@
+        -        self._record_event(
+        -            "budget_breach",
+        -            scope=loop_meter.full_scope,
+        -            action=breach_action,
+        -            details={"metric": metric, "limit": limit},
+        -        )
+        -        if breach_action == "stop":
+        -            self._stop_reasons.append(
+        -                {
+        -                    "scope": loop_meter.full_scope,
+        -                    "reason": "budget_exhausted",
+        -                    "details": {"metric": metric, "limit": limit},
+        -                }
+        -            )
+        -            return "halted"
+        -        raise RuntimeError("loop budget hard cap exceeded")
+        +        decision = loop_meter.charge(cost=None)
+        +        if decision.breached:
+        +            self._record_event(
+        +                "budget_breach",
+        +                scope=loop_meter.scope,
+        +                action=loop_meter.breach_action,
+        +                details={"overages": dict(decision.overages)},
+        +            )
+        +            if loop_meter.breach_action == "stop":
+        +                self._stop_reasons.append(
+        +                    {
+        +                        "scope": loop_meter.scope,
+        +                        "reason": "budget_exhausted",
+        +                        "details": {"overages": dict(decision.overages)},
+        +                    }
+        +                )
+        +                return "halted"
+        +            raise BudgetBreachHard(loop_meter.scope, decision.overages)
+      commentary: |
+        Recasts budgets around aggregated `overages` and removes policy-aware error text. Runner now depends on `BudgetMeter.charge(None)` for loop exhaustion yet never charges loops elsewhere, breaking nearest-scope semantics and trace fidelity.
+    - from: codex/integrate-budget-guards-with-runner
+      to: codex/implement-budget-guards-with-test-first-approach
+      git_diff: |
+        diff --git a/pkgs/dsl/runner.py b/pkgs/dsl/runner.py
+        index 0f8509b..5ad9c60 100644
+        --- a/pkgs/dsl/runner.py
+        +++ b/pkgs/dsl/runner.py
+        @@ -1,261 +1,75 @@
+        -from collections.abc import Callable, Mapping
+        -from dataclasses import dataclass, field
+        -from pathlib import Path
+        -from typing import Any
+        -
+        -from .budget import BudgetBreachError, BudgetMeter
+        +"""FlowRunner scaffolding with budget integration hooks."""
+        +
+        +from collections.abc import Mapping
+        +
+        +from .budget import BudgetManager
+        +from .trace import RunnerTraceRecorder
+        
+        -__all__ = ["RunResult", "FlowRunner"]
+        +__all__ = ["FlowRunner"]
+        
+        
+        -@dataclass(slots=True)
+        -class RunResult:
+        -    run_id: str
+        -    status: str
+        -    outputs: dict[str, dict[str, Any]]
+        -    stop_reasons: list[dict[str, Any]] = field(default_factory=list)
+        +class FlowRunner:
+        +    """Execute DSL flows with policy and budget enforcement (stubbed)."""
+        
+        -    def run(self, *, spec: Mapping[str, Any], vars: Mapping[str, Any]) -> RunResult:
+        -        ...
+        +    def plan(self, spec: Mapping[str, object], vars: Mapping[str, object]) -> Mapping[str, object]:
+        +        raise NotImplementedError("FlowRunner.plan is not implemented yet")
+        
+        -    def _execute_loop(...):
+        -        ...
+        +    def prepare_budgets(self, spec: Mapping[str, object]) -> None:
+        +        self._budget_manager.reset()
+        +        globals_cfg = spec.get("globals") or {}
+        +        run_budget = globals_cfg.get("run_budget")
+        +        self._budget_manager.configure_run(run_budget)
+      commentary: |
+        Runner collapses into a stub exposing `BudgetManager` plumbing only. Budget charging, stop reasons, and trace emission vanish, leaving acceptance tests impossible to satisfy without further orchestration glue.
+    - from: codex/implement-budget-guards-with-test-first-approach
+      to: codex/implement-budget-guards-with-test-first-approach-qhq0jq
+      git_diff: |
+        diff --git a/pkgs/dsl/budget.py b/pkgs/dsl/budget.py
+        index 6a21989..14940c4 100644
+        --- a/pkgs/dsl/budget.py
+        +++ b/pkgs/dsl/budget.py
+        @@ -1,679 +1,354 @@
+        -from collections.abc import Callable, Mapping
+        -from dataclasses import dataclass
+        -from typing import Iterable
+        -
+        -from .trace import RunnerTraceEvent, RunnerTraceRecorder, emit_trace_event
+        +from collections.abc import Mapping
+        +from dataclasses import dataclass
+        +from enum import Enum
+        +from typing import Any, cast
+        
+        -class CostSnapshot:
+        -    usd: float
+        -    tokens: int
+        -    calls: int
+        -    time_ms: float
+        +class Cost:
+        +    usd: float = 0.0
+        +    tokens: int = 0
+        +    calls: int = 0
+        +    time_sec: float = 0.0
+        +
+        +    def __add__(self, other: Cost) -> Cost:
+        +        return Cost(
+        +            usd=math.fsum((self.usd, other.usd)),
+        +            tokens=self.tokens + other.tokens,
+        +            calls=self.calls + other.calls,
+        +            time_sec=math.fsum((self.time_sec, other.time_sec)),
+        +        )
+        
+        -class BudgetWarning:
+        -    scope_type: str
+        -    scope_id: str
+        -    metrics: tuple[str, ...]
+        -    severity: str
+        -    message: str
+        +class BudgetMode(str, Enum):
+        +    HARD = "hard"
+        +    SOFT = "soft"
+        
+        -class BudgetBreachHard(BudgetError):
+        -    def __init__(self, meter: "BudgetMeter", evaluation: BudgetEvaluation) -> None:
+        -        metrics = evaluation.metrics or meter.metrics_exceeded()
+        -        metrics_str = ", ".join(metrics) or "budget"
+        -        super().__init__(
+        -            f"{meter.scope_type}:{meter.scope_id} hard budget exceeded for {metrics_str}"
+        -        )
+        +class BudgetExceededError(RuntimeError):
+        +    def __init__(
+        +        *,
+        +        scope: str,
+        +        metric: str,
+        +        limit: float,
+        +        spent: float,
+        +        attempted: float,
+        +        mode: BudgetMode,
+        +    ) -> None:
+        +        super().__init__(
+        +            f"Budget exceeded for {scope}:{metric} (limit={limit}, attempted={attempted})"
+        +        )
+      commentary: |
+        Shrinks the `BudgetManager` abstraction into a lean `BudgetMeter` with enum-backed modes and scalar `Cost`. Loses structured warnings/loop outcomes, so runner trace coupling must be rebuilt on top.
+    - from: codex/implement-budget-guards-with-test-first-approach
+      to: codex/implement-budget-guards-with-test-first-approach-8wxk32
+      git_diff: |
+        diff --git a/pkgs/dsl/runner.py b/pkgs/dsl/runner.py
+        index 5ad9c60..f8e55d2 100644
+        --- a/pkgs/dsl/runner.py
+        +++ b/pkgs/dsl/runner.py
+        @@ -1,75 +1,396 @@
+        -"""FlowRunner scaffolding with budget integration hooks."""
+        +"""Minimal FlowRunner implementation focused on budget enforcement."""
+        
+        -from collections.abc import Mapping
+        +import math
+        +import time
+        +import uuid
+        +from collections.abc import Callable, Iterable, Mapping, Sequence
+        +from dataclasses import dataclass
+        +from typing import Any
+        
+        -from .budget import BudgetManager
+        -from .trace import RunnerTraceRecorder
+        +from .budget import BudgetDecision, BudgetExceededError, BudgetMeter, Cost
+        
+        +@dataclass(frozen=True, slots=True)
+        +class NodeExecution:
+        +    node_id: str
+        +    outputs: Mapping[str, object]
+        +    cost: Cost
+        
+        +class FlowRunner:
+        +    def run(self, spec: Mapping[str, object], vars: Mapping[str, object]) -> RunResult:
+        +        run_id = str(self._id_factory())
+        +        self._trace = []
+        +        self._trace_event(
+        +            "run_start",
+        +            {
+        +                "run_id": run_id,
+        +                "ts": self._now_factory(),
+        +            },
+        +        )
+        +        ...
+      commentary: |
+        Provides the most complete execution story: loop iteration hints, per-node budget hints, rich trace surface, and explicit stop reasons. However it invents `BudgetDecision`, `Cost.from_budget`, and other APIs absent from peers/spec, so compatibility is questionable without spec updates.
+    - from: codex/implement-budget-guards-with-test-first-approach
+      to: codex/implement-budget-guards-with-test-first-approach-fa0vm9
+      git_diff: |
+        diff --git a/pkgs/dsl/runner.py b/pkgs/dsl/runner.py
+        index 5ad9c60..e0a3b14 100644
+        --- a/pkgs/dsl/runner.py
+        +++ b/pkgs/dsl/runner.py
+        @@ -1,75 +1,418 @@
+        -from collections.abc import Mapping
+        +from collections.abc import Callable, Mapping
+        +from dataclasses import dataclass
+        +from types import MappingProxyType
+        +from typing import Any, Protocol
+        +from uuid import uuid4
+        
+        -from .budget import BudgetManager
+        +from .budget import BudgetBreach, BudgetCharge, BudgetExceededError, BudgetMeter
+        
+        -class FlowRunner:
+        -    """Execute DSL flows with policy and budget enforcement (stubbed)."""
+        +class FlowRunner:
+        +    """Execute a simplified DSL flow with budget enforcement."""
+        
+        -    def plan(...):
+        -        raise NotImplementedError
+        +    def run(self, spec: Mapping[str, Any], vars: Mapping[str, Any]) -> RunResult:
+        +        self._trace.clear()
+        +        self._node_lookup = {node["id"]: node for node in spec.get("nodes", [])}
+        +        self._loop_stack.clear()
+        +        self._node_meters.clear()
+        +        self._soft_node_meters.clear()
+        +        self._loop_meters.clear()
+        +        self._run_meter = BudgetMeter(scope="run", config=run_budget)
+        +        ...
+      commentary: |
+        Builds a protocol-driven runner with explicit preflight charging (`estimate_cost`), soft vs hard enforcement, and structured trace events. Excellent separation of concerns, but diverges from shared spec field names (`graph.control`, policy stack hooks) and duplicates budget semantics already in `BudgetManager`.
+  summary_of_findings:
+    common_flaws:
+      - All branches duplicate the same `PolicyStack` yet none share the trace schema with runner traces, risking drift between policy and execution telemetry.
+      - Tests referenced in the task are absent across branches; no implementation includes e2e coverage tying budgets to policy enforcement.
+    unique_strengths:
+      - codex/integrate-budget-guards-with-runner keeps policy semantics intact while threading push/pop/resolve/violation traces through `PolicyStack`.
+      - codex/implement-budget-guards-with-test-first-approach-8wxk32 offers the richest budget-aware runner instrumentation and iteration stop reasons.
+      - codex/implement-budget-guards-with-test-first-approach-fa0vm9 demonstrates clean adapter protocols and preflight vs commit budgeting stages.
+      - codex/integrate-budget-guards-with-runner-zwi2ny introduces a reusable trace writer abstraction for future observability wiring.
+    critical_gaps:
+      - No branch validates that `PolicyStack.enforce()` integrates with the runner; policy decisions never gate tool execution.
+      - Budget cycle detection / nested loop coverage is missing, leaving potential for runaway recursion in tool-set expansion and budget stacking.
+      - Trace payloads are inconsistent (some dicts, some dataclasses, some `MappingProxyType`), making it impossible to guarantee schema compliance.
+confidence_notes:
+  - area: enforce() semantics
+    confidence: medium
+    reason: PolicyStack logic is consistent, but without runner integration in any branch we must infer intended coupling.
+  - area: budget stop behaviour
+    confidence: low
+    reason: Divergent budget meter APIs (charge vs evaluate vs cost hints) lead to incompatible loop-stop semantics.
+coverage_gaps:
+  - missing: unit and e2e tests exercising `policy_resolved` traces against runner stop conditions.
+  - missing: validation that unknown tools raise before budget charge to prevent phantom spending.
+traceability_checklist:
+  - must-emit: push
+  - must-emit: pop
+  - must-emit: policy_resolved
+  - must-raise: PolicyViolationError
