@@ -2,7 +2,7 @@ id: 40c-vectordb-md-ingest-frontmatter
 title: VectorDB – Markdown ingestion with YAML front-matter
 owner: codex
 priority: P0
-depends_on: [40b-vectordb-sharding-and-merge]
+dependencies: [40b-vectordb-sharding-and-merge]
 goal: Index builder accepts .md alongside PDFs; extracts optional front-matter (YAML or RFC822-style) into metadata.
 inputs:
   - eval/verification/rag_gold_corpus_neuroplasticity.zip

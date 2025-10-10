@@ -2,7 +2,7 @@ id: 20a-flowscript-spec-and-grammar
 title: FlowScript v0.1 – human-readable DSL spec + grammar
 owner: codex
 priority: P0
-depends_on: [03_vectordb_md_ingest, 05a_toolpacks_loader_minimal, 06b_mcp_server_bootstrap]
+dependencies: [03_vectordb_md_ingest, 05a_toolpacks_loader_minimal, 06b_mcp_server_bootstrap]
 goal: >
   Define the human-readable FlowScript language that compiles to the canonical YAML DSL
   in codex/specs/ragx_master_spec.yaml (components: dsl). Ship a formal grammar + examples.

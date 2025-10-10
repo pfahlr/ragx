@@ -2,7 +2,7 @@ id: 20b-flowscript-parser-ast
 title: FlowScript parser → AST (deterministic, no codegen yet)
 owner: codex
 priority: P0
-depends_on: [20a-flowscript-spec-and-grammar]
+dependencies: [20a-flowscript-spec-and-grammar]
 goal: Implement a deterministic parser for FlowScript (.fs) producing a typed AST.
 inputs:
   - pkgs/dsl/flowscript/grammar.ebnf

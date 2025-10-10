@@ -11,7 +11,7 @@ description: >
   and responses, emit JSONL logs with keep-last-5 rotation and a stable "latest"
   symlink, and provide a CLI to toggle transports and deterministic test runs.
 component_ids: [mcp_server, toolpacks_runtime, observability, cli]
-depends_on:
+dependencies:
   - 05a_toolpacks_loader_minimal
   - 05b_toolpacks_executor_python_only
   - 05c_toolpacks_loader_spec_alignment

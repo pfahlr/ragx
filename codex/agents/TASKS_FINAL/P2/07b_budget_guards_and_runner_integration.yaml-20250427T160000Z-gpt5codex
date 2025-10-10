@@ -42,7 +42,7 @@ component_ids:
   - pkgs.dsl.trace
   - tests.unit.budget
   - tests.e2e.runner
-depends_on:
+dependencies:
   - 07a_policy_stack_refinement
 arg_spec:
   - flow_id

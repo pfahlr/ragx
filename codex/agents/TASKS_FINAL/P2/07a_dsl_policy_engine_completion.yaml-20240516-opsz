@@ -52,7 +52,7 @@ tasks:
     reusable: true
     description: Add ToolDescriptor registry, PolicyDecision/PolicyResolution diagnostics map, and enriched trace payloads (candidates, stack depth).
     adapted_from_branch: codex/implement-dsl-policy-engine-in-yaml-reclz1
-    depends_on: [policy_stack_foundation]
+    dependencies: [policy_stack_foundation]
     source_files:
       - pkgs/dsl/models.py
       - pkgs/dsl/policy.py
@@ -66,7 +66,7 @@ tasks:
     reusable: false
     description: Introduce PolicyDenial/PolicySnapshot, enforce() API with PolicyViolationError, and optional event sink integration for push/pop/violation events.
     adapted_from_branch: codex/implement-dsl-policy-engine-in-yaml-yp01n0
-    depends_on: [policy_decision_diagnostics]
+    dependencies: [policy_decision_diagnostics]
     source_files:
       - pkgs/dsl/policy.py
       - pkgs/dsl/__init__.py
@@ -80,7 +80,7 @@ tasks:
     reusable: true
     description: Update FlowLinter to evaluate unit nodes, decision branches, and loop contexts using cloned stacks seeded with global/graph policies.
     adapted_from_branch: codex/implement-dsl-policy-engine-in-yaml-reclz1
-    depends_on: [policy_decision_diagnostics]
+    dependencies: [policy_decision_diagnostics]
     source_files:
       - pkgs/dsl/linter.py
     tests:
@@ -93,7 +93,7 @@ tasks:
     reusable: false
     description: Expand unit coverage for decision overrides, loop propagation, fallback reachability, and pop() scope mismatches; ensure fixtures are self-contained.
     adapted_from_branch: codex/implement-dsl-policy-engine-in-yaml-81p0id
-    depends_on: [linter_reachability_analysis]
+    dependencies: [linter_reachability_analysis]
     source_files:
       - tests/unit/test_policy_stack_resolution.py
       - tests/unit/test_linter_unreachable_tools.py

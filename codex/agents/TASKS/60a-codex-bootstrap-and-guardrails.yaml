@@ -2,7 +2,7 @@ id: 60a-codex-bootstrap-and-guardrails
 title: Agents – bootstrap guard (stop until tests pass) + env checks
 owner: codex
 priority: P0
-depends_on: []
+dependencies: []
 goal: Provide scripts and docs that force Codex to run tests first and abort if red; check OpenAI key when needed.
 outputs:
   - codex/agents/CODEX_BOOTSTRAP.md

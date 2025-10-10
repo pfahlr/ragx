@@ -2,7 +2,7 @@ id: 30b-mcp-discovery-and-prompts
 title: MCP – /mcp/discover + prompt registry
 owner: codex
 priority: P0
-depends_on: [30a-mcp-envelope-and-schema]
+dependencies: [30a-mcp-envelope-and-schema]
 goal: Deterministic discovery document and prompt registry with versioned specs.
 outputs:
   - apps/mcp_server/registry/prompts.py

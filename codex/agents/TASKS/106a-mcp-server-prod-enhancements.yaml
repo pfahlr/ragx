@@ -11,7 +11,7 @@ description: >
   performance optimizations (orjson, caching, Pydantic v2), configuration flags,
   and CI/CD workflows for golden management and artifact publishing.
 component_ids: [observability, mcp_server, security, ci_cd, performance]
-depends_on:
+dependencies:
   - 06b_mcp_server_bootstrap
   - 06ab_core_tools_minimal_subset
 arg_spec: [mcp_server, task_runner]

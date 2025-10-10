@@ -2,7 +2,7 @@ id: 20g-decisions-and-loops
 title: Decision predicates + loop control with stop/budget
 owner: codex
 priority: P0
-depends_on: [20e-policy-and-budget-engine]
+dependencies: [20e-policy-and-budget-engine]
 goal: Implement decision nodes and loop controllers; branch policies and loop budgets.
 inputs:
   - codex/specs/ragx_master_spec.yaml

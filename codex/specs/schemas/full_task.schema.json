@@ -128,7 +128,7 @@
       "items": { "type": "string" },
       "minItems": 1
     },
-    "depends_on": {
+    "dependencies": {
       "type": "array",
       "items": { "type": "string" }
     },
