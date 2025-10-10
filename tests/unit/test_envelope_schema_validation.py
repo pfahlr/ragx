@@ -82,6 +82,42 @@ def test_envelope_validator_rejects_error_payload_for_success(
         validator.validate(invalid_payload)
 
 
+def test_envelope_validator_accepts_valid_response_envelope(
+    schema_registry: SchemaRegistry,
+) -> None:
+    """Response envelopes produced by the service schema should validate."""
+
+    validator = schema_registry.load_envelope()
+    valid_payload = {
+        "ok": True,
+        "data": {"result": "ok"},
+        "error": None,
+        "meta": {
+            "requestId": "req-1",
+            "traceId": "trace-1",
+            "spanId": "span-1",
+            "schemaVersion": "0.1.0",
+            "deterministic": False,
+            "transport": "http",
+            "route": "discover",
+            "method": "mcp.discover",
+            "status": "ok",
+            "attempt": 0,
+            "execution": {
+                "durationMs": 1.0,
+                "inputBytes": 128,
+                "outputBytes": 256,
+            },
+            "idempotency": {"cacheHit": False},
+            "toolId": None,
+            "promptId": None,
+        },
+    }
+
+    # Should not raise if the registry is wired to the response envelope schema.
+    validator.validate(valid_payload)
+
+
 def test_tool_io_registry_returns_named_validators(schema_registry: SchemaRegistry) -> None:
     """Per-tool validator objects must expose validate() for input/output payloads."""
     validators = schema_registry.load_tool_io("mcp.tool:web.search.query")
