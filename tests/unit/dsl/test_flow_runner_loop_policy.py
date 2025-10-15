@@ -141,3 +141,83 @@ def test_policy_violation_leaves_budgets_uncharged(
     events = [evt.event for evt in trace_emitter.events]
     assert "policy_violation" in events
     assert "budget_charge" not in events
+
+
+def test_nested_loop_charges_outer_scope_budget(
+    trace_emitter: TraceEventEmitter,
+    policy_stack: PolicyStack,
+) -> None:
+    specs = [
+        bm.BudgetSpec(
+            name="run-soft",
+            scope_type="run",
+            limit=bm.CostSnapshot.from_raw({"time_ms": 1_000}),
+            mode="soft",
+            breach_action="warn",
+        ),
+        bm.BudgetSpec(
+            name="loop-stop",
+            scope_type="loop",
+            limit=bm.CostSnapshot.from_raw({"time_ms": 80}),
+            mode="soft",
+            breach_action="stop",
+        ),
+        bm.BudgetSpec(
+            name="node-hard",
+            scope_type="node",
+            limit=bm.CostSnapshot.from_raw({"time_ms": 200}),
+            mode="hard",
+            breach_action="stop",
+        ),
+    ]
+    manager = BudgetManager(specs=specs, trace=trace_emitter)
+    adapter = LoopAwareAdapter(cost_ms=40.0)
+    runner = FlowRunner(
+        adapters={"echo": adapter},
+        budget_manager=manager,
+        policy_stack=policy_stack,
+        trace=trace_emitter,
+    )
+
+    nested_loop = {
+        "id": "outer-loop",
+        "kind": "loop",
+        "max_iterations": 3,
+        "body": [
+            {
+                "id": "inner-loop",
+                "kind": "loop",
+                "max_iterations": 1,
+                "body": [
+                    {"id": "node-a", "tool": "echo", "params": {}},
+                ],
+            }
+        ],
+    }
+
+    results = runner.run(
+        flow_id="flow-nested-loop",
+        run_id="run-nested-loop",
+        nodes=[nested_loop],
+    )
+
+    assert [record.node_id for record in results] == ["node-a", "node-a"]
+    assert len(adapter.executed) == 2
+
+    outer_scope = bm.ScopeKey(scope_type="loop", scope_id="outer-loop")
+    inner_scope = bm.ScopeKey(scope_type="loop", scope_id="inner-loop")
+
+    outer_spent = manager.spent(outer_scope, "loop-stop").time_ms
+    assert outer_spent == pytest.approx(80.0)
+
+    inner_budget_charges = sum(
+        1
+        for evt in trace_emitter.events
+        if evt.event == "budget_charge" and evt.scope_id == "inner-loop"
+    )
+    assert inner_budget_charges == 2
+
+    assert any(
+        evt.event == "loop_stop" and evt.scope_id == "outer-loop"
+        for evt in trace_emitter.events
+    )
