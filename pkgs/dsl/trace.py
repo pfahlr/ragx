@@ -7,6 +7,32 @@ from dataclasses import dataclass
 from types import MappingProxyType
 from typing import Any
 
+
+def _freeze_value(value: Any) -> Any:
+    """Recursively convert mappings/sequences into immutable counterparts."""
+
+    if isinstance(value, Mapping):
+        frozen = {key: _freeze_value(item) for key, item in value.items()}
+        return MappingProxyType(frozen)
+    if isinstance(value, list):
+        return tuple(_freeze_value(item) for item in value)
+    if isinstance(value, tuple):
+        return tuple(_freeze_value(item) for item in value)
+    if isinstance(value, set):
+        return frozenset(_freeze_value(item) for item in value)
+    if isinstance(value, frozenset):
+        return frozenset(_freeze_value(item) for item in value)
+    return value
+
+
+def _freeze_payload(payload: Mapping[str, Any] | None) -> Mapping[str, Any]:
+    """Return an immutable mapping proxy for the provided payload."""
+
+    if payload is None:
+        return MappingProxyType({})
+    frozen = {key: _freeze_value(value) for key, value in payload.items()}
+    return MappingProxyType(frozen)
+
 __all__ = ["TraceEvent", "TraceEventEmitter"]
 
 
@@ -48,12 +74,12 @@ class TraceEventEmitter:
         scope_id: str,
         payload: Mapping[str, Any] | None = None,
     ) -> TraceEvent:
-        data = dict(payload or {})
+        immutable_payload = _freeze_payload(payload)
         record = TraceEvent(
             event=event,
             scope_type=scope_type,
             scope_id=scope_id,
-            payload=MappingProxyType(data),
+            payload=immutable_payload,
         )
         if self._validator is not None:
             self._validator(record)
