@@ -1,0 +1,26 @@
+# Minimal multishot flow (smoke) — strict schema version v1
+version: 1
+id: flows.multishot_smoke
+seed: 42
+budget:
+  usd: 0.01
+  tokens: 2000
+  calls: 4
+metadata:
+  description: "Hello → End minimal flow for parity/determinism tests"
+  created_by: "testkit"
+nodes:
+  - id: unit.hello
+    kind: unit
+    tool: echo_text
+    params:
+      text: "hello world"
+    next: transform.to_end
+
+  - id: transform.to_end
+    kind: transform
+    op: "passthrough"
+    next: end.done
+
+  - id: end.done
+    kind: end

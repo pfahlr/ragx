@@ -1,0 +1,2 @@
+{"event":"node_start","node":"unit.hello","transport":"<ANY>","ts":"<VOLATILE>","runId":"<VOLATILE>"}
+{"event":"node_end","node":"end.done","transport":"<ANY>","ts":"<VOLATILE>","runId":"<VOLATILE>"}
