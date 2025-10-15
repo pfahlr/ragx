@@ -8,13 +8,13 @@ The Phase 3 consolidation brings the budget guard and runner integration into th
 | ------ | ------- |
 | `pkgs/dsl/budget_models.py` | Immutable cost snapshots, specs, and decisions with mapping-proxy trace exports. |
 | `pkgs/dsl/budget_manager.py` | Scope lifecycle, preview/commit, breach recording, and inspection helpers. |
-| `pkgs/dsl/flow_runner.py` | Adapter orchestration that sequences policy allowlists, budget enforcement, and loop control. |
-| `pkgs/dsl/trace.py` | Trace event emitter with sink/validator hooks. |
+| `pkgs/dsl/flow_runner.py` | Adapter orchestration that sequences policy allowlists, budget enforcement, and nested loop control. |
+| `pkgs/dsl/trace.py` | Trace event emitter with sink/validator hooks and deep-frozen payloads. |
 
 ### Getting started
 
 ```bash
-# Run the dedicated regression suite shipped with the task
+# Phase 6 regression suite (nested loops, trace immutability)
 pytest codex/code/07b_budget_guards_and_runner_integration.yaml/tests -q
 
 # Execute targeted unit coverage from earlier phases

@@ -127,13 +127,13 @@ The Phase 3 sandbox reconciles the budget guard branches into production-ready m
 
 * **`pkgs/dsl/budget_models.py`** — immutable `CostSnapshot`, `BudgetSpec`, and `BudgetDecision` helpers that export mapping-proxy trace payloads.
 * **`pkgs/dsl/budget_manager.py`** — manages scope lifecycle, preview/commit/record flows, and emits `budget_charge`/`budget_breach` traces.
-* **`pkgs/dsl/flow_runner.py`** — orchestrates ToolAdapters, BudgetManager, and PolicyStack with deterministic trace ordering (`policy_resolved` → `budget_breach` → `loop_stop`).
-* **`pkgs/dsl/trace.py`** — `TraceEventEmitter` producing immutable `TraceEvent` records with optional sinks/validators.
+* **`pkgs/dsl/flow_runner.py`** — orchestrates ToolAdapters, BudgetManager, and PolicyStack with deterministic trace ordering (`policy_resolved` → `budget_breach` → `loop_stop`) and nested-loop execution support.
+* **`pkgs/dsl/trace.py`** — `TraceEventEmitter` producing deeply immutable `TraceEvent` payloads with optional sinks/validators.
 
 ### 4.1 Quick validation
 
 ```bash
-# Targeted Phase 3 regression suite
+# Phase 6 regression coverage (nested loops, trace immutability)
 pytest codex/code/07b_budget_guards_and_runner_integration.yaml/tests -q
 
 # Legacy unit coverage (imports will be updated in future phases)
@@ -155,9 +155,9 @@ pytest tests/unit/dsl/test_budget_manager.py -q
 
 ### 4.4 Acceptance targets
 
-* Loop budget stops and soft warnings (`test_flow_runner_auto.py`).
+* Loop budget stops, soft warnings, and nested-loop recursion (`test_flow_runner_auto.py`).
 * Policy/budget interleaving and run-level hard stops.
-* Trace payload immutability and validator error surfacing (`test_trace_auto.py`).
+* Trace payload immutability (deep freezing) and validator error surfacing (`test_trace_auto.py`).
 
 ### Log diff & verification
 
