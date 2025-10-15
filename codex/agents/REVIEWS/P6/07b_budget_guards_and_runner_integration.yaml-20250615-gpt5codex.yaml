@@ -1,0 +1,14 @@
+phase6_review:
+  task: 07b_budget_guards_and_runner_integration.yaml
+  runner_up_components_applied: false
+  code_review_issues_resolved:
+    total: 2
+    fixed: 2
+    deferred: 0
+  test_coverage_confirmed: true
+  cli_validated: true
+  docs_synced: true
+  error_handling_reviewed: true
+  final_notes:
+    - "_run_loop now recurses through nested bodies before dispatching to _run_unit_node, eliminating the KeyError noted in phase 5 review."
+    - "Removed the unused commit flag from _apply_budget and added explicit KeyError messaging for missing node fields."

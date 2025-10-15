@@ -1,14 +1,14 @@
 # RAGX Docs
 
-## Phase 3 Budget Guard Deliverable
+## Budget Guard Deliverable (Phase 6 polish)
 
-The Phase 3 consolidation brings the budget guard and runner integration into the canonical `pkgs/dsl` package. Key entry points:
+Phase 6 finalises the budget guard and runner integration in `pkgs/dsl`, adding nested-loop recursion, refined error messages, and refreshed docs. Key entry points:
 
 | Module | Purpose |
 | ------ | ------- |
 | `pkgs/dsl/budget_models.py` | Immutable cost snapshots, specs, and decisions with mapping-proxy trace exports. |
 | `pkgs/dsl/budget_manager.py` | Scope lifecycle, preview/commit, breach recording, and inspection helpers. |
-| `pkgs/dsl/flow_runner.py` | Adapter orchestration that sequences policy allowlists, budget enforcement, and loop control. |
+| `pkgs/dsl/flow_runner.py` | Adapter orchestration that sequences policy allowlists, budget enforcement, loop control, and nested loop recursion. |
 | `pkgs/dsl/trace.py` | Trace event emitter with sink/validator hooks. |
 
 ### Getting started
@@ -30,4 +30,4 @@ pytest tests/unit/dsl/test_flow_runner_loop_policy.py -q
 ### Documentation map
 
 * [`docs/07b_budget_guards_and_runner_integration.yaml.md`](07b_budget_guards_and_runner_integration.yaml.md) — detailed design, invariants, and customization guidance.
-* [`README.md`](../README.md#4-budget-guards--flowrunner-integration-phase-3) — high-level architecture and acceptance plan.
+* [`README.md`](../README.md#4-budget-guards--flowrunner-integration-phase-6-wrap-up) — high-level architecture and acceptance plan.
