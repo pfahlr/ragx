@@ -133,7 +133,7 @@ The Phase 3 sandbox reconciles the budget guard branches into production-ready m
 ### 4.1 Quick validation
 
 ```bash
-# Targeted Phase 3 regression suite
+# Targeted Phase 3 regression suite (Phase 6 adds nested loop coverage)
 pytest codex/code/07b_budget_guards_and_runner_integration.yaml/tests -q
 
 # Legacy unit coverage (imports will be updated in future phases)
@@ -145,7 +145,7 @@ pytest tests/unit/dsl/test_budget_manager.py -q
 1. `FlowRunner.run()` enters the run scope, emits `run_start`, and iterates nodes/loops.
 2. For each node, the runner calls `PolicyStack.effective_allowlist()` to emit `policy_resolved`, then `PolicyStack.enforce()` to raise `PolicyViolationError` when needed.
 3. `BudgetManager.preview_charge()` returns a `BudgetDecision`; if `decision.breached`, `record_breach()` emits immutable payloads and `BudgetBreachError` propagates when `should_stop`.
-4. Loop execution honours `breach_action` semantics: `stop` halts the loop (`loop_stop`), while `warn` keeps iterating after emitting `budget_breach`.
+4. Loop execution honours `breach_action` semantics: `stop` halts the loop (`loop_stop`), while `warn` keeps iterating after emitting `budget_breach`. Nested loops are handled recursively, so loop bodies can mix unit and loop entries without throwing `KeyError`.
 
 ### 4.3 Extension hooks
 

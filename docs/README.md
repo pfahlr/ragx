@@ -14,7 +14,7 @@ The Phase 3 consolidation brings the budget guard and runner integration into th
 ### Getting started
 
 ```bash
-# Run the dedicated regression suite shipped with the task
+# Run the dedicated regression suite shipped with the task (includes Phase 6 nested loop checks)
 pytest codex/code/07b_budget_guards_and_runner_integration.yaml/tests -q
 
 # Execute targeted unit coverage from earlier phases
