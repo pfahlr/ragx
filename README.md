@@ -121,19 +121,20 @@ python -m ragcore.cli merge \
 
 ---
 
-## 4) Budget Guards + FlowRunner Integration (Phase 3)
+## 4) Budget Guards + FlowRunner Integration (Phase 6 wrap-up)
 
-The Phase 3 sandbox reconciles the budget guard branches into production-ready modules under `pkgs/dsl/`:
+Phase 6 polishes the budget guard branches into production-ready modules under `pkgs/dsl/`, validating nested-loop execution,
+error messaging, and documentation parity:
 
 * **`pkgs/dsl/budget_models.py`** — immutable `CostSnapshot`, `BudgetSpec`, and `BudgetDecision` helpers that export mapping-proxy trace payloads.
 * **`pkgs/dsl/budget_manager.py`** — manages scope lifecycle, preview/commit/record flows, and emits `budget_charge`/`budget_breach` traces.
-* **`pkgs/dsl/flow_runner.py`** — orchestrates ToolAdapters, BudgetManager, and PolicyStack with deterministic trace ordering (`policy_resolved` → `budget_breach` → `loop_stop`).
+* **`pkgs/dsl/flow_runner.py`** — orchestrates ToolAdapters, BudgetManager, and PolicyStack with deterministic trace ordering (`policy_resolved` → `budget_breach` → `loop_stop`) and now recurses through nested loops while surfacing friendlier node validation errors.
 * **`pkgs/dsl/trace.py`** — `TraceEventEmitter` producing immutable `TraceEvent` records with optional sinks/validators.
 
 ### 4.1 Quick validation
 
 ```bash
-# Targeted Phase 3 regression suite
+# Targeted regression suite for the budget guards deliverable
 pytest codex/code/07b_budget_guards_and_runner_integration.yaml/tests -q
 
 # Legacy unit coverage (imports will be updated in future phases)
@@ -145,7 +146,7 @@ pytest tests/unit/dsl/test_budget_manager.py -q
 1. `FlowRunner.run()` enters the run scope, emits `run_start`, and iterates nodes/loops.
 2. For each node, the runner calls `PolicyStack.effective_allowlist()` to emit `policy_resolved`, then `PolicyStack.enforce()` to raise `PolicyViolationError` when needed.
 3. `BudgetManager.preview_charge()` returns a `BudgetDecision`; if `decision.breached`, `record_breach()` emits immutable payloads and `BudgetBreachError` propagates when `should_stop`.
-4. Loop execution honours `breach_action` semantics: `stop` halts the loop (`loop_stop`), while `warn` keeps iterating after emitting `budget_breach`.
+4. Loop execution honours `breach_action` semantics: `stop` halts the loop (`loop_stop`), while `warn` keeps iterating after emitting `budget_breach`. Nested loop bodies are evaluated recursively so inner loops can raise or emit stop traces without triggering `KeyError`.
 
 ### 4.3 Extension hooks
 

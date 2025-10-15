@@ -172,6 +172,10 @@ class FlowRunner:
                     payload={"iteration": iteration},
                 )
                 for node in body:
+                    kind = str(node.get("kind", "unit"))
+                    if kind == "loop":
+                        self._run_loop(run_scope, node, executions)
+                        continue
                     try:
                         execution = self._run_unit_node(
                             run_scope=run_scope,
@@ -223,8 +227,14 @@ class FlowRunner:
         loop_id: str | None,
         iteration: int | None,
     ) -> NodeExecution:
-        node_id = str(raw_node["id"])
-        tool = str(raw_node["tool"])
+        try:
+            node_id = str(raw_node["id"])
+        except KeyError as exc:
+            raise KeyError("unit node is missing required field 'id'") from exc
+        try:
+            tool = str(raw_node["tool"])
+        except KeyError as exc:
+            raise KeyError(f"unit node '{node_id}' is missing required field 'tool'") from exc
         adapter = self._adapters.get(tool)
         if adapter is None:
             raise KeyError(f"unknown adapter for tool '{tool}'")
@@ -254,17 +264,11 @@ class FlowRunner:
             cost_snapshot = bm.CostSnapshot.from_raw(
                 adapter.estimate_cost(node_payload)
             )
-            run_decision = self._apply_budget(
-                run_scope, cost_snapshot, commit=False
-            )
+            run_decision = self._apply_budget(run_scope, cost_snapshot)
             loop_decision: bm.BudgetDecision | None = None
             if loop_scope is not None:
-                loop_decision = self._apply_budget(
-                    loop_scope, cost_snapshot, commit=False
-                )
-            node_decision = self._apply_budget(
-                node_scope, cost_snapshot, commit=False
-            )
+                loop_decision = self._apply_budget(loop_scope, cost_snapshot)
+            node_decision = self._apply_budget(node_scope, cost_snapshot)
             self._budgets.commit_charge(node_decision)
             if loop_decision is not None:
                 self._budgets.commit_charge(loop_decision)
@@ -299,8 +303,6 @@ class FlowRunner:
         self,
         scope: bm.ScopeKey,
         cost: bm.CostSnapshot,
-        *,
-        commit: bool = True,
     ) -> bm.BudgetDecision:
         decision = self._budgets.preview_charge(scope, cost)
         if decision.breached:
@@ -310,6 +312,4 @@ class FlowRunner:
             if blocking is None:  # pragma: no cover - defensive guard
                 raise BudgetError("blocking outcome missing for stop decision")
             raise BudgetBreachError(scope, blocking)
-        if commit:
-            self._budgets.commit_charge(decision)
         return decision
