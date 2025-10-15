@@ -90,12 +90,13 @@ class FlowRunner:
             for raw_node in nodes:
                 kind = str(raw_node.get("kind", "unit"))
                 if kind == "loop":
-                    self._run_loop(run_scope, raw_node, executions)
+                    self._run_loop(run_scope, raw_node, executions, ())
                     continue
                 execution = self._run_unit_node(
                     run_scope=run_scope,
                     raw_node=raw_node,
                     loop_scope=None,
+                    loop_scopes=(),
                     loop_id=None,
                     iteration=None,
                 )
@@ -118,6 +119,7 @@ class FlowRunner:
         run_scope: bm.ScopeKey,
         raw_loop: Mapping[str, object],
         executions: list[NodeExecution],
+        parent_loop_scopes: tuple[bm.ScopeKey, ...],
     ) -> None:
         loop_id = str(raw_loop["id"])
         body_entries = raw_loop.get("body", [])
@@ -138,6 +140,7 @@ class FlowRunner:
             max_iterations_value = _coerce_int(raw_loop.get("max_iterations"))
         loop_scope = bm.ScopeKey(scope_type="loop", scope_id=loop_id)
         self._budgets.enter_scope(loop_scope)
+        active_loop_scopes = parent_loop_scopes + (loop_scope,)
         unlimited = max_iterations_value is None
         self._trace.emit(
             "loop_start",
@@ -175,12 +178,18 @@ class FlowRunner:
                     try:
                         node_kind = str(node.get("kind", "unit"))
                         if node_kind == "loop":
-                            self._run_loop(run_scope, node, executions)
+                            self._run_loop(
+                                run_scope,
+                                node,
+                                executions,
+                                active_loop_scopes,
+                            )
                             continue
                         execution = self._run_unit_node(
                             run_scope=run_scope,
                             raw_node=node,
                             loop_scope=loop_scope,
+                            loop_scopes=active_loop_scopes,
                             loop_id=loop_id,
                             iteration=iteration,
                         )
@@ -224,6 +233,7 @@ class FlowRunner:
         run_scope: bm.ScopeKey,
         raw_node: Mapping[str, object],
         loop_scope: bm.ScopeKey | None,
+        loop_scopes: tuple[bm.ScopeKey, ...],
         loop_id: str | None,
         iteration: int | None,
     ) -> NodeExecution:
@@ -259,17 +269,17 @@ class FlowRunner:
                 adapter.estimate_cost(node_payload)
             )
             run_decision = self._preview_budget(run_scope, cost_snapshot)
-            loop_decision: bm.BudgetDecision | None = None
-            if loop_scope is not None:
-                loop_decision = self._preview_budget(
-                    loop_scope, cost_snapshot
+            loop_decisions: list[bm.BudgetDecision] = []
+            for scope in loop_scopes:
+                loop_decisions.append(
+                    self._preview_budget(scope, cost_snapshot)
                 )
             node_decision = self._preview_budget(
                 node_scope, cost_snapshot
             )
             self._budgets.commit_charge(node_decision)
-            if loop_decision is not None:
-                self._budgets.commit_charge(loop_decision)
+            for decision in reversed(loop_decisions):
+                self._budgets.commit_charge(decision)
             self._budgets.commit_charge(run_decision)
             result = adapter.execute(node_payload)
             record = NodeExecution(
