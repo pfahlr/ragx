@@ -1,8 +1,8 @@
 # RAGX Docs
 
-## Phase 3 Budget Guard Deliverable
+## Phase 3/6 Budget Guard Deliverable
 
-The Phase 3 consolidation brings the budget guard and runner integration into the canonical `pkgs/dsl` package. Key entry points:
+The Phase 3 consolidation (hardened during Phase 6) brings the budget guard and runner integration into the canonical `pkgs/dsl` package. Key entry points:
 
 | Module | Purpose |
 | ------ | ------- |
@@ -24,7 +24,7 @@ pytest tests/unit/dsl/test_flow_runner_loop_policy.py -q
 ### Extension hooks
 
 * **Trace sinks** — pass a callable to `TraceEventEmitter.attach_sink` for centralized logging.
-* **Trace validators** — use `TraceEventEmitter.attach_validator` to enforce schema invariants (see `test_trace_auto.py`).
+* **Trace validators** — use `TraceEventEmitter.attach_validator` to enforce schema invariants (see `test_trace_auto_phase6.py`).
 * **Policy telemetry** — instantiate `PolicyStack` with a `PolicyTraceRecorder` or sink to capture push/pop/resolved/violation events.
 
 ### Documentation map
