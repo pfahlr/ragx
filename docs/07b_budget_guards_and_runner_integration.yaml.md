@@ -27,6 +27,7 @@ Key modules:
 5. **Loop semantics** – `_run_loop()` attaches loop scopes, emits `loop_start`/`loop_iteration_*`, and handles soft vs hard budgets:
    * `breach_action: stop` → emit `loop_stop` with reason `budget_stop`.
    * `breach_action: warn` → emit `budget_breach` but continue iterating.
+   * Nested loop entries recurse through `_run_loop`, guaranteeing that loop and node bodies can be mixed without raising `KeyError` or skipping budget enforcement.
 6. **Cleanup** – All scopes exit in `finally` blocks to prevent state leakage. `run_complete` is emitted when execution ends without
    a hard stop.
 
@@ -64,6 +65,7 @@ pytest tests/unit/dsl/test_flow_runner_budget_integration.py -q
 Regression tests cover:
 
 * Loop hard-stop and soft-warn semantics (`test_flow_runner_auto.py`).
+* Nested loop recursion and mixed body entries (`test_flow_runner_auto_phase6.py`).
 * Policy denial ordering relative to budget traces (`test_flow_runner_auto.py`).
 * Nested scope accounting, spec-level budgets, and property-based arithmetic invariants (`test_budget_manager_auto.py`).
 * Trace payload schema validation, sink failure propagation, and validator context (`test_trace_auto.py`).
