@@ -4,7 +4,7 @@
 
 This document summarises the Phase 3 consolidation of the budget guard branches. The deliverable restores a unified FlowRunner
 that cooperates with `PolicyStack`, enforces immutable budget models, and emits deterministic traces aligned with the DSL
-contract.
+contract. Phase 6 finalisation introduced nested-loop recursion and refreshed regression coverage.
 
 Key modules:
 
@@ -17,7 +17,7 @@ Key modules:
 
 ## Lifecycle & Control Flow
 
-1. **Runner bootstrap** – `FlowRunner.run()` enters the run scope, emits `run_start`, and prepares node/loop execution.
+1. **Runner bootstrap** – `FlowRunner.run()` enters the run scope, emits `run_start`, and prepares node/loop execution (including nested loops handled recursively).
 2. **Policy resolution** – Each node invokes `PolicyStack.effective_allowlist([tool])`, emitting `policy_resolved`, before calling
    `PolicyStack.enforce(tool)` to raise `PolicyViolationError` when the allowlist denies the tool.
 3. **Budget preview** – `BudgetManager.preview_charge(scope, cost)` computes `BudgetDecision` objects per scope. Breaches trigger
@@ -27,6 +27,7 @@ Key modules:
 5. **Loop semantics** – `_run_loop()` attaches loop scopes, emits `loop_start`/`loop_iteration_*`, and handles soft vs hard budgets:
    * `breach_action: stop` → emit `loop_stop` with reason `budget_stop`.
    * `breach_action: warn` → emit `budget_breach` but continue iterating.
+   * Nested loop bodies call `_run_loop()` recursively so inner loops honour the same guards without leaking parent scopes.
 6. **Cleanup** – All scopes exit in `finally` blocks to prevent state leakage. `run_complete` is emitted when execution ends without
    a hard stop.
 
@@ -40,7 +41,7 @@ Key modules:
   stop reasons.
 
 Attach a validator via `TraceEventEmitter.attach_validator` to enforce field-level invariants. See
-`codex/code/07b_budget_guards_and_runner_integration.yaml/tests/test_trace_auto.py` for examples of validator integration and error
+`codex/code/07b_budget_guards_and_runner_integration.yaml/tests/test_trace_auto_phase6.py` for examples of validator integration and error
 surfacing.
 
 ## Configuration Hooks
@@ -63,10 +64,9 @@ pytest tests/unit/dsl/test_flow_runner_budget_integration.py -q
 
 Regression tests cover:
 
-* Loop hard-stop and soft-warn semantics (`test_flow_runner_auto.py`).
-* Policy denial ordering relative to budget traces (`test_flow_runner_auto.py`).
-* Nested scope accounting, spec-level budgets, and property-based arithmetic invariants (`test_budget_manager_auto.py`).
-* Trace payload schema validation, sink failure propagation, and validator context (`test_trace_auto.py`).
+* Loop hard-stop, soft-warn semantics, nested loop propagation, and run-level stop handling (`test_flow_runner_auto_phase6.py`).
+* Nested scope accounting, spec-level budgets, and property-based arithmetic invariants (`test_budget_manager_auto_phase6.py`).
+* Trace payload schema validation, sink failure propagation, and validator context (`test_trace_auto_phase6.py`).
 
 ## Invariants & Future Work
 

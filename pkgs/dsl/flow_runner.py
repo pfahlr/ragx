@@ -173,6 +173,10 @@ class FlowRunner:
                 )
                 for node in body:
                     try:
+                        node_kind = str(node.get("kind", "unit"))
+                        if node_kind == "loop":
+                            self._run_loop(run_scope, node, executions)
+                            continue
                         execution = self._run_unit_node(
                             run_scope=run_scope,
                             raw_node=node,
@@ -254,16 +258,14 @@ class FlowRunner:
             cost_snapshot = bm.CostSnapshot.from_raw(
                 adapter.estimate_cost(node_payload)
             )
-            run_decision = self._apply_budget(
-                run_scope, cost_snapshot, commit=False
-            )
+            run_decision = self._preview_budget(run_scope, cost_snapshot)
             loop_decision: bm.BudgetDecision | None = None
             if loop_scope is not None:
-                loop_decision = self._apply_budget(
-                    loop_scope, cost_snapshot, commit=False
+                loop_decision = self._preview_budget(
+                    loop_scope, cost_snapshot
                 )
-            node_decision = self._apply_budget(
-                node_scope, cost_snapshot, commit=False
+            node_decision = self._preview_budget(
+                node_scope, cost_snapshot
             )
             self._budgets.commit_charge(node_decision)
             if loop_decision is not None:
@@ -295,13 +297,13 @@ class FlowRunner:
         finally:
             self._budgets.exit_scope(node_scope)
 
-    def _apply_budget(
+    def _preview_budget(
         self,
         scope: bm.ScopeKey,
         cost: bm.CostSnapshot,
-        *,
-        commit: bool = True,
     ) -> bm.BudgetDecision:
+        """Preview a budget decision and surface blocking outcomes before commit."""
+
         decision = self._budgets.preview_charge(scope, cost)
         if decision.breached:
             self._budgets.record_breach(decision)
@@ -310,6 +312,4 @@ class FlowRunner:
             if blocking is None:  # pragma: no cover - defensive guard
                 raise BudgetError("blocking outcome missing for stop decision")
             raise BudgetBreachError(scope, blocking)
-        if commit:
-            self._budgets.commit_charge(decision)
         return decision

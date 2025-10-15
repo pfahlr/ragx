@@ -133,19 +133,19 @@ The Phase 3 sandbox reconciles the budget guard branches into production-ready m
 ### 4.1 Quick validation
 
 ```bash
-# Targeted Phase 3 regression suite
+# Targeted Phase 3/6 regression suite
 pytest codex/code/07b_budget_guards_and_runner_integration.yaml/tests -q
 
-# Legacy unit coverage (imports will be updated in future phases)
+# Legacy unit coverage (kept for historical parity)
 pytest tests/unit/dsl/test_budget_manager.py -q
 ```
 
 ### 4.2 Execution flow
 
-1. `FlowRunner.run()` enters the run scope, emits `run_start`, and iterates nodes/loops.
+1. `FlowRunner.run()` enters the run scope, emits `run_start`, and iterates nodes/loops (including nested loops introduced in Phase 6).
 2. For each node, the runner calls `PolicyStack.effective_allowlist()` to emit `policy_resolved`, then `PolicyStack.enforce()` to raise `PolicyViolationError` when needed.
 3. `BudgetManager.preview_charge()` returns a `BudgetDecision`; if `decision.breached`, `record_breach()` emits immutable payloads and `BudgetBreachError` propagates when `should_stop`.
-4. Loop execution honours `breach_action` semantics: `stop` halts the loop (`loop_stop`), while `warn` keeps iterating after emitting `budget_breach`.
+4. Loop execution honours `breach_action` semantics: `stop` halts the loop (`loop_stop`), while `warn` keeps iterating after emitting `budget_breach`. Nested loop bodies recurse through `_run_loop`, preserving scope hygiene for inner loops.
 
 ### 4.3 Extension hooks
 
@@ -155,9 +155,9 @@ pytest tests/unit/dsl/test_budget_manager.py -q
 
 ### 4.4 Acceptance targets
 
-* Loop budget stops and soft warnings (`test_flow_runner_auto.py`).
-* Policy/budget interleaving and run-level hard stops.
-* Trace payload immutability and validator error surfacing (`test_trace_auto.py`).
+* Loop budget stops, soft warnings, nested loop propagation, and run-level hard stops (`test_flow_runner_auto_phase6.py`).
+* Nested scope accounting, spec budgets, and precision regression coverage (`test_budget_manager_auto_phase6.py`).
+* Trace payload immutability, sink handling, and validator error surfacing (`test_trace_auto_phase6.py`).
 
 ### Log diff & verification
 
