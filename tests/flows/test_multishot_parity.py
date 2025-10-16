@@ -1,4 +1,8 @@
-import os, importlib, pytest
+import importlib
+import os
+
+import pytest
+
 from tests.helpers.canonical import hash_events
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
@@ -42,4 +46,6 @@ def test_parity_http_vs_stdio_identical_canonical():
     events_stdio = run_flow(FLOW, transport="stdio")
     events_http = run_flow(FLOW, transport="http")
 
-    assert hash_events(events_stdio) == hash_events(events_http), "Canonicalized logs must match across transports"
+    assert hash_events(events_stdio) == hash_events(events_http), (
+        "Canonicalized logs must match across transports"
+    )

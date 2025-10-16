@@ -272,7 +272,7 @@ def test_flow_runner_policy_trace_interleaving_preserves_order() -> None:
     policy_events = [evt.event for evt in policy_trace.events]
     assert all(evt.event == "policy_resolved" for evt in policy_trace.events)
     assert len(policy_events) == 3
-    for budget_event, policy_event in zip(budget_events, policy_events):
+    for budget_event, policy_event in zip(budget_events, policy_events, strict=False):
         assert policy_event == "policy_resolved"
         assert budget_event.event in {"budget_charge", "budget_breach"}
 

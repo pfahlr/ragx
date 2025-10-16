@@ -111,7 +111,7 @@ def test_property_based_budget_charge_precision() -> None:
         mode="soft",
         breach_action="warn",
     )
-    prior = defaultdict(float)
+    prior: defaultdict[str, float] = defaultdict(float)
     running_total = bm.CostSnapshot.zero()
     for time_ms, tokens in product([0, 0.1, 1.5, 10.25, 50.5], [0, 1, 5, 10, 25]):
         cost = bm.CostSnapshot(time_ms=time_ms, tokens=tokens)

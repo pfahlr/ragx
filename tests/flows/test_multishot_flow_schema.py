@@ -1,31 +1,67 @@
-import os, json, copy, yaml, pytest, jsonschema
+from __future__ import annotations
 
-ROOT = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
-FLOW = os.path.join(ROOT, "flows", "examples", "multishot_smoke.yaml")
-FLOW_SCHEMA = os.path.join(ROOT, "codex", "specs", "dsl", "v1", "flow.schema.json")
+import copy
+import json
+import os
+from functools import lru_cache
+from pathlib import Path
+from typing import Any
+
+import jsonschema
+import pytest
+import yaml
+
+ROOT = Path(__file__).resolve().parents[2]
+SCHEMA_DIR = ROOT / "codex" / "specs" / "dsl" / "v1"
+FLOW = ROOT / "flows" / "examples" / "multishot_smoke.yaml"
+FLOW_SCHEMA = SCHEMA_DIR / "flow.schema.json"
+
+
+@lru_cache(maxsize=1)
+def _load_flow_validator() -> jsonschema.protocols.Validator:
+    with FLOW_SCHEMA.open("r", encoding="utf-8") as handle:
+        schema = json.load(handle)
+
+    store: dict[str, dict[str, Any]] = {}
+    for schema_path in SCHEMA_DIR.glob("*.schema.json"):
+        with schema_path.open("r", encoding="utf-8") as handle:
+            doc = json.load(handle)
+        schema_id = doc.get("$id")
+        if schema_id:
+            store[schema_id] = doc
+
+    resolver = jsonschema.RefResolver.from_schema(schema, store=store)
+    validator_cls = jsonschema.validators.validator_for(schema)
+    validator_cls.check_schema(schema)
+    return validator_cls(schema, resolver=resolver)
+
+
+def _validate_flow(instance: dict[str, Any]) -> None:
+    validator = _load_flow_validator()
+    validator.validate(instance)
+
 
 @pytest.mark.parametrize("path", [FLOW, FLOW_SCHEMA])
-def test_files_exist(path):
+def test_files_exist(path: Path) -> None:
     assert os.path.exists(path), f"Missing required file: {path}"
 
-def test_flow_schema_strict_accepts_valid():
-    with open(FLOW, "r") as f:
-        data = yaml.safe_load(f)
-    with open(FLOW_SCHEMA, "r") as f:
-        schema = json.load(f)
-    jsonschema.validate(instance=data, schema=schema)
 
-def test_flow_schema_strict_rejects_unknown_fields():
-    with open(FLOW, "r") as f:
-        data = yaml.safe_load(f)
-    data2 = copy.deepcopy(data)
-    data2["unknown_field"] = True
-    with open(FLOW_SCHEMA, "r") as f:
-        schema = json.load(f)
-    with pytest.raises(jsonschema.ValidationError):
-        jsonschema.validate(instance=data2, schema=schema)
+def test_flow_schema_strict_accepts_valid() -> None:
+    with FLOW.open("r", encoding="utf-8") as handle:
+        data = yaml.safe_load(handle)
+    _validate_flow(data)
 
-    data3 = copy.deepcopy(data)
-    data3["nodes"][0]["mystery"] = 123
+
+def test_flow_schema_strict_rejects_unknown_fields() -> None:
+    with FLOW.open("r", encoding="utf-8") as handle:
+        data = yaml.safe_load(handle)
+
+    data_with_extra = copy.deepcopy(data)
+    data_with_extra["unknown_field"] = True
     with pytest.raises(jsonschema.ValidationError):
-        jsonschema.validate(instance=data3, schema=schema)
+        _validate_flow(data_with_extra)
+
+    data_with_bad_node = copy.deepcopy(data)
+    data_with_bad_node["nodes"][0]["mystery"] = 123
+    with pytest.raises(jsonschema.ValidationError):
+        _validate_flow(data_with_bad_node)

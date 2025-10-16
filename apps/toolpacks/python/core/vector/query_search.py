@@ -12,6 +12,16 @@ _DOC_FIXTURES = [
     ("example_fixture", Path("tests/fixtures/mcp/core_tools/docs/example.md")),
 ]
 
+_WORKSPACE_ROOT = Path.cwd()
+
+
+def _canonical_path(path: Path) -> str:
+    resolved = path.expanduser().resolve()
+    try:
+        return resolved.relative_to(_WORKSPACE_ROOT).as_posix()
+    except ValueError:
+        return resolved.as_posix()
+
 
 @dataclass(frozen=True)
 class _Document:
@@ -28,7 +38,7 @@ class _Document:
             doc_id=doc_id,
             title=title_line.strip(),
             content=text,
-            source_path=str(path.resolve()),
+            source_path=_canonical_path(path),
         )
 
 

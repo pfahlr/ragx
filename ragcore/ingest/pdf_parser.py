@@ -6,11 +6,6 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
-try:
-    from pypdf import PdfReader  # type: ignore
-except ModuleNotFoundError:  # pragma: no cover - optional dependency
-    PdfReader = None
-
 
 def parse_pdf(
     path: Path,
@@ -18,11 +13,13 @@ def parse_pdf(
 ) -> tuple[str, dict[str, Any]]:
     """Parse a PDF document, extracting text and merging metadata."""
 
-    if PdfReader is None:
+    try:
+        from pypdf import PdfReader  # type: ignore
+    except ModuleNotFoundError as exc:  # pragma: no cover - optional dependency
         raise RuntimeError(
             "pypdf is required for PDF ingestion; install ragx[ingest] "
             "or add pypdf to your environment."
-        )
+        ) from exc
 
     reader = PdfReader(str(path))
 

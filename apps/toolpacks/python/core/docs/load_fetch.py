@@ -20,8 +20,19 @@ def _load_metadata(path: Path | None) -> dict[str, Any]:
     return data
 
 
+def _canonical_path(raw: Path, resolved: Path, *, workspace: Path) -> str:
+    try:
+        relative = resolved.relative_to(workspace)
+    except ValueError:
+        if raw.is_absolute():
+            return resolved.as_posix()
+        return raw.as_posix()
+    return relative.as_posix()
+
+
 def run(payload: Mapping[str, Any]) -> dict[str, Any]:
-    path = Path(payload["path"]).expanduser().resolve()
+    raw_path = Path(payload["path"])
+    path = raw_path.expanduser().resolve()
     encoding = str(payload.get("encoding", "utf-8"))
     metadata_path_value = payload.get("metadataPath")
     metadata_path = None
@@ -35,9 +46,12 @@ def run(payload: Mapping[str, Any]) -> dict[str, Any]:
 
     digest = hashlib.sha256(content.encode("utf-8")).hexdigest()
 
+    workspace_root = Path.cwd()
+    canonical_path = _canonical_path(raw_path, path, workspace=workspace_root)
+
     return {
         "document": {
-            "path": str(path),
+            "path": canonical_path,
             "content": content,
             "sha256": digest,
         },

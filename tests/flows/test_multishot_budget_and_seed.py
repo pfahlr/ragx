@@ -1,4 +1,7 @@
-import os, importlib, pytest
+import importlib
+import os
+
+import pytest
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
 FLOW = os.path.join(ROOT, "flows", "examples", "multishot_smoke.yaml")

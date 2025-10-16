@@ -205,7 +205,6 @@ def test_nested_loop_charges_outer_scope_budget(
     assert len(adapter.executed) == 2
 
     outer_scope = bm.ScopeKey(scope_type="loop", scope_id="outer-loop")
-    inner_scope = bm.ScopeKey(scope_type="loop", scope_id="inner-loop")
 
     outer_spent = manager.spent(outer_scope, "loop-stop").time_ms
     assert outer_spent == pytest.approx(80.0)

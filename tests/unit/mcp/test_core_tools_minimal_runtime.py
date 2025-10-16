@@ -121,13 +121,13 @@ def test_docs_load_fetch_reads_fixture(
 ) -> None:
     runtime_instance, writer = runtime
     payload = {
-        "path": str(DOC_FIXTURE_DIR / "sample_article.md"),
-        "metadataPath": str(DOC_FIXTURE_DIR / "sample_metadata.json"),
+        "path": (DOC_FIXTURE_DIR / "sample_article.md").as_posix(),
+        "metadataPath": (DOC_FIXTURE_DIR / "sample_metadata.json").as_posix(),
     }
     result = runtime_instance.invoke("mcp.tool:docs.load.fetch", payload)
 
     assert "document" in result and "metadata" in result
-    assert result["document"]["path"].endswith("sample_article.md")
+    assert result["document"]["path"] == payload["path"]
     assert "Sample Article" in result["document"]["content"]
     assert result["metadata"]["title"] == "Sample Article"
 
